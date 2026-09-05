@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS tii_page_views (
   view_count integer NOT NULL DEFAULT 0
 );
 ALTER TABLE tii_page_views ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "anyone_can_read_tii_views" ON tii_page_views;
 CREATE POLICY "anyone_can_read_tii_views" ON tii_page_views FOR SELECT USING (true);
 
 CREATE TABLE IF NOT EXISTS tii_page_visitor_log (
@@ -11,6 +12,7 @@ CREATE TABLE IF NOT EXISTS tii_page_visitor_log (
   PRIMARY KEY (user_id, view_date)
 );
 ALTER TABLE tii_page_visitor_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "editors_read_tii_visitor_log" ON tii_page_visitor_log;
 CREATE POLICY "editors_read_tii_visitor_log" ON tii_page_visitor_log FOR SELECT USING (true);
 
 CREATE OR REPLACE FUNCTION increment_tii_page_view()

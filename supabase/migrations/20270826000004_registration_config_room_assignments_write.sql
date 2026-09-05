@@ -13,6 +13,7 @@
 -- read policy ("the page already gates non-permitted users out"). Other keys
 -- (roster, registrations, targets, last-import) stay admin/pastor-only.
 
+drop policy if exists "Registration room assignments writable by any authenticated user" on public.registration_config;
 create policy "Registration room assignments writable by any authenticated user"
   on public.registration_config for all
   using (key = 'room-assignments' and auth.uid() is not null)

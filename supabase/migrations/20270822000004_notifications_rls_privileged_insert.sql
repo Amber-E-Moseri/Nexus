@@ -3,6 +3,7 @@
 -- for other users were silently failing.
 -- Allow dept_lead and regional_secretary to insert for any target user.
 
+DROP POLICY IF EXISTS "privileged_users_can_notify_others" ON public.notifications;
 CREATE POLICY "privileged_users_can_notify_others"
   ON public.notifications
   FOR INSERT
