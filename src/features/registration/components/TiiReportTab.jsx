@@ -313,10 +313,13 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
     return Object.values(report?.by_subgroup ?? {}).flatMap(sg => sg.walkIns ?? []);
   }, [report?.by_subgroup]);
 
-  // Best fuzzy-match registration per walk-in (score ≥ 0.6 = candidate)
+  // Best fuzzy-match registration per walk-in (score ≥ 0.6 = candidate).
+  // Excludes walk-ins already in committedMappings — they've been handled and
+  // should not re-appear in Quick Match or the auto-matched count.
   const walkInSuggestions = useMemo(() => {
     const result = {};
     allWalkInNames.forEach(cmpName => {
+      if (committedMappings[cmpName]) return; // already committed, skip
       let best = null, bestScore = 0;
       registrations.forEach(reg => {
         const regName = reg.fullName || reg.full_name || '';
@@ -326,7 +329,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       if (bestScore >= 0.6 && best) result[cmpName] = { registration: best, score: bestScore };
     });
     return result;
-  }, [allWalkInNames, registrations]);
+  }, [allWalkInNames, registrations, committedMappings]);
 
   const totalUniqueAttendees = useMemo(() => {
     const seen = new Set();
@@ -1122,22 +1125,30 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
           {/* ── Walk-in mapper callout ─────────────────────────────────────────── */}
           {allWalkInNames.length > 0 && (
             <div style={{ border: '1.5px solid #F0C040', borderRadius: 10, marginBottom: 18, overflow: 'hidden' }}>
+              {(() => {
+                const uncommittedWalkIns = allWalkInNames.filter(n => !committedMappings[n]);
+                const suggestionCount = Object.keys(walkInSuggestions).length;
+                const highCount = Object.entries(walkInSuggestions).filter(([, { score }]) => score >= 0.8).length;
+                return (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#FFFBEA', flexWrap: 'wrap' }}>
                 <AlertCircle size={16} style={{ color: '#B8710A', flexShrink: 0 }} />
                 <span style={{ flex: 1, fontSize: 13, color: '#7A5200', fontWeight: 600, minWidth: 140 }}>
-                  {allWalkInNames.length} unregistered attendee{allWalkInNames.length !== 1 ? 's' : ''}
-                  {Object.keys(walkInSuggestions).length > 0 && (
-                    <span style={{ fontWeight: 400, color: '#5A4000' }}> · {Object.keys(walkInSuggestions).length} fuzzy matched</span>
+                  {uncommittedWalkIns.length > 0
+                    ? `${uncommittedWalkIns.length} unassigned walk-in${uncommittedWalkIns.length !== 1 ? 's' : ''}`
+                    : `${allWalkInNames.length} walk-in${allWalkInNames.length !== 1 ? 's' : ''} — all assigned`}
+                  {suggestionCount > 0 && uncommittedWalkIns.length > 0 && (
+                    <span style={{ fontWeight: 400, color: '#5A4000' }}> · {suggestionCount} fuzzy matched</span>
                   )}
                 </span>
                 {/* Quick-apply high-confidence matches */}
-                {Object.entries(walkInSuggestions).filter(([, { score }]) => score >= 0.8).length > 0 && !showMapper && (
+                {highCount > 0 && !showMapper && (
                   <button
                     onClick={quickAutoMatch}
                     style={{ padding: '5px 12px', borderRadius: 6, border: '1.5px solid #4C2A92', background: '#F0EBFC', color: '#4C2A92', cursor: 'pointer', fontSize: 11.5, fontWeight: 700 }}>
-                    ✦ Quick Match ({Object.entries(walkInSuggestions).filter(([, { score }]) => score >= 0.8).length})
+                    ✦ Quick Match ({highCount})
                   </button>
                 )}
+                {uncommittedWalkIns.length > 0 && (
                 <button
                   onClick={() => {
                     if (showMapper) { setShowMapper(false); setWalkInMappings({}); setMapperSearch({}); return; }
@@ -1150,9 +1161,12 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
                     setShowMapper(true);
                   }}
                   style={{ padding: '6px 14px', borderRadius: 7, border: '1.5px solid #D4A020', background: showMapper ? '#FFF0B0' : '#fff', color: '#7A5200', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
-                  {showMapper ? 'Cancel' : `Assign Walk-ins${Object.keys(walkInSuggestions).length > 0 ? ` (${Object.keys(walkInSuggestions).length} auto-matched)` : ''}`}
+                  {showMapper ? 'Cancel' : `Assign Walk-ins${suggestionCount > 0 ? ` (${suggestionCount} auto-matched)` : ''}`}
                 </button>
+                )}
               </div>
+              );
+              })()}
 
               {showMapper && (
                 <div style={{ background: '#fff', borderTop: '1px solid #F0C040', padding: '14px 16px' }}>
