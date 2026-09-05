@@ -22,6 +22,9 @@ function isTiiService(s) {
   return name.includes('tii') || name.includes('this is it');
 }
 
+// Default subgroup for walk-ins who can't be matched to a registration
+const WALKIN_DEFAULT_SG = 'Central East Subgroup A';
+
 // Normalize a name or email key for matching
 function nameKey(str) {
   return (str || '').toLowerCase().trim();
@@ -301,11 +304,15 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
     return map;
   }, [registrations]);
 
-  // Best fuzzy-match registration per Unknown walk-in (score ≥ 0.6 = candidate)
+  // All walk-ins across every subgroup (not just Unknown)
+  const allWalkInNames = useMemo(() => {
+    return Object.values(report?.by_subgroup ?? {}).flatMap(sg => sg.walkIns ?? []);
+  }, [report?.by_subgroup]);
+
+  // Best fuzzy-match registration per walk-in (score ≥ 0.6 = candidate)
   const walkInSuggestions = useMemo(() => {
-    const unknownWalkIns = report?.by_subgroup?.['Unknown']?.walkIns ?? [];
     const result = {};
-    unknownWalkIns.forEach(cmpName => {
+    allWalkInNames.forEach(cmpName => {
       let best = null, bestScore = 0;
       registrations.forEach(reg => {
         const regName = reg.fullName || reg.full_name || '';
@@ -315,7 +322,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       if (bestScore >= 0.6 && best) result[cmpName] = { registration: best, score: bestScore };
     });
     return result;
-  }, [report?.by_subgroup, registrations]);
+  }, [allWalkInNames, registrations]);
 
   const totalUniqueAttendees = useMemo(() => {
     const seen = new Set();
@@ -459,11 +466,13 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
         }
       });
 
-      // Walk-ins: try to match to any registration (even if not in expected pool) for subgroup
+      // Walk-ins: try to match to any registration (even if not in expected pool) for subgroup.
+      // Default to Central East Subgroup A if no match found.
+      const DEFAULT_WALKIN_SG = uniqueSubgroups.includes('Central East Subgroup A') ? 'Central East Subgroup A' : (uniqueSubgroups[0] || 'Unknown');
       unexpectedNames.forEach(name => {
         const k = nameKey(name);
         const reg = regLookup[k];
-        const sg = reg?.subgroup || 'Unknown';
+        const sg = reg?.subgroup || DEFAULT_WALKIN_SG;
         if (!subgroups[sg]) subgroups[sg] = { expected: [], present: [], absent: [], walkIns: [] };
         subgroups[sg].walkIns.push(name);
       });
@@ -490,7 +499,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
         session_attendance[`${name} ★`] = {
           count: ps?.count ?? 0,
           sessions: ps?.sessions ?? {},
-          subgroup: reg?.subgroup || 'Unknown',
+          subgroup: reg?.subgroup || DEFAULT_WALKIN_SG,
         };
       });
 
@@ -528,16 +537,28 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
     setTimeout(() => setCopied(false), 2000);
   }
 
-  // Move walk-ins from Unknown: either match to a registration or assign to a subgroup
+  // Remap walk-ins: either match to a registration or reassign to a different subgroup
   function applyWalkInMappings() {
     if (!report) return;
     const newBySubgroup = JSON.parse(JSON.stringify(report.by_subgroup));
     const newSessionAttendance = { ...report.session_attendance };
-    const stillUnknown = [];
 
-    (newBySubgroup['Unknown']?.walkIns ?? []).forEach(cmpName => {
+    // Collect all walk-ins from all subgroups, clearing them from their source buckets
+    const walkInSource = {}; // cmpName -> sourceSg
+    Object.entries(newBySubgroup).forEach(([sg, data]) => {
+      (data.walkIns ?? []).forEach(name => { walkInSource[name] = sg; });
+      data.walkIns = [];
+    });
+
+    // For unmapped walk-ins, track where to put them back
+    Object.entries(walkInSource).forEach(([cmpName, sourceSg]) => {
       const mapping = walkInMappings[cmpName];
-      if (!mapping) { stillUnknown.push(cmpName); return; }
+      if (!mapping?.value) {
+        // No change — put back in source subgroup
+        if (!newBySubgroup[sourceSg]) newBySubgroup[sourceSg] = { expected: [], present: [], absent: [], walkIns: [] };
+        newBySubgroup[sourceSg].walkIns.push(cmpName);
+        return;
+      }
 
       const sessionKey = `${cmpName} ★`;
       const sessionData = newSessionAttendance[sessionKey];
@@ -586,26 +607,30 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
         if (sessionData) newSessionAttendance[sessionKey] = { ...sessionData, subgroup: targetSg };
 
       } else {
-        stillUnknown.push(cmpName);
+        // No recognized type — put back in source
+        if (!newBySubgroup[walkInSource[cmpName]]) newBySubgroup[walkInSource[cmpName]] = { expected: [], present: [], absent: [], walkIns: [] };
+        newBySubgroup[walkInSource[cmpName]].walkIns.push(cmpName);
       }
     });
 
-    // Clean up Unknown
-    if (newBySubgroup['Unknown']) {
-      newBySubgroup['Unknown'].walkIns = stillUnknown;
-      const u = newBySubgroup['Unknown'];
-      if (!u.expected?.length && !u.present?.length && !u.absent?.length && !stillUnknown.length) {
-        delete newBySubgroup['Unknown'];
+    // Remove any empty subgroup shells (no expected/present/absent/walkIns)
+    Object.keys(newBySubgroup).forEach(sg => {
+      const d = newBySubgroup[sg];
+      if (!d.expected?.length && !d.present?.length && !d.absent?.length && !d.walkIns?.length) {
+        delete newBySubgroup[sg];
       }
-    }
+    });
 
-    // Recompute top-level KPI stats from the updated subgroup data
+    // Recompute top-level KPI stats + rebuild name arrays from the updated subgroup data
     let expTotal = 0, presTotal = 0, absTotal = 0, wiTotal = 0;
+    const presentNames = [], absentNames = [];
     Object.values(newBySubgroup).forEach(d => {
       expTotal += d.expected?.length ?? 0;
       presTotal += d.present?.length ?? 0;
       absTotal += d.absent?.length ?? 0;
       wiTotal += d.walkIns?.length ?? 0;
+      presentNames.push(...(d.present ?? []));
+      absentNames.push(...(d.absent ?? []));
     });
     const reach_pct = expTotal > 0 ? Math.round(presTotal / expTotal * 1000) / 10 : 0;
 
@@ -613,6 +638,8 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       ...prev,
       by_subgroup: newBySubgroup,
       session_attendance: newSessionAttendance,
+      present_names: presentNames,
+      absent_names: absentNames,
       expected_count: expTotal,
       attended_count: presTotal + wiTotal,
       absent_count: absTotal,
@@ -751,13 +778,16 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
     if (!toApply.length) return;
     const newBySubgroup = JSON.parse(JSON.stringify(report.by_subgroup));
     const newSessionAttendance = { ...report.session_attendance };
-    const stillUnknown = (newBySubgroup['Unknown']?.walkIns ?? []).filter(
-      name => !toApply.find(([n]) => n === name)
-    );
+    const toApplySet = new Set(toApply.map(([n]) => n));
+
+    // Remove matched walk-ins from their source subgroups
+    Object.values(newBySubgroup).forEach(d => {
+      if (d.walkIns) d.walkIns = d.walkIns.filter(n => !toApplySet.has(n));
+    });
 
     toApply.forEach(([cmpName, { registration: reg }]) => {
       const regName = reg.fullName || reg.full_name || cmpName;
-      const sg = reg.subgroup || 'Unknown';
+      const sg = reg.subgroup || WALKIN_DEFAULT_SG;
       if (!newBySubgroup[sg]) newBySubgroup[sg] = { expected: [], present: [], absent: [], walkIns: [] };
       const absentIdx = (newBySubgroup[sg].absent ?? []).indexOf(regName);
       const sd = newSessionAttendance[`${cmpName} ★`];
@@ -772,17 +802,22 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       }
     });
 
-    if (newBySubgroup['Unknown']) {
-      newBySubgroup['Unknown'].walkIns = stillUnknown;
-      const u = newBySubgroup['Unknown'];
-      if (!u.expected?.length && !u.present?.length && !u.absent?.length && !stillUnknown.length) delete newBySubgroup['Unknown'];
-    }
+    // Remove empty subgroup shells
+    Object.keys(newBySubgroup).forEach(sg => {
+      const d = newBySubgroup[sg];
+      if (!d.expected?.length && !d.present?.length && !d.absent?.length && !d.walkIns?.length) delete newBySubgroup[sg];
+    });
 
     let expTotal = 0, presTotal = 0, absTotal = 0, wiTotal = 0;
-    Object.values(newBySubgroup).forEach(d => { expTotal += d.expected?.length ?? 0; presTotal += d.present?.length ?? 0; absTotal += d.absent?.length ?? 0; wiTotal += d.walkIns?.length ?? 0; });
+    const presentNames = [], absentNames = [];
+    Object.values(newBySubgroup).forEach(d => {
+      expTotal += d.expected?.length ?? 0; presTotal += d.present?.length ?? 0;
+      absTotal += d.absent?.length ?? 0; wiTotal += d.walkIns?.length ?? 0;
+      presentNames.push(...(d.present ?? [])); absentNames.push(...(d.absent ?? []));
+    });
     const reach_pct = expTotal > 0 ? Math.round(presTotal / expTotal * 1000) / 10 : 0;
 
-    setReport(prev => ({ ...prev, by_subgroup: newBySubgroup, session_attendance: newSessionAttendance, expected_count: expTotal, attended_count: presTotal + wiTotal, absent_count: absTotal, unexpected_count: wiTotal, reach_pct }));
+    setReport(prev => ({ ...prev, by_subgroup: newBySubgroup, session_attendance: newSessionAttendance, present_names: presentNames, absent_names: absentNames, expected_count: expTotal, attended_count: presTotal + wiTotal, absent_count: absTotal, unexpected_count: wiTotal, reach_pct }));
   }
 
   // ── GENERATE VIEW ─────────────────────────────────────────────────────────
@@ -988,12 +1023,12 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
       {summaryTab === 'subgroups' && (
         <>
           {/* ── Walk-in mapper callout ─────────────────────────────────────────── */}
-          {(subgroups['Unknown']?.walkIns?.length ?? 0) > 0 && (
+          {allWalkInNames.length > 0 && (
             <div style={{ border: '1.5px solid #F0C040', borderRadius: 10, marginBottom: 18, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#FFFBEA' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#FFFBEA', flexWrap: 'wrap' }}>
                 <AlertCircle size={16} style={{ color: '#B8710A', flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: 13, color: '#7A5200', fontWeight: 600 }}>
-                  {subgroups['Unknown'].walkIns.length} unregistered attendee{subgroups['Unknown'].walkIns.length !== 1 ? 's' : ''}
+                <span style={{ flex: 1, fontSize: 13, color: '#7A5200', fontWeight: 600, minWidth: 140 }}>
+                  {allWalkInNames.length} unregistered attendee{allWalkInNames.length !== 1 ? 's' : ''}
                   {Object.keys(walkInSuggestions).length > 0 && (
                     <span style={{ fontWeight: 400, color: '#5A4000' }}> · {Object.keys(walkInSuggestions).length} fuzzy matched</span>
                   )}
@@ -1028,14 +1063,14 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
                     Select an action for each person. Matched registrations fix name mismatches; subgroup assigns keep them as walk-ins in the right group.
                   </p>
 
-                  {/* Column headers */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 8, padding: '6px 10px', background: '#F7F5FB', borderRadius: 6, marginBottom: 4, fontSize: 11, fontWeight: 700, color: '#8A7F99', textTransform: 'uppercase', letterSpacing: '.06em' }}>
-                    <span>Attendee</span>
-                    <span>Action</span>
+                  {/* Column headers — hidden on very small screens via min-width guard */}
+                  <div style={{ display: 'flex', gap: 8, padding: '6px 10px', background: '#F7F5FB', borderRadius: 6, marginBottom: 4, fontSize: 11, fontWeight: 700, color: '#8A7F99', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                    <span style={{ flex: '1 1 160px' }}>Attendee</span>
+                    <span style={{ flex: '1 1 200px' }}>Action</span>
                   </div>
 
                   <div style={{ maxHeight: 380, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 14 }}>
-                    {(subgroups['Unknown']?.walkIns ?? []).map((cmpName, rowIdx) => {
+                    {allWalkInNames.map((cmpName, rowIdx) => {
                       const mapping = walkInMappings[cmpName];
                       const suggestion = walkInSuggestions[cmpName];
                       const isAutoSuggested = mapping?.autoSuggested === true;
@@ -1065,21 +1100,21 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
                       const highlight = isAutoSuggested || !!mapping?.value;
 
                       return (
-                        <div key={cmpName} style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 8, alignItems: 'center', padding: '7px 10px', background: highlight ? '#F8F5FF' : rowBg, borderRadius: 6, border: highlight ? '1px solid #DDD0F4' : '1px solid transparent' }}>
-                          {/* Name + label */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <div key={cmpName} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', padding: '7px 10px', background: highlight ? '#F8F5FF' : rowBg, borderRadius: 6, border: highlight ? '1px solid #DDD0F4' : '1px solid transparent' }}>
+                          {/* Name + label — flex-basis 160px so it always shows full width on mobile */}
+                          <div style={{ flex: '1 1 160px', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                             <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1220', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cmpName}</span>
-                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: '#B8710A', background: '#FBF0DE', borderRadius: 4, padding: '2px 6px', border: '1px solid #F0D09A' }}>★ unregistered</span>
+                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: '#B8710A', background: '#FBF0DE', borderRadius: 4, padding: '2px 5px', border: '1px solid #F0D09A' }}>★ walk-in</span>
                             {suggestion && !mapping && (
                               <span style={{ flexShrink: 0, fontSize: 10, color: '#7A5200', fontStyle: 'italic' }}>≈ {suggestion.registration.fullName || suggestion.registration.full_name}</span>
                             )}
                           </div>
-                          {/* Action selector */}
+                          {/* Action selector — flex-basis 200px so it sits beside name on desktop, wraps below on mobile */}
                           <select
                             value={selectVal}
                             onChange={handleSelectChange}
-                            style={{ width: '100%', padding: '5px 8px', border: selectVal ? '1.5px solid #4C2A92' : '1px solid #C8C2D8', borderRadius: 6, fontSize: 12.5, color: '#1A1220', background: '#fff', cursor: 'pointer' }}>
-                            <option value="">— Keep as Unknown —</option>
+                            style={{ flex: '1 1 200px', padding: '5px 8px', border: selectVal ? '1.5px solid #4C2A92' : '1px solid #C8C2D8', borderRadius: 6, fontSize: 12.5, color: '#1A1220', background: '#fff', cursor: 'pointer' }}>
+                            <option value="">— Keep in current subgroup —</option>
                             <optgroup label="Match to Registration">
                               {registrations.map(r => {
                                 const rn = r.fullName || r.full_name || '';
@@ -1089,7 +1124,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
                                 return <option key={r.id || rn} value={`reg::${rn}`}>{rn}{hint}</option>;
                               })}
                             </optgroup>
-                            <optgroup label="Assign to Subgroup (stays walk-in)">
+                            <optgroup label="Move to Subgroup (stays walk-in)">
                               {uniqueSubgroups.map(sg => (
                                 <option key={sg} value={`sg::${sg}`}>{sg}</option>
                               ))}
@@ -1102,7 +1137,7 @@ export default function TiiReportTab({ registrations = [], eventId, eventConfig 
 
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 12, color: '#8A7F99' }}>
-                      {Object.values(walkInMappings).filter(m => m?.value).length} of {subgroups['Unknown']?.walkIns?.length ?? 0} assigned
+                      {Object.values(walkInMappings).filter(m => m?.value).length} of {allWalkInNames.length} assigned
                     </span>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button

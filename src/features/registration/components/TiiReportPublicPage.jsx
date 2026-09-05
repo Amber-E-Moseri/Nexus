@@ -100,8 +100,9 @@ function SubgroupCard({ subgroup, data }) {
 
 // ─── SESSION ATTENDANCE TABLE ──────────────────────────────────────────────────
 function SessionAttendanceTable({ report }) {
-  const sessionLabels = report?.session_labels || [];
-  const sessionAttendance = report?.session_attendance || {};
+  // session_labels and session_attendance are stored inside by_session when the report was saved
+  const sessionLabels = report?.by_session?.session_labels || report?.session_labels || [];
+  const sessionAttendance = report?.by_session?.session_attendance || report?.session_attendance || {};
   if (!Object.keys(sessionAttendance).length || !sessionLabels.length) return null;
 
   // Group by subgroup; Unknown last

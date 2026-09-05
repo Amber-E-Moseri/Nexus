@@ -321,7 +321,11 @@ export function useTiiReport() {
             absent_names: reportData.absent_names || [],
             excused_names: reportData.excused_names || [],
             unexpected_names: reportData.unexpected_names || [],
-            by_session: reportData.by_session || {},
+            by_session: {
+              ...(reportData.by_session || {}),
+              session_labels: (reportData as any).session_labels || [],
+              session_attendance: (reportData as any).session_attendance || {},
+            },
             by_subgroup: reportData.by_subgroup || {},
             expected_pool_filter: expectedPoolFilter,
             share_token: shareToken,
