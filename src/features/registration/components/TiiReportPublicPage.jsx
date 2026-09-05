@@ -42,8 +42,8 @@ function SubgroupCard({ subgroup, data }) {
   const pct = exp > 0 ? Math.round(pres / exp * 100) : 0;
   const band = reachBand(pct);
   return (
-    <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-      <div style={{ background: '#3D1A78', color: '#fff', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, marginBottom: 16 }}>
+      <div style={{ background: '#3D1A78', color: '#fff', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '12px 12px 0 0' }}>
         <div style={{ fontSize: 15, fontWeight: 800 }}>{subgroup}</div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>{pres} of {exp}</span>
@@ -117,9 +117,9 @@ function SessionAttendanceTable({ report }) {
   let rowIdx = 0;
 
   return (
-    <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-      <div style={{ background: '#3D1A78', color: '#fff', padding: '12px 18px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em' }}>Session Attendance</div>
-      <div style={{ overflowX: 'auto' }}>
+    <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, marginBottom: 16 }}>
+      <div style={{ background: '#3D1A78', color: '#fff', padding: '12px 18px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', borderRadius: '12px 12px 0 0' }}>Session Attendance</div>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 400 }}>
           <thead>
             <tr style={{ background: '#FAFAF7' }}>
@@ -255,7 +255,7 @@ export default function TiiReportPublicPage() {
   });
 
   return (
-    <div className="tii-public-page" style={{ minHeight: '100vh', background: PAGE_BG, overflowX: 'hidden' }}>
+    <div className="tii-public-page" style={{ minHeight: '100vh', background: PAGE_BG, overflowX: 'hidden', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       <style>{PRINT_STYLES}</style>
 
       {/* Header */}
@@ -294,9 +294,10 @@ export default function TiiReportPublicPage() {
 
         {/* Subgroup overview table */}
         {subgroupKeys.length > 1 && (
-          <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
-            <div style={{ background: '#3D1A78', color: '#fff', padding: '12px 18px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em' }}>Subgroup Overview</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, marginBottom: 24 }}>
+            <div style={{ background: '#3D1A78', color: '#fff', padding: '12px 18px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', borderRadius: '12px 12px 0 0' }}>Subgroup Overview</div>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 360 }}>
               <thead>
                 <tr>
                   {['Subgroup', 'Expected', 'Present', 'Absent', 'Reach'].map((h, i) => (
@@ -324,6 +325,7 @@ export default function TiiReportPublicPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
