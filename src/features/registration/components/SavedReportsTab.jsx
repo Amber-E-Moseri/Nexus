@@ -179,6 +179,26 @@ function SavedReportDetail({ report: initial, onBack, onSaved }) {
     setDirty(true);
   }
 
+  // Toggle a specific session cell for a person in session_attendance
+  function toggleSession(name, sessionLabel) {
+    setReport(prev => {
+      const newSess = JSON.parse(JSON.stringify(prev.by_session || {}));
+      const sa = newSess.session_attendance || {};
+      if (!sa[name]) return prev;
+      const cur = !!(sa[name].sessions?.[sessionLabel]);
+      if (!sa[name].sessions) sa[name].sessions = {};
+      if (cur) {
+        delete sa[name].sessions[sessionLabel];
+      } else {
+        sa[name].sessions[sessionLabel] = true;
+      }
+      sa[name].count = Object.keys(sa[name].sessions).length;
+      newSess.session_attendance = sa;
+      return { ...prev, by_session: newSess };
+    });
+    setDirty(true);
+  }
+
   return (
     <div style={{ padding: '20px 0' }}>
       {/* Header */}
@@ -323,7 +343,7 @@ function SavedReportDetail({ report: initial, onBack, onSaved }) {
                               {displayName}{isWalkIn && <span style={{ fontSize: 9, marginLeft: 5, opacity: 0.7 }}>(walk-in)</span>}
                             </td>
                             {sessionLabels.map(lbl => (
-                              <td key={lbl} style={{ padding: '8px 10px', textAlign: 'center', borderBottom: '1px solid #F0EDF6' }}>
+                              <td key={lbl} onClick={() => toggleSession(name, lbl)} style={{ padding: '8px 10px', textAlign: 'center', borderBottom: '1px solid #F0EDF6', cursor: 'pointer', userSelect: 'none' }} title="Click to toggle">
                                 {data.sessions?.[lbl]
                                   ? <span style={{ color: '#2D8653', fontWeight: 700 }}>✓</span>
                                   : <span style={{ color: '#E0D8EE' }}>—</span>}
