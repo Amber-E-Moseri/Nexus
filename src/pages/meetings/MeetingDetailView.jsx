@@ -246,7 +246,11 @@ function MeetingDetailViewInner() {
     if (!extraction.result) return
     const extracted = extraction.result
     setAiResult(extracted)
-    setEditableSummary(extracted.summary || '')
+    const rawSummary = extracted.summary || ''
+    // Guard against a past bug where an unparseable Claude response was stored
+    // verbatim as summary (starting with ```json or a bare {).
+    const safeSummary = /^```|^\s*\{/.test(rawSummary.trim()) ? '' : rawSummary
+    setEditableSummary(safeSummary)
     setEditableDetailedNotes(extracted.detailed_notes || '')
     setEditableDecisions(
       Array.isArray(extracted.decisions)

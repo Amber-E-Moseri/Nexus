@@ -230,7 +230,7 @@ function parseExtractionJSON(text: string) {
       data_issues: [],
       cleaned_transcript: null,
       chapters: [],
-      summary: text,
+      summary: null,
       detailed_notes: null,
       scripture_references: [],
       decisions: [],
