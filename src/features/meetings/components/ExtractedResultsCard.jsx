@@ -549,7 +549,7 @@ function OrganizedView({ results, onSaveToMinutes, onDiscard, saving }) {
                   <span style={{ fontSize: 12 }}>📅</span>
                   <input
                     type="date"
-                    value={item.due_date || ''}
+                    value={/^\d{4}-\d{2}-\d{2}$/.test(item.due_date) ? item.due_date : ''}
                     onChange={(e) => handleUpdateAction(i, 'due_date', e.target.value)}
                     style={{ flex: 1, padding: '6px 8px', fontSize: 12, border: '1px solid #EDE8DC', borderRadius: 6, background: 'white' }}
                   />

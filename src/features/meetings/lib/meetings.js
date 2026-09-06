@@ -498,7 +498,7 @@ export async function createTasksFromActionItems(meetingId, departmentId, action
       title: item.title,
       description: item.description || null,
       assignee_id: item.assigneeId || null,
-      due_date: item.dueDate || null,
+      due_date: item.dueDate && /^\d{4}-\d{2}-\d{2}/.test(item.dueDate) ? item.dueDate.slice(0, 10) : null,
       department_id: destDeptId,
       meeting_id: meetingId,
       source: 'meeting',

@@ -273,10 +273,13 @@ function MeetingDetailViewInner() {
         setEditableAiItems(extracted.action_items.map((raw) => {
           const item = typeof raw === 'string' ? { title: raw, owner: '', due_date: '' } : raw
           const resolved = resolveAssignment(item, directory)
+          const rawDate = item.due_date || ''
+          const dateOnly = rawDate.slice(0, 10)
+          const due_date = /^\d{4}-\d{2}-\d{2}$/.test(dateOnly) ? dateOnly : ''
           return {
             title: item.title || '',
             owner: item.owner || '',
-            due_date: item.due_date || '',
+            due_date,
             assigneeId: resolved.assigneeId || '',
             departmentId: resolved.departmentId || meeting?.department_id || '',
           }
@@ -2322,7 +2325,7 @@ function MeetingDetailViewInner() {
                                 </select>
                                 <input
                                   type="date"
-                                  value={item.due_date}
+                                  value={/^\d{4}-\d{2}-\d{2}$/.test(item.due_date) ? item.due_date : ''}
                                   onChange={(e) => setEditableAiItems((prev) => prev.map((it, j) => j === i ? { ...it, due_date: e.target.value } : it))}
                                   style={{ fontSize:11, color: FS.text, border:`1px solid ${FS.borderL}`, borderRadius:4, padding:'3px 6px', fontFamily:'inherit', background:'#fff' }}
                                 />
