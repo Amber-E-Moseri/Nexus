@@ -3,6 +3,7 @@ import { touchLastActive } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
 import { clearAllAppCache, loadSession, clearSession } from '../lib/cacheUtils'
 import { silentSubscribeToPush, unsubscribePush } from '../lib/webPush'
+import { queryClient } from '../lib/queryClient'
 
 // Default is used by detached fibers (lazy-loaded component's Suspense retry fires
 // after the Suspense boundary unmounts due to an auth redirect). loading:true makes
@@ -290,6 +291,13 @@ export function AuthProvider({ children }) {
         }
       }
 
+      // Clear the legacy nexus IDB store now that nexus-auth is the authority.
+      // This prevents the migration fallback below from running on future visits
+      // (it fires when getSession returns null, which can happen on stuck IDB).
+      if (session?.user) {
+        clearSession().catch(() => {})
+      }
+
       if (!mounted) return
 
       // Only set user state when we have a valid session. Never call setUser(null)
@@ -501,6 +509,7 @@ export function AuthProvider({ children }) {
           setLoading(false)
           clearAllAppCache()
           clearSession()
+          queryClient.clear()
         } else if (event === 'INITIAL_SESSION') {
           // INITIAL_SESSION(null) fires when the token is expired but the refresh
           // token is still valid — auth-js emits TOKEN_REFRESHED shortly after.
