@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle, HelpCircle, ClipboardList, BarChart3, CheckCircle2, Info } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle, HelpCircle, ClipboardList, BarChart3, CheckCircle2, Info, Plane } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -104,6 +104,7 @@ export default function AppsPage() {
   const canSeeLibrary = role === 'super_admin'
   const canSeeCommunications = ['super_admin', 'regional_secretary', 'ors', 'dept_lead', 'programs'].includes(role)
   const canSeeRegistration = ['super_admin', 'regional_secretary', 'pastor'].includes(role)
+  const canSeeICPLC = ['super_admin', 'regional_secretary', 'pastor'].includes(role)
   const navigate = useNavigate()
 
   return (
@@ -133,6 +134,16 @@ export default function AppsPage() {
               bg="linear-gradient(135deg, #E8F5EC 0%, #D0EDD8 100%)"
               description="Attendee registration"
               onClick={() => navigate('/registration')}
+            />
+          )}
+          {canSeeICPLC && (
+            <AppIcon
+              icon={Plane}
+              label="ICPLC"
+              color="#2A5FA5"
+              bg="linear-gradient(135deg, #E9F0FA 0%, #D4E4F7 100%)"
+              description="Reg, flights, rooms & transport"
+              onClick={() => navigate('/icplc')}
             />
           )}
           <AppIcon

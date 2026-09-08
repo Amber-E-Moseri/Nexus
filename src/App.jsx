@@ -113,6 +113,7 @@ const InvitationDetailPage = lazy(() => import('./pages/communications/Invitatio
 const InvitationsListPage = lazy(() => import('./pages/communications/InvitationsListPage'))
 const InstagramGradingPage = lazyRoute('/instagram', () => import('./features/instagram/pages/InstagramGradingPage'))
 const RegistrationPage = lazyRoute('/registration', () => import('./pages/events/RegistrationPage'))
+const ICPLCPage = lazyRoute('/icplc', () => import('./pages/events/ICPLCPage'))
 const HelpPage = lazyRoute('/help', () => import('./pages/HelpPage'))
 const NovaKnowledgeBase = lazyRoute('/nova/kb', () => import('./pages/NovaKnowledgeBase'))
 const NovaReportsPage = lazyRoute('/nova/reports', () => import('./pages/nova/NovaReportsPage'))
@@ -504,6 +505,7 @@ export default function App() {
             }
           />
           <Route path="/registration" element={<RegistrationPage />} />
+          <Route path="/icplc" element={<ICPLCPage />} />
         </Route>
         {/* Map rendered fullscreen — no sidebar shell */}
         <Route path="/map" element={<CanMapPage />} />
