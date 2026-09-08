@@ -14,6 +14,47 @@ const CACHE_KEYS = {
 
 export { CACHE_KEYS }
 
+// --- Profile stale-while-revalidate cache ---
+const PROFILE_CACHE_PREFIX = 'nexus_profile_'
+const PROFILE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+export function saveProfileCache(profile) {
+  if (!profile?.id) return
+  try {
+    localStorage.setItem(
+      PROFILE_CACHE_PREFIX + profile.id,
+      JSON.stringify({ data: profile, savedAt: Date.now() }),
+    )
+  } catch {}
+}
+
+export function loadProfileCache(userId) {
+  if (!userId) return null
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_PREFIX + userId)
+    if (!raw) return null
+    const { data, savedAt } = JSON.parse(raw)
+    if (Date.now() - savedAt > PROFILE_CACHE_TTL) {
+      localStorage.removeItem(PROFILE_CACHE_PREFIX + userId)
+      return null
+    }
+    return data ?? null
+  } catch {
+    return null
+  }
+}
+
+export function clearProfileCache() {
+  try {
+    const keysToRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith(PROFILE_CACHE_PREFIX)) keysToRemove.push(key)
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key))
+  } catch {}
+}
+
 export function clearAllAppCache() {
   try {
     // Clear all localStorage entries that start with our app prefixes
@@ -22,7 +63,8 @@ export function clearAllAppCache() {
       const key = localStorage.key(i)
       if (key?.includes('hidden-space-ids-') ||
           key?.includes('space-tree-expanded-') ||
-          key?.startsWith('blw_')) {
+          key?.startsWith('blw_') ||
+          key?.startsWith(PROFILE_CACHE_PREFIX)) {
         keysToRemove.push(key)
       }
     }

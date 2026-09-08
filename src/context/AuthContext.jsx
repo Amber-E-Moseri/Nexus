@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { touchLastActive } from '../lib/people/api'
 import { supabase } from '../lib/supabase'
-import { clearAllAppCache, loadSession, clearSession } from '../lib/cacheUtils'
+import { clearAllAppCache, loadSession, clearSession, saveProfileCache, loadProfileCache } from '../lib/cacheUtils'
 import { silentSubscribeToPush, unsubscribePush } from '../lib/webPush'
 import { queryClient } from '../lib/queryClient'
 
@@ -309,11 +309,21 @@ export function AuthProvider({ children }) {
       }
 
       if (session?.user) {
+        // Seed from localStorage cache so the shell renders before the DB responds.
+        // The real fetch below always runs and overwrites with fresh data.
+        const cachedProfile = loadProfileCache(session.user.id)
+        if (cachedProfile && mounted) {
+          profileRef.current = cachedProfile
+          setProfile(cachedProfile)
+          setLoading(false)
+        }
+
         try {
           const nextProfile = await ensureProfileFetch(session.user.id)
           if (mounted) {
             profileRef.current = nextProfile
             setProfile(nextProfile)
+            saveProfileCache(nextProfile)
             // Defer supplementary fetch to avoid interrupting page renders on navigation
             deferredFetchSupplementary(session.user.id, nextProfile.department_id)
           }
@@ -326,6 +336,8 @@ export function AuthProvider({ children }) {
           if (mounted) setLoading(false)
         } catch (e) {
           console.warn('[Auth] fetchProfile failed or timed out:', e)
+          // If fetch failed but we already seeded from cache, keep the app running
+          if (!profileRef.current && mounted) setLoading(false)
         }
       }
       // No session: don't call setLoading(false) here. onAuthStateChange will fire
@@ -455,6 +467,7 @@ export function AuthProvider({ children }) {
             const nextProfile = await ensureProfileFetch(session.user.id)
             if (mounted) {
               setProfile(nextProfile)
+              saveProfileCache(nextProfile)
               deferredFetchSupplementary(session.user.id, nextProfile.department_id)
             }
             touchLastActive().catch(() => {})
