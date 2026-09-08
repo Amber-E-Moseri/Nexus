@@ -27,6 +27,7 @@ import {
   PanelLeft,
   Phone,
   Pencil,
+  Plane,
   Plus,
   Settings,
   EyeOff,
@@ -355,6 +356,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
   // communications, map), no people management, and no Sprints unless they've
   // been added to a specific sprint (RLS scopes displayedSprints to theirs).
   const isGroupMember = role === 'group_member'
+  const canSeeICPLC = ['super_admin', 'regional_secretary', 'pastor'].includes(role)
   const hasAnyPlatformAccess =
     showAdminPlatform ||
     role === 'pastor' ||
@@ -694,6 +696,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 { label: 'Trash', to: '/trash', icon: Trash2 },
                 // Apps (not in main sidebar nav)
                 ...(!isExternalMember ? [{ label: 'Apps', to: '/apps', icon: Trophy }] : []),
+                ...(['super_admin', 'regional_secretary', 'pastor'].includes(role) ? [{ label: 'ICPLC', to: '/icplc', icon: Plane }] : []),
                 { label: 'Wins', to: '/wins', icon: Trophy },
                 ...(['super_admin'].includes(role) ? [{ label: 'Growth Tracking', to: '/growth-tracking', icon: TrendingUp }] : []),
                 // Sprints
@@ -873,6 +876,14 @@ export default function Sidebar({ isMobileDrawer = false }) {
             icon={Trophy}
             label="Apps"
             to="/apps"
+          />
+        ) : null}
+        {canSeeICPLC ? (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/icplc')}
+            icon={Plane}
+            label="ICPLC"
+            to="/icplc"
           />
         ) : null}
         <SidebarItem
