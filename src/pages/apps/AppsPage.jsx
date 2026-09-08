@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle, HelpCircle, ClipboardList, BarChart3 } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle, HelpCircle, ClipboardList, BarChart3, CheckCircle2, Info } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -103,6 +103,7 @@ export default function AppsPage() {
   const canSeeMap = ['super_admin', 'dept_lead', 'regional_secretary', 'pastor'].includes(role)
   const canSeeLibrary = role === 'super_admin'
   const canSeeCommunications = ['super_admin', 'regional_secretary', 'ors', 'dept_lead', 'programs'].includes(role)
+  const canSeeRegistration = ['super_admin', 'regional_secretary', 'pastor'].includes(role)
   const navigate = useNavigate()
 
   return (
@@ -116,6 +117,24 @@ export default function AppsPage() {
 
       <div className="apps-page-content">
         <div className="apps-grid">
+          <AppIcon
+            icon={Info}
+            label="This Is It Info"
+            color="#C47A2B"
+            bg="linear-gradient(135deg, #FBF0DE 0%, #F5E0C0 100%)"
+            description="Event info & details"
+            onClick={() => navigate('/thisisitinfo')}
+          />
+          {canSeeRegistration && (
+            <AppIcon
+              icon={CheckCircle2}
+              label="TII Registration"
+              color="#1F8A4C"
+              bg="linear-gradient(135deg, #E8F5EC 0%, #D0EDD8 100%)"
+              description="Attendee registration"
+              onClick={() => navigate('/registration')}
+            />
+          )}
           <AppIcon
             icon={Trophy}
             label="Wins"

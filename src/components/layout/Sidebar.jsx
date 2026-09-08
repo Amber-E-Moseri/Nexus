@@ -12,7 +12,6 @@ import {
   Folder,
   HelpCircle,
   HeadphonesIcon,
-  Info,
   Ticket,
   Trophy,
   TrendingUp,
@@ -56,7 +55,6 @@ import CreateListModal from '../../features/spaces/components/CreateListModal'
 import CreateFolderModal from '../../features/spaces/components/CreateFolderModal'
 import SprintModal from '../../features/sprints/components/SprintModal'
 import { useSprints } from '../../features/sprints/SprintsContext'
-import { useEventConfig } from '../../features/registration/EventConfigContext'
 import { useMyTaskCounts } from '../../features/tasks/hooks/useMyTaskCounts'
 import { CACHE_KEYS, getItemSafe, setItemSafe } from '../../lib/cacheUtils'
 import { preloadRoute } from '../../lib/routePreload'
@@ -337,37 +335,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
   const collapsed = !isMobileDrawer && collapsedPref
   const [featureSearch, setFeatureSearch] = useState('')
 
-  const [hasRegistrationAccess, setHasRegistrationAccess] = useState(false)
-  const { config: eventConfig } = useEventConfig()
-  useEffect(() => {
-    let cancelled = false
-    setHasRegistrationAccess(false)
-    if (!profile?.id) return undefined
-    const legacyTii = !eventConfig
-    if ((legacyTii && ['pastor', 'super_admin', 'regional_secretary'].includes(role)) || (!legacyTii && ['super_admin', 'regional_secretary'].includes(role))) {
-      setHasRegistrationAccess(true)
-      return undefined
-    }
-    const sprintPattern = eventConfig?.sprint_pattern || '%This Is It 2.0%'
-    const sidebarTeams = eventConfig?.sidebar_teams || [
-      'Foundation School Graduation and Baptism', 'Secretariat and Planning', 'Registration', 'Secretariat Programs',
-      'Finance', 'Transportation', 'Delegates Compliance', 'Accommodation and Room Coordination', 'Hospitality — Delegates',
-    ]
-    ;(async () => {
-      const { data: sprint } = await supabase
-        .from('sprints').select('id').ilike('name', sprintPattern).limit(1).maybeSingle()
-      if (!sprint?.id) return
-      const { data: teams } = await supabase
-        .from('sprint_teams').select('id, name').eq('sprint_id', sprint.id)
-      if (!teams?.length) return
-      const allowed = teams.filter(t => sidebarTeams.some(a => t.name.toLowerCase().includes(a.toLowerCase()))).map(t => t.id)
-      if (!allowed.length) return
-      const { data: membership } = await supabase
-        .from('sprint_team_members').select('team_id').in('team_id', allowed).eq('user_id', profile.id).limit(1)
-      if (!cancelled && membership?.length) setHasRegistrationAccess(true)
-    })()
-    return () => { cancelled = true }
-  }, [profile?.id, role, eventConfig])
   const sidebarRef = useRef(null)
 
   // _supplementaryLoaded is false during the ~200ms window between minimal
@@ -764,8 +731,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 // My Flock
                 ...(['regional_secretary', 'pastor', 'super_admin'].includes(role) ? [{ label: 'My Flock', to: '/flock', icon: Users }] : []),
                 ...(role === 'super_admin' ? [{ label: 'Flock CRM', to: '/flock-crm', icon: Network }] : []),
-                // Registration
-                ...(hasRegistrationAccess ? [{ label: 'This Is It Registration', to: '/registration', icon: CheckCircle2 }] : []),
                 // Admin tools
                 ...(isAdmin ? [
                   { label: 'Instagram Grading', to: '/instagram', icon: Image },
@@ -924,20 +889,6 @@ export default function Sidebar({ isMobileDrawer = false }) {
             to="/flock"
           />
         ) : null}
-        {hasRegistrationAccess && (
-          <SidebarItem
-            active={isPathActive(location.pathname, '/registration')}
-            icon={CheckCircle2}
-            label="This Is It Registration"
-            to="/registration"
-          />
-        )}
-        <SidebarItem
-          active={isPathActive(location.pathname, '/thisisitinfo')}
-          icon={Info}
-          label="This Is It Info"
-          to="/thisisitinfo"
-        />
         {!collapsed && shouldShowSpaces && <SidebarSectionLabel onAdd={canCreateSpace ? () => setShowSpaceModal(true) : undefined}>Spaces</SidebarSectionLabel>}
         {displaySpaces.map((space) => (
           <div
