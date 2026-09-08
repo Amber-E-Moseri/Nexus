@@ -9,7 +9,9 @@ import { EventConfigContext } from '../../features/registration/EventConfigConte
 // central = Registration Data (includes per-person flight info)
 // rooms   = Room Assignments
 // transport = Transportation / flights manifest
-const ICPLC_HIDDEN_TABS = ['overview', 'summary', 'tii-report', 'checkin', 'confirm', 'discipleship', 'compliance', 'finance', 'import']
+// finance tab is intentionally NOT hidden — Finance team members on the ICPLC
+// sprint get access via the finance_only team permission tier.
+const ICPLC_HIDDEN_TABS = ['overview', 'summary', 'tii-report', 'checkin', 'confirm', 'discipleship', 'compliance', 'import']
 
 const ICPLC_DEFAULT_CONFIG = {
   event_name: 'ICPLC',
@@ -50,6 +52,7 @@ export default function ICPLCPage() {
   const [canAccess, setCanAccess] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sprintEditAccess, setSprintEditAccess] = useState(false)
+  const [financeAccess, setFinanceAccess] = useState(false)
   const [userTeamNames, setUserTeamNames] = useState([])
   const [needsSubgroupAssignment, setNeedsSubgroupAssignment] = useState(false)
 
@@ -89,7 +92,7 @@ export default function ICPLCPage() {
 
     try {
       if (role === 'regional_secretary') {
-        setSprintEditAccess(true); setCanAccess(true); setLoading(false); return
+        setSprintEditAccess(true); setFinanceAccess(true); setCanAccess(true); setLoading(false); return
       }
       if (role === 'super_admin') {
         setSprintEditAccess(true); setCanAccess(true); setLoading(false); return
@@ -148,6 +151,9 @@ export default function ICPLCPage() {
       if (matchesAny(permissions.unscoped_edit)) {
         setSprintEditAccess(true); setCanAccess(true); setLoading(false); return
       }
+      if (matchesAny(permissions.finance_only)) {
+        setFinanceAccess(true); setCanAccess(true); setLoading(false); return
+      }
       if (matchesAny(permissions.scoped_edit_all)) {
         if (isLeadOf('Registration')) { setSprintEditAccess(true); setCanAccess(true) }
         else { setSprintEditAccess(true); setCanAccess('limited') }
@@ -194,7 +200,7 @@ export default function ICPLCPage() {
       <RegistrationEcosystem
         limitedToSubgroups={canAccess === 'limited' ? [] : null}
         sprintEditAccess={sprintEditAccess}
-        financeAccess={false}
+        financeAccess={financeAccess}
         limitedToRegistrationDataOnly={false}
         userTeamNames={userTeamNames}
       />
