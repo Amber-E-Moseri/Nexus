@@ -288,12 +288,29 @@ export default function RegistrationPage() {
   }
 
   return (
-    <RegistrationEcosystem
-      limitedToSubgroups={canAccess === 'limited' ? limitedToSubgroups : null}
-      sprintEditAccess={sprintEditAccess}
-      financeAccess={financeAccess}
-      limitedToRegistrationDataOnly={limitedToRegistrationDataOnly}
-      userTeamNames={userTeamNames}
-    />
+    <div>
+      {/* This Is It 2.0 — preserved historical event system.
+          ICPLC is the active revamp; do NOT apply ICPLC-specific changes here
+          unless the user explicitly requests it. See docs/this-is-it-icplc-architecture.md */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '6px 16px', background: '#F5F3FF', borderBottom: '1px solid #E7E2EE',
+        fontSize: 12, color: '#6D5E9C',
+      }}>
+        <span style={{ fontWeight: 600 }}>This Is It 2.0</span>
+        <span style={{
+          background: '#EDE9FE', color: '#5B21B6', borderRadius: 4,
+          padding: '1px 6px', fontSize: 11, fontWeight: 500,
+        }}>Historical</span>
+        <span style={{ color: '#8A7F99' }}>— 2026 BLW Canada event system preserved for historical records &amp; reporting</span>
+      </div>
+      <RegistrationEcosystem
+        limitedToSubgroups={canAccess === 'limited' ? limitedToSubgroups : null}
+        sprintEditAccess={sprintEditAccess}
+        financeAccess={financeAccess}
+        limitedToRegistrationDataOnly={limitedToRegistrationDataOnly}
+        userTeamNames={userTeamNames}
+      />
+    </div>
   )
 }

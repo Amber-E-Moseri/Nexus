@@ -356,6 +356,9 @@ export default function Sidebar({ isMobileDrawer = false }) {
   // communications, map), no people management, and no Sprints unless they've
   // been added to a specific sprint (RLS scopes displayedSprints to theirs).
   const isGroupMember = role === 'group_member'
+  // This Is It 2.0 — historical system preserved separately from ICPLC.
+  // Same role gate as ICPLC; RegistrationPage handles its own fine-grained access check.
+  const canSeeTII = ['super_admin', 'regional_secretary', 'pastor'].includes(role)
   const canSeeICPLC = ['super_admin', 'regional_secretary', 'pastor'].includes(role)
   const hasAnyPlatformAccess =
     showAdminPlatform ||
@@ -696,6 +699,8 @@ export default function Sidebar({ isMobileDrawer = false }) {
                 { label: 'Trash', to: '/trash', icon: Trash2 },
                 // Apps (not in main sidebar nav)
                 ...(!isExternalMember ? [{ label: 'Apps', to: '/apps', icon: Trophy }] : []),
+                // This Is It 2.0 — historical event system (separate from ICPLC)
+                ...(['super_admin', 'regional_secretary', 'pastor'].includes(role) ? [{ label: 'This Is It 2.0', to: '/registration', icon: CheckCircle2 }] : []),
                 ...(['super_admin', 'regional_secretary', 'pastor'].includes(role) ? [{ label: 'ICPLC', to: '/icplc', icon: Plane }] : []),
                 { label: 'Wins', to: '/wins', icon: Trophy },
                 ...(['super_admin'].includes(role) ? [{ label: 'Growth Tracking', to: '/growth-tracking', icon: TrendingUp }] : []),
@@ -876,6 +881,15 @@ export default function Sidebar({ isMobileDrawer = false }) {
             icon={Trophy}
             label="Apps"
             to="/apps"
+          />
+        ) : null}
+        {/* This Is It 2.0 — preserved historical event system; distinct from ICPLC */}
+        {canSeeTII ? (
+          <SidebarItem
+            active={isPathActive(location.pathname, '/registration')}
+            icon={CheckCircle2}
+            label="This Is It 2.0"
+            to="/registration"
           />
         ) : null}
         {canSeeICPLC ? (

@@ -1007,16 +1007,30 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       // everyone on your own team's tab" (Accommodation/Hospitality/Transportation) — the
       // registrations query already honored that; roster and working_list didn't, so those
       // team members still only ever saw their own subgroup's rooms/roster data.
+      // event_config_id isolation: if this ecosystem is running under an ICPLC (or other
+      // non-TII) config that has an id, scope all queries to that event's records only.
+      // NULL event_config_id rows are This Is It 2.0 historical records (pre-separation);
+      // when no id is present (legacy TII context) those are the rows we want.
+      const eventId = eventConfig?.id ?? null
+
       let rosterQ = supabase.from('roster').select('*').order('last_name', { ascending: true });
+      if (eventId) { rosterQ = rosterQ.eq('event_config_id', eventId) }
+      else { rosterQ = rosterQ.is('event_config_id', null) }
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
 
       let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false });
+      if (eventId) { regsQ = regsQ.eq('event_config_id', eventId) }
+      else { regsQ = regsQ.is('event_config_id', null) }
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) regsQ = regsQ.in('subgroup', limitedToSubgroups);
 
       let wlQ = supabase.from('working_list').select('*').order('subgroup', { ascending: true });
+      if (eventId) { wlQ = wlQ.eq('event_config_id', eventId) }
+      else { wlQ = wlQ.is('event_config_id', null) }
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) wlQ = wlQ.in('subgroup', limitedToSubgroups);
 
-      const paymentsQ = supabase.from('event_payments').select('*').order('subgroup', { ascending: true });
+      let paymentsQ = supabase.from('event_payments').select('*').order('subgroup', { ascending: true });
+      if (eventId) { paymentsQ = paymentsQ.eq('event_config_id', eventId) }
+      else { paymentsQ = paymentsQ.is('event_config_id', null) }
 
       const [rosterRes, regsRes, wlRes, payRes] = await Promise.all([rosterQ, regsQ, wlQ, paymentsQ]);
 
@@ -1493,7 +1507,13 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
 
   async function handleAddToWorkingList(person) {
     const now = new Date().toISOString();
-    const row = { ...person, synced_at: now, manually_added: true, absent: false };
+    const row = {
+      ...person,
+      synced_at: now,
+      manually_added: true,
+      absent: false,
+      event_config_id: eventConfig?.id ?? null,
+    };
     try {
       const { error } = await supabase.from('working_list').insert(row);
       if (error) throw error;
@@ -1518,6 +1538,9 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       phone: person.wl_phone || '',
       submitted_at: now,
       manually_confirmed: true,
+      // Provenance: links this registration to its owning event so TII and ICPLC
+      // records stay isolated. NULL = legacy TII 2.0 record (pre-separation).
+      event_config_id: eventConfig?.id ?? null,
     };
     try {
       const { data, error } = await supabase.from('registrations').insert(row).select().single();
