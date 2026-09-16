@@ -789,11 +789,11 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   }, []);
 
   const refetchRegistrations = useCallback(async () => {
+    const eventId = eventConfig?.id
     try {
-      const { data: dbRegs } = await supabase
-        .from('registrations')
-        .select('*')
-        .order('submitted_at', { ascending: false });
+      let q = supabase.from('registrations').select('*').order('submitted_at', { ascending: false })
+      if (eventId) q = q.eq('event_config_id', eventId)
+      const { data: dbRegs } = await q;
       const mapped = (dbRegs || []).map(r => ({
         id: r.id, email: r.email, fullName: r.full_name, firstName: r.first_name,
         lastName: r.last_name, gender: r.gender, subgroup: r.subgroup, fellowship: r.fellowship,
@@ -825,7 +825,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     } catch (e) {
       console.error('Failed to refetch registrations:', e);
     }
-  }, []);
+  }, [eventConfig?.id]);
 
   const handleClearFlight = useCallback(async (regEmail) => {
     try {
@@ -1446,6 +1446,11 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   }
 
   async function handleImportWorkingList(text) {
+    const eventId = eventConfig?.id
+    if (!eventId) {
+      console.error('handleImportWorkingList: no event_config_id — aborting import to prevent unscoped delete')
+      return
+    }
     if (!text || !text.trim()) return;
     const rows = parseCSV(text);
     if (!rows.length) return;
@@ -1466,12 +1471,12 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       return;
     }
 
-    const eventId = eventConfig?.id
     try {
       // Preserve absent markings and manually-added rows across re-import.
       // Scoped to this event so cross-event records are never touched.
-      const existingQ = supabase.from('working_list').select('email, absent, absent_reason, manually_added, full_name, subgroup, fellowship, phone_number')
-      const { data: existing } = eventId ? await existingQ.eq('event_config_id', eventId) : await existingQ
+      const { data: existing } = await supabase.from('working_list')
+        .select('email, absent, absent_reason, manually_added, full_name, subgroup, fellowship, phone_number')
+        .eq('event_config_id', eventId)
       const absentByEmail = {};
       const manualRows = [];
       for (const row of existing || []) {
@@ -1480,8 +1485,10 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       }
 
       // Delete only sheet-synced rows for this event (manually_added = false OR null for legacy rows)
-      const deleteQ = supabase.from('working_list').delete().or('manually_added.eq.false,manually_added.is.null')
-      await (eventId ? deleteQ.eq('event_config_id', eventId) : deleteQ)
+      await supabase.from('working_list')
+        .delete()
+        .or('manually_added.eq.false,manually_added.is.null')
+        .eq('event_config_id', eventId)
 
       // Re-insert with absent data preserved and explicit event ownership
       const withAbsent = records.map(r => ({ ...r, ...(absentByEmail[r.email] || {}), event_config_id: eventId }));
@@ -1491,11 +1498,10 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       // Keep manually-added entries that aren't overwritten by the import
       const importEmails = new Set(records.map(r => r.email));
       const manualToKeep = manualRows.filter(m => !importEmails.has(m.email));
-      if (manualToKeep.length) await supabase.from('working_list').insert(manualToKeep.map(m => ({ ...m, synced_at: now })));
+      if (manualToKeep.length) await supabase.from('working_list').insert(manualToKeep.map(m => ({ ...m, synced_at: now, event_config_id: eventId })));
 
       // Refresh state (scoped to this event)
-      const refreshQ = supabase.from('working_list').select('*').order('subgroup')
-      const { data: refreshed } = eventId ? await refreshQ.eq('event_config_id', eventId) : await refreshQ
+      const { data: refreshed } = await supabase.from('working_list').select('*').order('subgroup').eq('event_config_id', eventId)
       setWorkingListDb(refreshed || withAbsent);
     } catch (e) {
       console.error('Failed to save working list:', e);

@@ -193,7 +193,7 @@ Both also appear as cards on `/apps`.
 
 ## Tests
 
-`src/tests/tii-icplc-separation.test.js` — 19 tests covering:
+`src/tests/tii-icplc-separation.test.js` — 21 tests covering:
 - Event filter resolution (abort if no UUID, eq filter for named events)
 - TII data access (explicit UUID scoping)
 - ICPLC data isolation (eq filter)
@@ -202,6 +202,42 @@ Both also appear as cards on `/apps`.
 - Cross-contamination guard (non-overlapping result sets)
 
 Run: `npm test -- src/tests/tii-icplc-separation.test.js --run`
+
+---
+
+## RLS / Security Boundary
+
+**`event_config_id` is application-level scoping, not an RLS security boundary.**
+
+The four registration-domain tables use these RLS policies:
+
+| Table | SELECT policy | Event isolation |
+|-------|--------------|-----------------|
+| `registrations` | role/grant-gated | application only |
+| `working_list` | `using(true)` — any auth user | application only |
+| `roster` | `auth.uid() is not null` | application only |
+| `event_payments` | finance role/grant-gated | application only |
+
+A user with a valid session token can query any event's rows directly via the
+Supabase client or API, bypassing the `eq('event_config_id', ...)` filter that
+`RegistrationEcosystem` applies. The UI prevents this; the DB does not.
+
+TII and ICPLC have different authorized audiences (different sprint team members),
+so cross-event access via a Supabase bypass is a real risk. Enforcing event
+isolation at the RLS layer is deferred to the ICPLC branch because it requires
+either RLS functions that inspect JWT claims for sprint membership, or explicit
+grant tables — both are significant features outside this closure scope.
+
+### registration_config shared-key contamination risk
+
+`registration_config` is a key-value store scoped only by key name, not by
+`event_config_id`. TII and ICPLC share the same table but use different keys for
+their share tokens (`tii2_public_token` vs `icplc_public_token`). However:
+
+- ICPLC's `rooms` tab is not hidden; saving ICPLC room assignments writes to the
+  shared `room-assignments` key, overwriting TII's room layout.
+- The ICPLC branch must either add event scoping to `registration_config` or hide
+  the rooms tab until a separate key prefix per event is implemented.
 
 ---
 
