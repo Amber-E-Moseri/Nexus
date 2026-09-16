@@ -39,14 +39,14 @@ Role-based: `super_admin`, `regional_secretary`, `pastor`.
 `RegistrationPage.jsx` performs its own fine-grained sprint team + permission checks.
 
 ### Data ownership
-All tables where `event_config_id IS NULL` are This Is It 2.0 historical records:
+All records where `event_config_id = <tii_uuid>` (the active `event_configs` row for TII).
 
-| Table | Historical record marker |
-|-------|--------------------------|
-| `registrations` | `event_config_id IS NULL` |
-| `working_list` | `event_config_id IS NULL` |
-| `roster` | `event_config_id IS NULL` |
-| `event_payments` | `event_config_id IS NULL` |
+| Table | Ownership marker |
+|-------|------------------|
+| `registrations` | `event_config_id = <tii_uuid>` |
+| `working_list` | `event_config_id = <tii_uuid>` |
+| `roster` | `event_config_id = <tii_uuid>` |
+| `event_payments` | `event_config_id = <tii_uuid>` |
 | `tii_sessions` | `event_id` → TII event_configs row |
 | `tii_attendance` | via `tii_sessions.event_id` |
 | `tii_saved_reports` | (linked to sessions) |
@@ -56,11 +56,13 @@ All tables where `event_config_id IS NULL` are This Is It 2.0 historical records
 All tables in the `registrations` domain; see **Shared Infrastructure** below.
 
 ### Migrations
-All TII-specific migrations use a `tii_` prefix or reference `This Is It` in
-their file names. The critical data-isolation migration is:
+The provenance migration sequence (applied 2026-09-15):
 
 ```
-supabase/migrations/20260915000001_registration_event_config_id.sql
+20260915000001_registration_event_config_id.sql   — adds nullable event_config_id FK
+20260915000002_backfill_tii_event_config_id.sql   — backfills NULL → TII UUID
+20260915000003_registration_event_config_not_null.sql — adds NOT NULL + RESTRICT FK
+20260915000004_public_rpc_event_config_scope.sql  — scopes public RPC by event
 ```
 
 ---
@@ -127,25 +129,31 @@ form, wire it through a separate route or an `event_config_id` query param.
 ## Data Lineage
 
 ### Invariant
-> **Historical This Is It 2.0 data must remain identifiable as TII 2.0 data forever.**
-> Never make historical records appear as though they originated from ICPLC.
-
-### Convention
 ```
-event_config_id IS NULL   →  This Is It 2.0 historical record (pre-separation)
-event_config_id = <uuid>  →  Record belonging to that specific event_configs row
+TII_UUID   →  This Is It 2.0 record
+ICPLC_UUID →  ICPLC record
+NULL       →  INVALID (DB NOT NULL constraint rejects this since 2026-09-15)
 ```
 
-### Migration
-`20260915000001_registration_event_config_id.sql` adds `event_config_id` as a
-nullable FK to `registrations`, `working_list`, `roster`, and `event_payments`.
-Existing (all TII 2.0) records retain `NULL`.
+> **NULL is not a valid event_config_id.** All historical TII records were
+> backfilled with the explicit TII UUID on 2026-09-15. Code that treats NULL as
+> TII ownership is a bug.
 
 ### Write rule
-Every insert into these tables must set `event_config_id`:
-- TII 2.0 path: use `eventConfig?.id ?? null`
-  (null when legacy config has no id; explicit TII id when it does)
-- ICPLC path: always has a non-null `eventConfig.id` from `ICPLCConfigProvider`
+Every insert into `registrations`, `working_list`, `roster`, `event_payments` must
+set `event_config_id` to the UUID from the active `EventConfigContext`:
+
+```javascript
+// CORRECT — explicit UUID from context
+event_config_id: eventConfig.id
+
+// WRONG — NULL-as-TII is permanently removed
+event_config_id: eventConfig?.id ?? null
+```
+
+If `eventConfig.id` is absent, the write must be rejected before reaching the DB.
+`RegistrationEcosystem` guards this: the data-load useEffect returns early and logs
+an error if `eventConfig.id` is falsy.
 
 ### Source-of-truth for new events
 When a new ICPLC event cycle begins, create a new `event_configs` row (via the
@@ -158,13 +166,14 @@ will carry that UUID. Historical TII records remain untouched.
 
 These things **must never happen**:
 
-1. An ICPLC write is not filtered to TII's `event_config_id IS NULL` scope
-2. A TII read is not filtered to ICPLC's `event_config_id`
+1. A write to the 4 registration-domain tables omits `event_config_id`
+2. A read query uses `IS NULL` to scope to TII (use explicit eq filter instead)
 3. A migration renames, deletes, or re-assigns existing `registrations` rows
    from TII to ICPLC
 4. `RegistrationPage.jsx` receives ICPLC-specific display logic
 5. `ICPLCPage.jsx` is used as the entry point for TII 2.0 historical access
 6. The sidebar has only one of the two entries — both must appear for eligible roles
+7. Code uses `eventConfig?.id ?? null` to produce a NULL fallback (remove it)
 
 ---
 
@@ -184,12 +193,13 @@ Both also appear as cards on `/apps`.
 
 ## Tests
 
-`src/tests/tii-icplc-separation.test.js` — 24 tests covering:
-- Event filter resolution (NULL vs eq)
-- TII historical data access (NULL filter)
+`src/tests/tii-icplc-separation.test.js` — 19 tests covering:
+- Event filter resolution (abort if no UUID, eq filter for named events)
+- TII data access (explicit UUID scoping)
 - ICPLC data isolation (eq filter)
-- Insert provenance stamping
-- Cross-contamination guard
+- Insert provenance (no NULL writes; undefined → DB rejects)
+- Provenance regression (NULL records invisible to all eq-filter queries)
+- Cross-contamination guard (non-overlapping result sets)
 
 Run: `npm test -- src/tests/tii-icplc-separation.test.js --run`
 
@@ -200,4 +210,4 @@ Run: `npm test -- src/tests/tii-icplc-separation.test.js --run`
 | Date | Change |
 |------|--------|
 | 2026-09-08 | ICPLC forked from TII 2.0 (`cc9d63d`); TII moved from sidebar to Apps (`3701dd0`) |
-| 2026-09-15 | TII sidebar entry restored; `event_config_id` FK added to data tables; separation tests written; this document created |
+| 2026-09-15 | TII sidebar entry restored; `event_config_id` FK added to data tables; NULL backfilled to explicit TII UUID; NOT NULL + RESTRICT constraint applied; NULL-as-TII logic removed from all code paths; separation tests rewritten; this document updated |

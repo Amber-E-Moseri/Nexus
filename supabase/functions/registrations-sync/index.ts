@@ -61,6 +61,18 @@ serve(async (request) => {
       return jsonResponse(200, { message: 'No registrations to sync', inserted: 0, updated: 0 })
     }
 
+    // Resolve the active event config (TII) so all inserts carry explicit ownership
+    const { data: activeConfig } = await supabase
+      .from('event_configs')
+      .select('id')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+    if (!activeConfig?.id) {
+      return jsonResponse(500, { error: 'No active event config found — cannot stamp event ownership' })
+    }
+    const eventConfigId = activeConfig.id
+
     let inserted = 0
     let updated = 0
 
@@ -121,10 +133,10 @@ serve(async (request) => {
           updated++
         }
       } else {
-        // Insert new registration
+        // Insert new registration with explicit event ownership
         const { error } = await supabase
           .from('registrations')
-          .insert([registrationData])
+          .insert([{ ...registrationData, event_config_id: eventConfigId }])
 
         if (error) {
           console.error('Error inserting registration:', error)

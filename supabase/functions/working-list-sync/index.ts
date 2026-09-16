@@ -37,6 +37,18 @@ serve(async (request) => {
     if (!Array.isArray(members)) return jsonResponse(400, { error: 'members must be an array' })
     if (members.length === 0) return jsonResponse(200, { message: 'No members to sync', upserted: 0 })
 
+    // Resolve the active event config (TII) so all rows carry explicit ownership
+    const { data: activeConfig } = await supabase
+      .from('event_configs')
+      .select('id')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+    if (!activeConfig?.id) {
+      return jsonResponse(500, { error: 'No active event config found — cannot stamp event ownership' })
+    }
+    const eventConfigId = activeConfig.id
+
     const seen = new Set<string>()
     const rows = members
       .filter((m: Record<string, string>) => m.email?.trim())
@@ -47,6 +59,7 @@ serve(async (request) => {
         fellowship: (m.fellowship || '').trim(),
         phone_number: (m.phone_number || m.phoneNumber || m.phone || '').trim(),
         synced_at: new Date().toISOString(),
+        event_config_id: eventConfigId,
       }))
       .filter((r) => {
         if (seen.has(r.email)) return false

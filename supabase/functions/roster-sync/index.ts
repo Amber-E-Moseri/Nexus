@@ -37,6 +37,18 @@ serve(async (request) => {
     if (!Array.isArray(members)) return jsonResponse(400, { error: 'members must be an array' })
     if (members.length === 0) return jsonResponse(200, { message: 'No members to sync', inserted: 0, updated: 0 })
 
+    // Resolve the active event config (TII) so all inserts carry explicit ownership
+    const { data: activeConfig } = await supabase
+      .from('event_configs')
+      .select('id')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+    if (!activeConfig?.id) {
+      return jsonResponse(500, { error: 'No active event config found — cannot stamp event ownership' })
+    }
+    const eventConfigId = activeConfig.id
+
     let inserted = 0
     let updated = 0
 
@@ -67,7 +79,7 @@ serve(async (request) => {
         const { error } = await supabase.from('roster').update(memberData).eq('id', existing.id)
         if (!error) updated++
       } else {
-        const { error } = await supabase.from('roster').insert([memberData])
+        const { error } = await supabase.from('roster').insert([{ ...memberData, event_config_id: eventConfigId }])
         if (!error) inserted++
       }
     }

@@ -142,6 +142,18 @@ Deno.serve(async (req) => {
 
   const serviceClient = createClient(supabaseUrl, supabaseServiceKey)
 
+  // Resolve the active event config (TII) so all inserts carry explicit ownership
+  const { data: activeConfig } = await serviceClient
+    .from('event_configs')
+    .select('id')
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle()
+  if (!activeConfig?.id) {
+    return json(500, { error: 'No active event config found — cannot stamp event ownership' })
+  }
+  const eventConfigId = activeConfig.id
+
   // ════════════════════════════════════════════════════════════════════════════
   // FLIGHTS FORM
   // ════════════════════════════════════════════════════════════════════════════
@@ -208,6 +220,7 @@ Deno.serve(async (req) => {
           departure_date: row.departure_date,
           departure_time: row.departure_time,
           departure_flight: row.departure_flight,
+          event_config_id: eventConfigId,
         })
       } else {
         unmatchedRows.push({
@@ -238,7 +251,11 @@ Deno.serve(async (req) => {
       // Merge auto-matched with any manual overrides supplied by the caller,
       // then drop any row that was hand-edited in the Transportation tab —
       // those are locked until the edit is cleared.
-      const allMatched = [...matched, ...(body.manual_matches || [])]
+      const manualWithConfig = (body.manual_matches || []).map((r: Record<string, unknown>) => ({
+        ...r,
+        event_config_id: eventConfigId,
+      }))
+      const allMatched = [...matched, ...manualWithConfig]
       const toUpsert = allMatched.filter((r) => !lockedEmails.has(r.email))
       const lockedSkipped = allMatched.length - toUpsert.length
       if (toUpsert.length === 0) {
@@ -327,7 +344,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'apply') {
-    const toUpsert = rows.filter((r) => !lockedEmails.has(r.email))
+    const toUpsert = rows
+      .filter((r) => !lockedEmails.has(r.email))
+      .map((r) => ({ ...r, event_config_id: eventConfigId }))
     const lockedSkipped = rows.length - toUpsert.length
     if (toUpsert.length === 0) {
       return json(200, { upserted: 0, locked_skipped: lockedSkipped, message: 'No registrations to update' })

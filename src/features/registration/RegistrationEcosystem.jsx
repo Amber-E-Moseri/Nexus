@@ -1007,30 +1007,25 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       // everyone on your own team's tab" (Accommodation/Hospitality/Transportation) — the
       // registrations query already honored that; roster and working_list didn't, so those
       // team members still only ever saw their own subgroup's rooms/roster data.
-      // event_config_id isolation: if this ecosystem is running under an ICPLC (or other
-      // non-TII) config that has an id, scope all queries to that event's records only.
-      // NULL event_config_id rows are This Is It 2.0 historical records (pre-separation);
-      // when no id is present (legacy TII context) those are the rows we want.
-      const eventId = eventConfig?.id ?? null
+      // event_config_id isolation: every record carries an explicit owner UUID — both TII
+      // and ICPLC scope with eq('event_config_id', eventId). NULL is not a valid owner.
+      const eventId = eventConfig?.id
+      if (!eventId) {
+        console.error('RegistrationEcosystem: no event_config_id available — data load aborted')
+        setLoaded(true)
+        return
+      }
 
-      let rosterQ = supabase.from('roster').select('*').order('last_name', { ascending: true });
-      if (eventId) { rosterQ = rosterQ.eq('event_config_id', eventId) }
-      else { rosterQ = rosterQ.is('event_config_id', null) }
+      let rosterQ = supabase.from('roster').select('*').order('last_name', { ascending: true }).eq('event_config_id', eventId);
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
 
-      let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false });
-      if (eventId) { regsQ = regsQ.eq('event_config_id', eventId) }
-      else { regsQ = regsQ.is('event_config_id', null) }
+      let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false }).eq('event_config_id', eventId);
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) regsQ = regsQ.in('subgroup', limitedToSubgroups);
 
-      let wlQ = supabase.from('working_list').select('*').order('subgroup', { ascending: true });
-      if (eventId) { wlQ = wlQ.eq('event_config_id', eventId) }
-      else { wlQ = wlQ.is('event_config_id', null) }
+      let wlQ = supabase.from('working_list').select('*').order('subgroup', { ascending: true }).eq('event_config_id', eventId);
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) wlQ = wlQ.in('subgroup', limitedToSubgroups);
 
-      let paymentsQ = supabase.from('event_payments').select('*').order('subgroup', { ascending: true });
-      if (eventId) { paymentsQ = paymentsQ.eq('event_config_id', eventId) }
-      else { paymentsQ = paymentsQ.is('event_config_id', null) }
+      let paymentsQ = supabase.from('event_payments').select('*').order('subgroup', { ascending: true }).eq('event_config_id', eventId);
 
       const [rosterRes, regsRes, wlRes, payRes] = await Promise.all([rosterQ, regsQ, wlQ, paymentsQ]);
 
@@ -1471,9 +1466,12 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       return;
     }
 
+    const eventId = eventConfig?.id
     try {
-      // Preserve absent markings and manually-added rows across re-import
-      const { data: existing } = await supabase.from('working_list').select('email, absent, absent_reason, manually_added, full_name, subgroup, fellowship, phone_number');
+      // Preserve absent markings and manually-added rows across re-import.
+      // Scoped to this event so cross-event records are never touched.
+      const existingQ = supabase.from('working_list').select('email, absent, absent_reason, manually_added, full_name, subgroup, fellowship, phone_number')
+      const { data: existing } = eventId ? await existingQ.eq('event_config_id', eventId) : await existingQ
       const absentByEmail = {};
       const manualRows = [];
       for (const row of existing || []) {
@@ -1481,11 +1479,12 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         if (row.manually_added) manualRows.push(row);
       }
 
-      // Delete only sheet-synced rows (manually_added = false OR null for legacy rows)
-      await supabase.from('working_list').delete().or('manually_added.eq.false,manually_added.is.null');
+      // Delete only sheet-synced rows for this event (manually_added = false OR null for legacy rows)
+      const deleteQ = supabase.from('working_list').delete().or('manually_added.eq.false,manually_added.is.null')
+      await (eventId ? deleteQ.eq('event_config_id', eventId) : deleteQ)
 
-      // Re-insert with absent data preserved
-      const withAbsent = records.map(r => ({ ...r, ...(absentByEmail[r.email] || {}) }));
+      // Re-insert with absent data preserved and explicit event ownership
+      const withAbsent = records.map(r => ({ ...r, ...(absentByEmail[r.email] || {}), event_config_id: eventId }));
       const { error } = await supabase.from('working_list').insert(withAbsent);
       if (error) throw error;
 
@@ -1494,8 +1493,9 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       const manualToKeep = manualRows.filter(m => !importEmails.has(m.email));
       if (manualToKeep.length) await supabase.from('working_list').insert(manualToKeep.map(m => ({ ...m, synced_at: now })));
 
-      // Refresh state
-      const { data: refreshed } = await supabase.from('working_list').select('*').order('subgroup');
+      // Refresh state (scoped to this event)
+      const refreshQ = supabase.from('working_list').select('*').order('subgroup')
+      const { data: refreshed } = eventId ? await refreshQ.eq('event_config_id', eventId) : await refreshQ
       setWorkingListDb(refreshed || withAbsent);
     } catch (e) {
       console.error('Failed to save working list:', e);
@@ -1512,7 +1512,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       synced_at: now,
       manually_added: true,
       absent: false,
-      event_config_id: eventConfig?.id ?? null,
+      event_config_id: eventConfig?.id,
     };
     try {
       const { error } = await supabase.from('working_list').insert(row);
@@ -1538,9 +1538,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       phone: person.wl_phone || '',
       submitted_at: now,
       manually_confirmed: true,
-      // Provenance: links this registration to its owning event so TII and ICPLC
-      // records stay isolated. NULL = legacy TII 2.0 record (pre-separation).
-      event_config_id: eventConfig?.id ?? null,
+      event_config_id: eventConfig?.id,
     };
     try {
       const { data, error } = await supabase.from('registrations').insert(row).select().single();
@@ -1787,7 +1785,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited }} />}
         {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, onToggleFlightLock: handleToggleFlightLock, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onSetTransportMode: setTransportMode, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'finance' && (hasFinanceAccess
-          ? <FinanceTab {...{ registrations: registrationsFiltered.filter(r => !absentEmailsForMerge.has(r.email)), payments, setPayments, userId: profile?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
+          ? <FinanceTab {...{ registrations: registrationsFiltered.filter(r => !absentEmailsForMerge.has(r.email)), payments, setPayments, userId: profile?.id, eventConfigId: eventConfig?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
           : <div style={{ padding: 48, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
               <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Access Restricted</div>
@@ -2751,7 +2749,7 @@ function WorkingListTab({ workingList, workingListDb, workingListLoading, regByE
 
 // ============ FINANCE TAB ============
 // Early-bird cutoff: $250 until Aug 5, $350 after
-function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffAt, earlyFee = 250, standardFee = 350 }) {
+function FinanceTab({ registrations, payments, setPayments, userId, eventConfigId, earlyCutoffAt, earlyFee = 250, standardFee = 350 }) {
   const earlyCutoff = earlyCutoffAt ? new Date(earlyCutoffAt) : null;
   const earlyBirdActive = !earlyCutoff || new Date() < earlyCutoff;
   const defaultFee = earlyBirdActive ? Number(earlyFee) : Number(standardFee);
@@ -2818,8 +2816,9 @@ function FinanceTab({ registrations, payments, setPayments, userId, earlyCutoffA
         payment_date: paymentDate || new Date().toISOString().split('T')[0],
         payment_notes: notes || '',
         recorded_by: userId || null,
+        event_config_id: eventConfigId,
       };
-      const { error } = await supabase.from('event_payments').upsert(payload, { onConflict: 'email' });
+      const { error } = await supabase.from('event_payments').upsert(payload, { onConflict: 'email,event_config_id' });
       if (!error) {
         setPayments(prev => [...prev.filter(p => p.email !== email), payload]);
       } else {
