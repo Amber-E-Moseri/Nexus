@@ -239,9 +239,12 @@ Deno.serve(async (request) => {
           return jsonResponse(400, { error: 'assignee not found' })
         }
 
-        // Verify assignee is eligible for this task's department
-        // Eligible if: same department, OR assignee has NULL department (admin/global user)
-        if (departmentId && assignee.department_id && assignee.department_id !== departmentId) {
+        // Verify assignee is eligible for this task's department per Nexus policy:
+        // - super_admin and regional_secretary can be assigned to any department
+        // - other users must have their department_id match the task's department_id exactly
+        const assigneeIsPrivileged = assignee.role && ['super_admin', 'regional_secretary'].includes(assignee.role)
+
+        if (!assigneeIsPrivileged && assignee.department_id !== departmentId) {
           return jsonResponse(403, { error: 'assignee is not eligible for this task\'s department' })
         }
       }
