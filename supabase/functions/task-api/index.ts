@@ -223,6 +223,29 @@ Deno.serve(async (request) => {
         return jsonResponse(403, { error: 'sprint_id is outside this API key scope' })
       }
 
+      // Validate assignee eligibility for the effective task department
+      const sprintId = body.sprint_id ?? keyRecord.sprint_id ?? null
+      const departmentId = body.department_id ?? keyRecord.department_id ?? null
+
+      if (body.assignee_id) {
+        // Lookup assignee to verify existence and department eligibility
+        const { data: assignee, error: assigneeError } = await supabase
+          .from('users')
+          .select('id, department_id, role')
+          .eq('id', body.assignee_id)
+          .maybeSingle()
+
+        if (assigneeError || !assignee) {
+          return jsonResponse(400, { error: 'assignee not found' })
+        }
+
+        // Verify assignee is eligible for this task's department
+        // Eligible if: same department, OR assignee has NULL department (admin/global user)
+        if (departmentId && assignee.department_id && assignee.department_id !== departmentId) {
+          return jsonResponse(403, { error: 'assignee is not eligible for this task\'s department' })
+        }
+      }
+
       if (body.external_unique_key) {
         const { data: existing } = await supabase
           .from('tasks')
@@ -238,9 +261,6 @@ Deno.serve(async (request) => {
           })
         }
       }
-
-      const sprintId = body.sprint_id ?? keyRecord.sprint_id ?? null
-      const departmentId = body.department_id ?? keyRecord.department_id ?? null
       const taskData = {
         title: body.title.trim(),
         description: body.description?.trim() || null,
