@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Archive, ExternalLink, Calendar } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 const PRIMARY = '#4C2A92'
 const BORDER = '#EDE8DC'
@@ -7,20 +9,44 @@ const TEXT = '#2D2A22'
 const MUTED = '#9E9488'
 const BG = '#FAFAF8'
 
-// Past events — these are no longer active but have historical data
-const PAST_EVENTS = [
-  {
-    id: 'tii-2024',
-    name: 'This Is It 2.0',
-    year: 2024,
-    description: 'Regional youth conference',
-    registrations: 450,
-    link: '/registration-public?event=tii-2024',
-  },
-]
-
 export default function PastEventsPage() {
   const navigate = useNavigate()
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadPastEvents()
+  }, [])
+
+  async function loadPastEvents() {
+    try {
+      const { data, error } = await supabase
+        .from('event_configs')
+        .select('id, event_name, created_at, updated_at, is_active')
+        .eq('is_active', false)
+        .order('updated_at', { ascending: false })
+
+      if (error) throw error
+
+      // Transform to display format
+      const transformed = (data || []).map(event => {
+        const year = new Date(event.updated_at || event.created_at).getFullYear()
+        return {
+          id: event.id,
+          name: event.event_name,
+          year,
+          description: 'Registration & event data',
+          link: `/registration-public?event=${event.id}`,
+        }
+      })
+
+      setEvents(transformed)
+    } catch (err) {
+      console.error('Failed to load past events:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: BG }}>
@@ -39,7 +65,17 @@ export default function PastEventsPage() {
       </div>
 
       <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto' }}>
-        {PAST_EVENTS.length === 0 ? (
+        {loading ? (
+          <div style={{
+            background: '#fff',
+            border: `1px solid ${BORDER}`,
+            borderRadius: 10,
+            padding: 40,
+            textAlign: 'center',
+          }}>
+            <p style={{ fontSize: 14, color: MUTED }}>Loading past events...</p>
+          </div>
+        ) : events.length === 0 ? (
           <div style={{
             background: '#fff',
             border: `1px solid ${BORDER}`,
@@ -52,7 +88,7 @@ export default function PastEventsPage() {
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 16 }}>
-            {PAST_EVENTS.map(event => (
+            {events.map(event => (
               <div
                 key={event.id}
                 style={{
@@ -85,12 +121,6 @@ export default function PastEventsPage() {
                   <p style={{ fontSize: 13, color: MUTED, margin: '0 0 8px' }}>
                     {event.description}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: MUTED }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Calendar size={14} />
-                      <span>{event.registrations} registrations</span>
-                    </div>
-                  </div>
                 </div>
                 <button
                   onClick={() => window.open(event.link, '_blank')}
