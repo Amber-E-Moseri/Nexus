@@ -1,5 +1,6 @@
 -- Fix email_delivery_log RLS policy to be simpler and more reliable
 drop policy if exists "users_can_read_own_email_logs" on public.email_delivery_log;
+drop policy if exists "super_admin_reads_email_logs" on public.email_delivery_log;
 
 -- Super admins can read all email logs
 create policy "super_admin_reads_email_logs"
