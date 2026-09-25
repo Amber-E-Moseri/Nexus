@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import PageSpinner from '../../components/ui/PageSpinner'
 import RegistrationEcosystem from '../../features/registration/RegistrationEcosystem'
 import { EventConfigContext } from '../../features/registration/EventConfigContext'
+import ICPLCPortal from '../../features/icplc/ICPLCPortal.jsx'
 
 // Tabs shown for ICPLC — everything else is hidden via tab_config overrides.
 // central = Registration Data (includes per-person flight info)
@@ -195,14 +196,38 @@ export default function ICPLCPage() {
     )
   }
 
+  // Derive a clean access tier for ICPLCPortal from existing checkAccess() state.
+  // ICPLCPage NEVER provisions database grants — RLS derives capability from
+  // team membership server-side. This is a UI-only tier for conditional rendering.
+  function deriveAccessTier() {
+    if (financeAccess && !sprintEditAccess) return 'finance_only'
+    if (role === 'super_admin' || role === 'regional_secretary') return 'admin'
+    if (sprintEditAccess && canAccess === true) return 'write'
+    return 'read_only'
+  }
+
+  const accessTier = deriveAccessTier()
+
+  // Legacy tab content — RegistrationEcosystem receives the same props as before.
+  // ICPLCPortal renders it in legacy tabs via the legacyContent prop, never importing
+  // RegistrationEcosystem itself.
+  const legacyContent = (
+    <RegistrationEcosystem
+      limitedToSubgroups={canAccess === 'limited' ? [] : null}
+      sprintEditAccess={sprintEditAccess}
+      financeAccess={financeAccess}
+      limitedToRegistrationDataOnly={false}
+      userTeamNames={userTeamNames}
+    />
+  )
+
   return (
     <ICPLCConfigProvider config={eventConfig}>
-      <RegistrationEcosystem
-        limitedToSubgroups={canAccess === 'limited' ? [] : null}
-        sprintEditAccess={sprintEditAccess}
+      <ICPLCPortal
+        config={eventConfig}
+        accessTier={accessTier}
         financeAccess={financeAccess}
-        limitedToRegistrationDataOnly={false}
-        userTeamNames={userTeamNames}
+        legacyContent={legacyContent}
       />
     </ICPLCConfigProvider>
   )
