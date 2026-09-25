@@ -133,6 +133,7 @@ const SupportPage = lazyRoute('/support', () => import('./pages/SupportPage'))
 const SupportTicketsAdminPage = lazyRoute('/admin/tickets', () => import('./pages/SupportTicketsAdminPage'))
 const GrowthTrackingPage = lazyRoute('/growth-tracking', () => import('./pages/growth/GrowthTrackingPage'))
 const RegistrationGuide = lazyRoute('/app/registration-guide', () => import('./pages/apps/RegistrationGuide'))
+const PastEventsPage = lazyRoute('/past-events', () => import('./pages/apps/PastEventsPage'))
 const ReportingPage = lazyRoute('/reporting', () => import('./pages/reporting/ReportingPage'))
 const GlowCardDemo = lazy(() => import('./components/ui/GlowCardDemo'))
 const BooksApp = lazy(() => import('./features/reader/pages/BooksApp'))
@@ -221,6 +222,7 @@ export default function App() {
           <Route path="/planner" element={<Planner />} />
           <Route path="/wins" element={<WinsPage />} />
           <Route path="/apps" element={<AppsPage />} />
+          <Route path="/past-events" element={<PastEventsPage />} />
           <Route path="/calendar" element={<MinistryCalendar />} />
           <Route
             path="/calendar-management"

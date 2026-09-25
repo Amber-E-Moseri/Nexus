@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle, HelpCircle, ClipboardList, BarChart3, CheckCircle2, Info, Plane } from 'lucide-react'
+import { TrendingUp, Trophy, Map, Library, Send, BookOpen, ClipboardCheck, FileText, MailCheck, MessageCircle, HelpCircle, ClipboardList, BarChart3, CheckCircle2, Info, Plane, Archive } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 const PRIMARY = '#4C2A92'
@@ -144,6 +144,16 @@ export default function AppsPage() {
               bg="linear-gradient(135deg, #E9F0FA 0%, #D4E4F7 100%)"
               description="Reg, flights, rooms & transport"
               onClick={() => navigate('/icplc')}
+            />
+          )}
+          {canSeeRegistration && (
+            <AppIcon
+              icon={Archive}
+              label="Past Events"
+              color="#8B7355"
+              bg="linear-gradient(135deg, #F5EDE3 0%, #E8DED0 100%)"
+              description="Historical data & details"
+              onClick={() => navigate('/past-events')}
             />
           )}
           <AppIcon
