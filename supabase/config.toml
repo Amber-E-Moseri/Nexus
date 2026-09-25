@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions."zoom-recording-sync"]
 verify_jwt = false
+
+[functions."task-api"]
+verify_jwt = false
