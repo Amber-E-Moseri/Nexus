@@ -228,25 +228,18 @@ Deno.serve(async (request) => {
       const departmentId = body.department_id ?? keyRecord.department_id ?? null
 
       if (body.assignee_id) {
-        // Lookup assignee to verify existence and department eligibility
+        // Lookup assignee to verify existence
         const { data: assignee, error: assigneeError } = await supabase
           .from('users')
-          .select('id, department_id, role')
+          .select('id')
           .eq('id', body.assignee_id)
           .maybeSingle()
 
         if (assigneeError || !assignee) {
           return jsonResponse(400, { error: 'assignee not found' })
         }
-
-        // Verify assignee is eligible for this task's department per Nexus policy:
-        // - super_admin and regional_secretary can be assigned to any department
-        // - other users must have their department_id match the task's department_id exactly
-        const assigneeIsPrivileged = assignee.role && ['super_admin', 'regional_secretary'].includes(assignee.role)
-
-        if (!assigneeIsPrivileged && assignee.department_id !== departmentId) {
-          return jsonResponse(403, { error: 'assignee is not eligible for this task\'s department' })
-        }
+        // assignee eligibility is governed by Nexus set_task_assignees() RPC authorization
+        // not by department restrictions here
       }
 
       if (body.external_unique_key) {
