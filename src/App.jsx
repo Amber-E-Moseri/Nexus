@@ -17,6 +17,17 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js')
     .then(registration => console.log('[PWA] Service Worker registered successfully'))
     .catch(err => console.warn('[PWA] Service Worker registration failed:', err))
+
+  // When a new SW takes control (after skipWaiting + clients.claim), reload
+  // once so the tab picks up fresh HTML + new content-hashed chunk URLs.
+  // Guard prevents an infinite loop: the reload itself won't trigger another
+  // controllerchange because the same SW is already in control after reload.
+  let swReloadArmed = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swReloadArmed) return
+    swReloadArmed = true
+    window.location.reload()
+  })
 }
 
 // lazyRoute registers the import for hover/idle prefetching (BLW-07);
@@ -103,6 +114,7 @@ const CampusEditsPage = lazy(() => import('./pages/admin/CampusEditsPage'))
 const CampusPhotosSettings = lazy(() => import('./pages/settings/CampusPhotosSettings'))
 const AdminPermissionsPage = lazy(() => import('./pages/admin/PermissionsPage'))
 const EmailAdminPage = lazy(() => import('./pages/admin/EmailAdminPage'))
+const EventConfigsPage = lazy(() => import('./pages/admin/EventConfigsPage'))
 const NovaReview = lazy(() => import('./pages/admin/NovaReview'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
 const RegistrationPublicPage = lazy(() => import('./pages/events/RegistrationPublicPage'))
@@ -263,6 +275,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['super_admin']}>
                 <EmailAdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/event-configs"
+            element={
+              <ProtectedRoute roles={['super_admin']}>
+                <EventConfigsPage />
               </ProtectedRoute>
             }
           />
