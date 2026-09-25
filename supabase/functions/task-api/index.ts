@@ -8,7 +8,7 @@
 //   longer sets completed_at explicitly. API callers may supply either status
 //   (legacy string) or status_id (uuid). Both are returned in read responses so
 //   callers can migrate at their own pace.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN')
 
