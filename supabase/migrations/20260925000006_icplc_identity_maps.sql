@@ -7,7 +7,7 @@ create table public.icplc_identity_maps (
   id             uuid primary key default gen_random_uuid(),
   event_id       uuid not null references public.event_configs(id) on delete restrict,
   source_type    text not null
-    check (source_type in ('csv', 'cmp_registrations', 'cmp_flights', 'registration', 'mi_member')),
+    check (source_type in ('csv', 'cmp_registrations', 'cmp_flights', 'registration')),
   source_key     text not null,   -- normalized: lowercase, trimmed, collapsed whitespace
   participant_id uuid not null references public.icplc_participants(id) on delete cascade,
   confirmed_by   uuid references public.users(id) on delete set null,
