@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { ICPLCProvider } from './ICPLCContext.jsx'
 import OverviewPage from './pages/OverviewPage.jsx'
 import PeoplePage from './pages/PeoplePage.jsx'
+import RegistrationsPage from './pages/RegistrationsPage.jsx'
 import BoardPage from './pages/BoardPage.jsx'
 import DocumentationPage from './pages/DocumentationPage.jsx'
 import TravelPage from './pages/TravelPage.jsx'
@@ -15,6 +16,7 @@ import SettingsPage from './pages/SettingsPage.jsx'
 const NEW_TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'people', label: 'People' },
+  { key: 'registrations', label: 'Registrations' },
   { key: 'board', label: 'Board' },
   { key: 'documentation', label: 'Documentation' },
   { key: 'travel', label: 'Travel' },
@@ -103,6 +105,7 @@ export default function ICPLCPortal({
           {/* New ICPLC operational tabs */}
           {!isLegacyTab && resolvedTab === 'overview' && <OverviewPage />}
           {!isLegacyTab && resolvedTab === 'people' && <PeoplePage canWrite={canWrite} />}
+          {!isLegacyTab && resolvedTab === 'registrations' && <RegistrationsPage canWrite={canWrite} />}
           {!isLegacyTab && resolvedTab === 'board' && <BoardPage canWrite={canWrite} />}
           {!isLegacyTab && resolvedTab === 'documentation' && <DocumentationPage canWrite={canWrite} />}
           {!isLegacyTab && resolvedTab === 'travel' && <TravelPage canWrite={canWrite} />}

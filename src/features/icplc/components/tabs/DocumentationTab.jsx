@@ -1,6 +1,15 @@
 import React, { useState } from 'react'
+import { useAuth } from '../../../../hooks/useAuth'
 import { useUpdateProfile } from '../../hooks/useICPLCProfile.js'
 import Badge from '../../../../components/ui/Badge.jsx'
+import {
+  DOCUMENT_READINESS,
+  DOCUMENT_READINESS_LABELS,
+  DOCUMENT_TYPE_LABELS,
+  RESIDENCY_STATUS,
+  RESIDENCY_STATUS_LABELS,
+  deriveDocumentType,
+} from '../../../registration/icplcDocReadiness.js'
 
 const PASSPORT_READINESS_OPTIONS = [
   'unknown', 'ready', 'renewal_needed', 'renewal_in_progress',
@@ -33,10 +42,12 @@ const VISA_PROCESS_TONES = {
 }
 
 export default function DocumentationTab({ participant, canWrite }) {
+  const { profile: authProfile } = useAuth()
   const updateProfile = useUpdateProfile()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     canada_residency_status: participant.canada_residency_status || '',
+    canada_status_document_readiness: participant.canada_status_document_readiness || '',
     passport_country: participant.passport_country || '',
     passport_readiness: participant.passport_readiness,
     visa_requirement: participant.visa_requirement,
@@ -51,31 +62,89 @@ export default function DocumentationTab({ participant, canWrite }) {
       if (val !== cur) changed[key] = val || undefined
     }
     if (Object.keys(changed).length === 0) { setEditing(false); return }
-    await updateProfile.mutateAsync({ id: participant.id, fields: changed })
+
+    const canadaOverrideFields = [
+      'canada_residency_status',
+      'canada_status_document_readiness',
+    ].filter((field) => field in changed)
+
+    await updateProfile.mutateAsync({
+      id: participant.id,
+      fields: changed,
+      setOverride: canadaOverrideFields.length > 0,
+      overrideFields: canadaOverrideFields,
+      userId: authProfile?.id,
+    })
     setEditing(false)
   }
 
+  const activeResidency = editing ? form.canada_residency_status : participant.canada_residency_status
+  const docType = deriveDocumentType(activeResidency)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Staff-managed fields */}
       <section>
-        <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-          Documentation — Staff Managed
-        </h4>
+        <h4 style={sectionTitle}>Canadian Documentation</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
-            <label style={labelStyle}>Canada Residency Status</label>
+            <label style={labelStyle}>Canadian Status</label>
             {editing && canWrite ? (
-              <input
+              <select
                 value={form.canada_residency_status}
-                onChange={(e) => setForm((f) => ({ ...f, canada_residency_status: e.target.value }))}
-                style={inputStyle}
-                placeholder="e.g. Permanent Resident"
-              />
+                onChange={(e) => setForm((f) => ({
+                  ...f,
+                  canada_residency_status: e.target.value,
+                  canada_status_document_readiness: e.target.value === RESIDENCY_STATUS.CANADIAN_CITIZEN
+                    ? DOCUMENT_READINESS.NOT_APPLICABLE
+                    : f.canada_status_document_readiness,
+                }))}
+                style={selectStyle}
+              >
+                <option value="">Not set</option>
+                {Object.values(RESIDENCY_STATUS).map((value) => (
+                  <option key={value} value={value}>{RESIDENCY_STATUS_LABELS[value]}</option>
+                ))}
+              </select>
             ) : (
-              <div style={{ fontSize: 13 }}>{participant.canada_residency_status || '—'}</div>
+              <div style={{ fontSize: 13 }}>{RESIDENCY_STATUS_LABELS[participant.canada_residency_status] || '-'}</div>
             )}
           </div>
+          <div>
+            <label style={labelStyle}>Required Document</label>
+            <div style={{ fontSize: 13 }}>{DOCUMENT_TYPE_LABELS[docType]}</div>
+          </div>
+          <div>
+            <label style={labelStyle}>Document Readiness</label>
+            {editing && canWrite ? (
+              <select
+                value={form.canada_status_document_readiness}
+                onChange={(e) => setForm((f) => ({ ...f, canada_status_document_readiness: e.target.value }))}
+                style={selectStyle}
+                disabled={!form.canada_residency_status}
+              >
+                <option value="">Not set</option>
+                {Object.values(DOCUMENT_READINESS).map((value) => (
+                  <option key={value} value={value}>{DOCUMENT_READINESS_LABELS[value]}</option>
+                ))}
+              </select>
+            ) : (
+              <div style={{ fontSize: 13 }}>{DOCUMENT_READINESS_LABELS[participant.canada_status_document_readiness] || '-'}</div>
+            )}
+          </div>
+          <div>
+            <label style={labelStyle}>Authority</label>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              {participant.override_fields?.canada_residency_status?.overridden || participant.override_fields?.canada_status_document_readiness?.overridden
+                ? 'Staff override active'
+                : 'Operational staff field'}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h4 style={sectionTitle}>Passport</h4>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
             <label style={labelStyle}>Passport Country</label>
             {editing && canWrite ? (
@@ -86,41 +155,28 @@ export default function DocumentationTab({ participant, canWrite }) {
                 placeholder="e.g. Nigeria"
               />
             ) : (
-              <div style={{ fontSize: 13 }}>{participant.passport_country || '—'}</div>
+              <div style={{ fontSize: 13 }}>{participant.passport_country || '-'}</div>
+            )}
+          </div>
+          <div>
+            <label style={labelStyle}>Passport Readiness</label>
+            {editing && canWrite ? (
+              <select
+                value={form.passport_readiness}
+                onChange={(e) => setForm((f) => ({ ...f, passport_readiness: e.target.value }))}
+                style={selectStyle}
+              >
+                {PASSPORT_READINESS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            ) : (
+              <Badge tone={PASSPORT_TONES[participant.passport_readiness] || 'mute'} label={participant.passport_readiness} />
             )}
           </div>
         </div>
       </section>
 
-      {/* Passport readiness */}
       <section>
-        <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-          Passport
-        </h4>
-        <div>
-          <label style={labelStyle}>Passport Readiness</label>
-          {editing && canWrite ? (
-            <select
-              value={form.passport_readiness}
-              onChange={(e) => setForm((f) => ({ ...f, passport_readiness: e.target.value }))}
-              style={selectStyle}
-            >
-              {PASSPORT_READINESS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          ) : (
-            <Badge
-              tone={PASSPORT_TONES[participant.passport_readiness] || 'mute'}
-              label={participant.passport_readiness}
-            />
-          )}
-        </div>
-      </section>
-
-      {/* Visa */}
-      <section>
-        <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-          Visa
-        </h4>
+        <h4 style={sectionTitle}>Visa</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
             <label style={labelStyle}>Visa Requirement</label>
@@ -147,10 +203,7 @@ export default function DocumentationTab({ participant, canWrite }) {
                 {VISA_PROCESS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             ) : (
-              <Badge
-                tone={VISA_PROCESS_TONES[participant.visa_process_status] || 'mute'}
-                label={participant.visa_process_status}
-              />
+              <Badge tone={VISA_PROCESS_TONES[participant.visa_process_status] || 'mute'} label={participant.visa_process_status} />
             )}
           </div>
         </div>
@@ -160,12 +213,8 @@ export default function DocumentationTab({ participant, canWrite }) {
         <div style={{ display: 'flex', gap: 8 }}>
           {editing ? (
             <>
-              <button
-                onClick={handleSave}
-                disabled={updateProfile.isPending}
-                style={primaryBtn}
-              >
-                {updateProfile.isPending ? 'Saving…' : 'Save'}
+              <button onClick={handleSave} disabled={updateProfile.isPending} style={primaryBtn}>
+                {updateProfile.isPending ? 'Saving...' : 'Save'}
               </button>
               <button onClick={() => setEditing(false)} style={ghostBtn}>Cancel</button>
             </>
@@ -178,6 +227,7 @@ export default function DocumentationTab({ participant, canWrite }) {
   )
 }
 
+const sectionTitle = { margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }
 const labelStyle = { display: 'block', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }
 const inputStyle = {
   padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 4,

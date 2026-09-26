@@ -37,6 +37,8 @@ describe('Readiness Engine (release gate)', () => {
       arrival_flight: 'WS001',
       arrival_date: '2027-01-15',
       departure_date: '2027-01-20',
+      canada_residency_status: 'CANADIAN_CITIZEN',
+      canada_status_document_readiness: 'NOT_APPLICABLE',
     }
     const { readiness } = deriveReadiness(participant)
     expect(readiness).toBe('ready')
@@ -52,6 +54,8 @@ describe('Readiness Engine (release gate)', () => {
       arrival_flight: 'AC456',
       arrival_date: '2027-01-15',
       departure_date: '2027-01-22',
+      canada_residency_status: 'CANADIAN_CITIZEN',
+      canada_status_document_readiness: 'NOT_APPLICABLE',
     }
     const { readiness } = deriveReadiness(participant)
     expect(readiness).toBe('ready')
@@ -68,6 +72,8 @@ describe('Readiness Engine (release gate)', () => {
       arrival_flight: 'WS100',
       arrival_date: '2027-01-15',
       departure_date: '2027-01-22',
+      canada_residency_status: 'CANADIAN_CITIZEN',
+      canada_status_document_readiness: 'NOT_APPLICABLE',
     }
     const withNotes = { ...base, notes: 'Changed the notes field', subgroup: 'Group A' }
     const { readiness: r1 } = deriveReadiness(base)

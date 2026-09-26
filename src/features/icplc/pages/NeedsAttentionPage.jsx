@@ -4,6 +4,7 @@ import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import ParticipantTable from '../components/ParticipantTable.jsx'
+import { DOCUMENT_READINESS, RESIDENCY_STATUS } from '../../registration/icplcDocReadiness.js'
 
 const COHORTS = [
   {
@@ -20,7 +21,7 @@ const COHORTS = [
   },
   {
     key: 'confirmed_no_itinerary',
-    label: 'Confirmed — Missing Itinerary',
+    label: 'Confirmed - Missing Itinerary',
     description: 'Confirmed attendance but no flight details yet',
     filter: (p) =>
       p.participation_status === 'confirmed' &&
@@ -28,7 +29,7 @@ const COHORTS = [
   },
   {
     key: 'registered_unconfirmed',
-    label: 'Registered — Not Confirmed',
+    label: 'Registered - Not Confirmed',
     description: 'Registered in system but participation not confirmed',
     filter: (p) =>
       p.registration_status === 'registered' &&
@@ -36,11 +37,35 @@ const COHORTS = [
   },
   {
     key: 'visa_not_started',
-    label: 'Visa Required — Not Started',
+    label: 'Visa Required - Not Started',
     description: 'Visa required but process not yet started',
     filter: (p) =>
       p.visa_requirement === 'required' &&
       p.visa_process_status === 'not_started',
+  },
+  {
+    key: 'canadian_status_unknown',
+    label: 'Canadian Status Unknown',
+    description: 'Canadian status has not been collected for this participant',
+    filter: (p) => !p.canada_residency_status,
+  },
+  {
+    key: 'canadian_status_review',
+    label: 'Canadian Status Needs Review',
+    description: 'Visitor/Other status requires staff review',
+    filter: (p) => p.canada_residency_status === RESIDENCY_STATUS.VISITOR_OTHER,
+  },
+  {
+    key: 'canadian_doc_renewal',
+    label: 'Canadian Document Renewal Needed',
+    description: 'Required Canadian status document needs renewal',
+    filter: (p) => p.canada_status_document_readiness === DOCUMENT_READINESS.RENEWAL_NEEDED,
+  },
+  {
+    key: 'canadian_doc_issue',
+    label: 'Canadian Document Issue',
+    description: 'Required Canadian status document has an issue',
+    filter: (p) => p.canada_status_document_readiness === DOCUMENT_READINESS.ISSUE,
   },
 ]
 
@@ -56,7 +81,7 @@ export default function NeedsAttentionPage({ canWrite }) {
     })).filter((c) => c.participants.length > 0)
   }, [participants])
 
-  if (isLoading) return <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading…</div>
+  if (isLoading) return <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading...</div>
   if (!cohorts.length) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>

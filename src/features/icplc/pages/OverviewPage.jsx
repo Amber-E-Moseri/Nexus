@@ -1,13 +1,45 @@
 import React, { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../../../lib/supabase'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
+import {
+  REGISTRATION_SOURCE_TYPE,
+  registrationSourceKey,
+  reconciliationState,
+} from '../lib/reconciliation.js'
 
 export default function OverviewPage({ canWrite }) {
-  const { config, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
+  const { config, activeProfileId, activeProfileTab, closeProfile } = useICPLC()
   const eventId = config?.id
   const { data: participants, isLoading } = useICPLCParticipants(eventId, {})
+  const { data: registrations = [] } = useQuery({
+    queryKey: ['icplc_overview_registrations', eventId],
+    enabled: !!eventId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('registrations')
+        .select('id, email, full_name, first_name, last_name, submitted_at')
+        .eq('event_config_id', eventId)
+      if (error) throw error
+      return data || []
+    },
+  })
+  const { data: maps = [] } = useQuery({
+    queryKey: ['icplc_overview_registration_maps', eventId],
+    enabled: !!eventId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('icplc_identity_maps')
+        .select('source_key, participant_id')
+        .eq('event_id', eventId)
+        .eq('source_type', REGISTRATION_SOURCE_TYPE)
+      if (error) throw error
+      return data || []
+    },
+  })
 
   const stats = useMemo(() => {
     if (!participants) return null
@@ -23,22 +55,51 @@ export default function OverviewPage({ canWrite }) {
     return { total, byParticipation, byRegistration, byReadiness, bySubgroup }
   }, [participants])
 
-  if (isLoading) return <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading…</div>
+  const reconciliation = useMemo(() => {
+    const mapBySourceKey = new Map(maps.map((m) => [m.source_key, m]))
+    const rows = registrations.map((registration) =>
+      reconciliationState(registration, participants || [], mapBySourceKey.get(registrationSourceKey(registration))))
+    return {
+      unmatched: rows.filter((r) => r.state === 'UNMATCHED').length,
+      possible: rows.filter((r) => r.state === 'POSSIBLE_MATCH').length,
+    }
+  }, [maps, participants, registrations])
+
+  if (isLoading) return <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading...</div>
   if (!stats) return null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
-        <StatCard label="Total Participants" value={stats.total} />
-        <StatCard label="Confirmed" value={stats.byParticipation.confirmed || 0} tone="success" />
+        <StatCard label="People" value={stats.total} />
         <StatCard label="Registered" value={stats.byRegistration.registered || 0} tone="success" />
-        <StatCard label="Action Required" value={stats.byReadiness.action_required || 0} tone="warn" />
-        <StatCard label="Blocked" value={stats.byReadiness.blocked || 0} tone="danger" />
+        <StatCard label="Confirmed" value={stats.byParticipation.confirmed || 0} tone="success" />
         <StatCard label="Ready" value={stats.byReadiness.ready || 0} tone="success" />
       </div>
 
-      {/* Subgroup breakdown */}
+      {(reconciliation.unmatched > 0 || reconciliation.possible > 0) && (
+        <div style={{
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: 14,
+          background: 'var(--surface-1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 12,
+          alignItems: 'center',
+        }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Registration Reconciliation</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>
+              {reconciliation.unmatched} new/unmatched registrations, {reconciliation.possible} possible matches.
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Review in the Registrations tab
+          </div>
+        </div>
+      )}
+
       <section>
         <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600 }}>By Subgroup</h3>
         <table className="fs-table" style={{ width: '100%', borderCollapse: 'collapse' }}>

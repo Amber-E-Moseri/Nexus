@@ -3,6 +3,8 @@
 // V1 readiness enum: unknown | in_progress | action_required | blocked | ready
 // CRITICAL is explicitly deferred until deadline configuration exists.
 
+import { DOCUMENT_READINESS, docNeedsAttention } from '../../registration/icplcDocReadiness.js'
+
 /**
  * Derives whether a participant has itinerary data.
  * @param {object} p - icplc_participants row
@@ -58,6 +60,13 @@ export function deriveReadiness(p) {
   if (['issue', 'not_registered'].includes(p.registration_status)) {
     reasons.push('Registration outstanding')
   }
+  const canadianDocReason = docNeedsAttention({
+    canadaResidencyStatus: p.canada_residency_status,
+    canadaStatusDocumentReadiness: p.canada_status_document_readiness,
+  })
+  if (canadianDocReason) {
+    reasons.push(canadianDocReason)
+  }
   if (deriveItineraryStatus(p) === 'missing' && p.participation_status === 'confirmed') {
     reasons.push('Itinerary missing for confirmed participant')
   }
@@ -66,6 +75,9 @@ export function deriveReadiness(p) {
 
   // IN_PROGRESS — something is underway but no action currently needed from staff
   if (['in_progress', 'submitted', 'processing'].includes(p.visa_process_status)) {
+    return { readiness: 'in_progress', reasons: [] }
+  }
+  if (p.canada_status_document_readiness === DOCUMENT_READINESS.RENEWAL_IN_PROGRESS) {
     return { readiness: 'in_progress', reasons: [] }
   }
 

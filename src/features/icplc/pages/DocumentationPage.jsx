@@ -3,6 +3,12 @@ import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
+import {
+  DOCUMENT_READINESS_LABELS,
+  DOCUMENT_TYPE_LABELS,
+  RESIDENCY_STATUS_LABELS,
+  deriveDocumentType,
+} from '../../registration/icplcDocReadiness.js'
 
 const PASSPORT_TONES = {
   ready: 'done', renewal_needed: 'at_risk', renewal_in_progress: 'in_progress',
@@ -17,7 +23,7 @@ export default function DocumentationPage({ canWrite }) {
   const { config, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const { data: participants, isLoading } = useICPLCParticipants(config?.id, {})
 
-  if (isLoading) return <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading…</div>
+  if (isLoading) return <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading...</div>
 
   return (
     <div>
@@ -34,7 +40,9 @@ export default function DocumentationPage({ canWrite }) {
               <th style={thStyle}>Passport</th>
               <th style={thStyle}>Visa Req.</th>
               <th style={thStyle}>Visa Status</th>
-              <th style={thStyle}>Residency</th>
+              <th style={thStyle}>Canadian Status</th>
+              <th style={thStyle}>Required Doc</th>
+              <th style={thStyle}>Doc Readiness</th>
             </tr>
           </thead>
           <tbody>
@@ -43,8 +51,8 @@ export default function DocumentationPage({ canWrite }) {
                 <td style={tdStyle}>
                   <div style={{ fontWeight: 500, fontSize: 13 }}>{p.full_name}</div>
                 </td>
-                <td style={tdStyle}>{p.subgroup || '—'}</td>
-                <td style={tdStyle}>{p.passport_country || '—'}</td>
+                <td style={tdStyle}>{p.subgroup || '-'}</td>
+                <td style={tdStyle}>{p.passport_country || '-'}</td>
                 <td style={tdStyle}>
                   <Badge tone={PASSPORT_TONES[p.passport_readiness] || 'mute'} label={p.passport_readiness} />
                 </td>
@@ -52,7 +60,9 @@ export default function DocumentationPage({ canWrite }) {
                 <td style={tdStyle}>
                   <Badge tone={VISA_PROCESS_TONES[p.visa_process_status] || 'mute'} label={p.visa_process_status} />
                 </td>
-                <td style={tdStyle}>{p.canada_residency_status || '—'}</td>
+                <td style={tdStyle}>{RESIDENCY_STATUS_LABELS[p.canada_residency_status] || '-'}</td>
+                <td style={tdStyle}>{DOCUMENT_TYPE_LABELS[deriveDocumentType(p.canada_residency_status)]}</td>
+                <td style={tdStyle}>{DOCUMENT_READINESS_LABELS[p.canada_status_document_readiness] || '-'}</td>
               </tr>
             ))}
           </tbody>

@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
 import { useAuth } from '../../../../hooks/useAuth'
 import { useUpdateProfile, useClearFieldOverride } from '../../hooks/useICPLCProfile.js'
-import { isFieldOverridden, getOverrideMeta } from '../../lib/fieldAuthority.js'
-import Badge from '../../../../components/ui/Badge.jsx'
+import { getOverrideMeta } from '../../lib/fieldAuthority.js'
 
 const REGISTRATION_OPTIONS = ['unknown', 'not_registered', 'registered', 'issue']
 const PARTICIPATION_OPTIONS = ['tracking', 'likely', 'confirmed', 'uncertain', 'not_attending']
@@ -19,6 +18,8 @@ export default function RegistrationTab({ participant, canWrite }) {
   })
 
   const registrationOverride = getOverrideMeta(participant, 'registration_status')
+  const registrationSource = participant.source_values?.registration_source
+  const registrationStatusSource = participant.source_values?.registration_status
 
   async function handleSave() {
     const changed = {}
@@ -70,6 +71,13 @@ export default function RegistrationTab({ participant, canWrite }) {
       </Field>
 
       {/* Registration status — source-backed with override */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Info label="Registration Source" value={registrationStatusSource?.source || registrationSource?.source || 'None linked'} />
+        <Info label="Received" value={formatDate(registrationSource?.submitted_at || registrationStatusSource?.observed_at)} />
+        <Info label="Source Identifier" value={registrationSource?.registration_id || registrationStatusSource?.registration_id || '-'} />
+        <Info label="Source Email" value={registrationSource?.email || '-'} />
+      </div>
+
       <Field
         label="Registration Status"
         sourceValue={participant.source_values?.registration_status}
@@ -167,6 +175,20 @@ function Field({ label, staffManaged, sourceValue, override, onResumeSync, child
       )}
     </div>
   )
+}
+
+function Info({ label, value }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 13 }}>{value || '-'}</div>
+    </div>
+  )
+}
+
+function formatDate(value) {
+  if (!value) return '-'
+  try { return new Date(value).toLocaleDateString() } catch { return value }
 }
 
 const selectStyle = {

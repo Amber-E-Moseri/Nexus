@@ -1,14 +1,5 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import {
-  RESIDENCY_STATUS,
-  RESIDENCY_STATUS_LABELS,
-  DOCUMENT_READINESS,
-  DOCUMENT_READINESS_LABELS,
-  deriveDocumentType,
-  DOCUMENT_TYPE,
-  DOCUMENT_TYPE_LABELS,
-} from './icplcDocReadiness';
 import { supabase } from '../../lib/supabase';
 
 const C = {
@@ -44,9 +35,6 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
     departureFlight: registration.departureFlight || '',
     flightManualOverride: registration.flightManualOverride || false,
     registrationManualOverride: registration.registrationManualOverride || false,
-    // Canadian status document fields — manual only, never synced
-    canadaResidencyStatus: registration.canadaResidencyStatus || '',
-    canadaStatusDocumentReadiness: registration.canadaStatusDocumentReadiness || '',
   });
 
   const [saving, setSaving] = useState(false);
@@ -107,8 +95,6 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
         flight_manual_override: formData.flightManualOverride,
         registration_manual_override: formData.registrationManualOverride,
         // Canadian status document — manual only, never triggers sync override flags
-        canada_residency_status: formData.canadaResidencyStatus || null,
-        canada_status_document_readiness: formData.canadaStatusDocumentReadiness || null,
       };
 
       let updateError;
@@ -284,60 +270,6 @@ export default function RegistrationEditModal({ registration, onClose, onSave })
             <FormField label="Departure Time" type="time" value={formData.departureTime} onChange={(v) => handleChange('departureTime', v)} />
             <FormField label="Departure Flight" value={formData.departureFlight} onChange={(v) => handleChange('departureFlight', v)} />
 
-          </div>
-
-          {/* Canadian Status Document — manual only, never synced */}
-          <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 20, marginTop: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-              Canadian Status Document
-            </div>
-            <div style={{ fontSize: 11.5, color: C.mute, marginBottom: 14, lineHeight: 1.5 }}>
-              Operational tracking only — not a legal determination. These fields are never overwritten by sync.
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <FormField
-                label="Canadian Status"
-                value={formData.canadaResidencyStatus}
-                onChange={(v) => setFormData(prev => ({
-                  ...prev,
-                  canadaResidencyStatus: v,
-                  // Reset document readiness when status changes — old value may be for a different doc type
-                  canadaStatusDocumentReadiness: v !== prev.canadaResidencyStatus ? '' : prev.canadaStatusDocumentReadiness,
-                }))}
-                type="select"
-                options={[
-                  '',
-                  ...Object.values(RESIDENCY_STATUS),
-                ]}
-                optionLabels={{ '': '— not set —', ...RESIDENCY_STATUS_LABELS }}
-              />
-              {(() => {
-                const docType = deriveDocumentType(formData.canadaResidencyStatus);
-                if (!formData.canadaResidencyStatus || docType === DOCUMENT_TYPE.NONE || docType === DOCUMENT_TYPE.REVIEW) {
-                  return null;
-                }
-                return (
-                  <FormField
-                    label={`${DOCUMENT_TYPE_LABELS[docType]} Readiness`}
-                    value={formData.canadaStatusDocumentReadiness}
-                    onChange={(v) => setFormData(prev => ({ ...prev, canadaStatusDocumentReadiness: v }))}
-                    type="select"
-                    options={['', ...Object.values(DOCUMENT_READINESS).filter(v => v !== 'NOT_APPLICABLE')]}
-                    optionLabels={{ '': '— not set —', ...DOCUMENT_READINESS_LABELS }}
-                  />
-                );
-              })()}
-              {formData.canadaResidencyStatus === RESIDENCY_STATUS.CANADIAN_CITIZEN && (
-                <div style={{ gridColumn: '1 / -1', fontSize: 12.5, color: C.green, background: '#E8F5EC', padding: '8px 12px', borderRadius: 7 }}>
-                  Canadian citizen — no Canadian status document required for this workflow.
-                </div>
-              )}
-              {formData.canadaResidencyStatus === 'VISITOR_OTHER' && (
-                <div style={{ gridColumn: '1 / -1', fontSize: 12.5, color: C.amber, background: C.amberBg, padding: '8px 12px', borderRadius: 7 }}>
-                  Visitor / Other — manual review required before travel.
-                </div>
-              )}
-            </div>
           </div>
         </div>
 

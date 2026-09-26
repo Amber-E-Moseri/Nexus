@@ -70,6 +70,7 @@ export default function ParticipantTable({ participants, loading }) {
         <thead>
           <tr>
             <SortTh field="full_name" label="Name" active={sortField} dir={sortDir} onClick={handleSort} />
+            <SortTh field="region" label="Region" active={sortField} dir={sortDir} onClick={handleSort} />
             <SortTh field="subgroup" label="Subgroup" active={sortField} dir={sortDir} onClick={handleSort} />
             <SortTh field="participation_status" label="Participation" active={sortField} dir={sortDir} onClick={handleSort} />
             <SortTh field="registration_status" label="Registration" active={sortField} dir={sortDir} onClick={handleSort} />
@@ -90,7 +91,8 @@ export default function ParticipantTable({ participants, loading }) {
                 <div style={{ fontWeight: 500, fontSize: 13 }}>{p.full_name}</div>
                 {p.email && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.email}</div>}
               </td>
-              <td style={tdStyle}>{p.subgroup || '—'}</td>
+              <td style={tdStyle}>{p.region || '-'}</td>
+              <td style={tdStyle}>{p.subgroup || '-'}</td>
               <td style={tdStyle}>
                 <Badge
                   tone={PARTICIPATION_TONES[p.participation_status] || 'mute'}

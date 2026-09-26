@@ -66,12 +66,16 @@ export function useICPLCActivity(participantId) {
 export function useUpdateProfile() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, fields, setOverride, overrideField, userId }) => {
+    mutationFn: async ({ id, fields, setOverride, overrideField, overrideFields, userId }) => {
       let update = { ...fields }
-      if (setOverride && overrideField && userId) {
+      const fieldsToOverride = overrideFields || (overrideField ? [overrideField] : [])
+      if (setOverride && fieldsToOverride.length && userId) {
         const current = qc.getQueryData(PROFILE_KEY(id))
         const existing = current?.override_fields || {}
-        update.override_fields = { ...existing, ...setOverridePatch(overrideField, userId) }
+        update.override_fields = fieldsToOverride.reduce(
+          (acc, field) => ({ ...acc, ...setOverridePatch(field, userId) }),
+          { ...existing },
+        )
       }
       const { data, error } = await supabase
         .from('icplc_participants')

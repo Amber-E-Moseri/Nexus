@@ -12,7 +12,7 @@ import ICPLCPortal from '../../features/icplc/ICPLCPortal.jsx'
 // transport = Transportation / flights manifest
 // finance tab is intentionally NOT hidden — Finance team members on the ICPLC
 // sprint get access via the finance_only team permission tier.
-const ICPLC_HIDDEN_TABS = ['overview', 'summary', 'tii-report', 'checkin', 'confirm', 'discipleship', 'compliance', 'import']
+const ICPLC_HIDDEN_TABS = ['overview', 'summary', 'tii-report', 'checkin', 'confirm', 'discipleship', 'compliance', 'import', 'documentation']
 
 const ICPLC_DEFAULT_CONFIG = {
   event_name: 'ICPLC',
