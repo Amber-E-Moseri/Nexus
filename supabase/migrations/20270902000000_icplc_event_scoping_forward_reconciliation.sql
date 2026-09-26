@@ -65,7 +65,7 @@ BEGIN
   -- Identify TII by known verified UUID
   v_tii_id := '6c68fd1b-04ea-4b2d-9bba-d2b4307a83c1'::uuid;
 
-  SELECT name INTO v_tii_name FROM public.event_configs WHERE id = v_tii_id;
+  SELECT event_name INTO v_tii_name FROM public.event_configs WHERE id = v_tii_id;
   IF v_tii_name IS NULL THEN
     RAISE EXCEPTION
       'Expected TII event_config does not exist. '
@@ -77,7 +77,7 @@ BEGIN
   -- Identify ICPLC by known verified UUID
   v_icplc_id := '37db5b0d-6651-4fc6-8ffb-f4f81c9139e4'::uuid;
 
-  SELECT name INTO v_icplc_name FROM public.event_configs WHERE id = v_icplc_id;
+  SELECT event_name INTO v_icplc_name FROM public.event_configs WHERE id = v_icplc_id;
   IF v_icplc_name IS NULL THEN
     RAISE EXCEPTION
       'Expected ICPLC event_config does not exist. '
@@ -89,7 +89,7 @@ BEGIN
   -- Verify no ambiguous TII or ICPLC events
   SELECT count(*) INTO v_ambiguous
     FROM public.event_configs
-   WHERE (name ILIKE '%This Is It%' OR name ILIKE '%TII%')
+   WHERE (event_name ILIKE '%This Is It%' OR event_name ILIKE '%TII%')
      AND id != v_tii_id;
 
   IF v_ambiguous > 0 THEN
@@ -101,7 +101,7 @@ BEGIN
 
   SELECT count(*) INTO v_ambiguous
     FROM public.event_configs
-   WHERE (name ILIKE '%ICPLC%')
+   WHERE (event_name ILIKE '%ICPLC%')
      AND id != v_icplc_id;
 
   IF v_ambiguous > 0 THEN
@@ -220,10 +220,19 @@ ALTER TABLE public.event_payments
 -- Also drop any duplicate unique index
 DROP INDEX IF EXISTS public.event_payments_email_unique;
 
--- Add composite unique constraint
-ALTER TABLE public.event_payments
-  ADD CONSTRAINT event_payments_email_event_config_id_key
-  UNIQUE (email, event_config_id);
+-- Add composite unique constraint (idempotent: skip if already exists)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.event_payments'::regclass
+      AND conname = 'event_payments_email_event_config_id_key'
+  ) THEN
+    ALTER TABLE public.event_payments
+      ADD CONSTRAINT event_payments_email_event_config_id_key
+      UNIQUE (email, event_config_id);
+  END IF;
+END $$;
 
 -- Keep email-only index for fast lookups in RPC joins
 CREATE INDEX IF NOT EXISTS idx_event_payments_email
