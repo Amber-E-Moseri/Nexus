@@ -20,8 +20,8 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    // Verify caller has ICPLC write capability (enforced in RPC too; belt-and-suspenders)
-    const { data: canWrite, error: permErr } = await supabase.rpc('icplc_can_write_participants')
+    // Verify caller has ICPLC import capability (enforced in RPC too; belt-and-suspenders)
+    const { data: canWrite, error: permErr } = await supabase.rpc('icplc_can_import')
     if (permErr || !canWrite) return errorResponse('Access denied', 403)
 
     // Resolve caller identity for activity_log
