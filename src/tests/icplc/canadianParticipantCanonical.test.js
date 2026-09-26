@@ -52,4 +52,21 @@ describe('ICPLC Canadian documentation canonical participant model', () => {
     expect(sql).not.toContain('icplc_update_documentation')
     expect(sql).not.toContain('icplc_resume_form_sync')
   })
+
+  it('does not put Canadian operational authority into registration-created participant payloads', async () => {
+    const { participantInsertFromRegistration } = await import('../../features/icplc/lib/reconciliation.js')
+    const insert = participantInsertFromRegistration({
+      id: 'registration-1',
+      event_config_id: 'icplc-event',
+      full_name: 'Canadian Fields Stay Participant-Owned',
+      submitted_at: '2027-01-01T00:00:00Z',
+      canada_residency_status: RESIDENCY_STATUS.PERMANENT_RESIDENT,
+      canada_status_document_readiness: DOCUMENT_READINESS.READY,
+    }, 'icplc-event')
+
+    expect(insert).not.toHaveProperty('canada_residency_status')
+    expect(insert).not.toHaveProperty('canada_status_document_readiness')
+    expect(insert.source_values).not.toHaveProperty('canada_residency_status')
+    expect(insert.source_values).not.toHaveProperty('canada_status_document_readiness')
+  })
 })

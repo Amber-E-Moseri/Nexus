@@ -25,6 +25,80 @@ export function registrationDisplayName(registration) {
     .join(' ')
 }
 
+export function isActiveParticipant(participant) {
+  return participant?.participation_status !== 'not_attending'
+}
+
+export function isValidCurrentRegistration(registration, eventId = null) {
+  if (!registration?.id) return false
+  if (eventId && registration.event_config_id && registration.event_config_id !== eventId) return false
+  if ('submitted_at' in registration && !registration.submitted_at) return false
+
+  const status = normalizeIdentity(registration.status || registration.registration_status)
+  return !['cancelled', 'canceled', 'rejected', 'invalid', 'void'].includes(status)
+}
+
+export function registrationSourceValue(registration, observedAt = new Date().toISOString()) {
+  return {
+    value: 'registered',
+    source: REGISTRATION_SOURCE_TYPE,
+    registration_id: registration.id,
+    observed_at: observedAt,
+  }
+}
+
+export function registrationSourceMetadata(registration) {
+  return {
+    registration_id: registration.id,
+    email: registration.email || null,
+    submitted_at: registration.submitted_at || null,
+  }
+}
+
+export function participantInsertFromRegistration(registration, eventId, observedAt = new Date().toISOString()) {
+  const fullName = registrationDisplayName(registration)
+  if (!isValidCurrentRegistration(registration, eventId)) {
+    throw new Error('Registration is not valid for this ICPLC event')
+  }
+  if (!fullName) throw new Error('Registration is missing a name')
+
+  return {
+    event_id: eventId,
+    full_name: fullName,
+    email: registration.email || null,
+    subgroup: registration.subgroup || null,
+    registration_status: 'registered',
+    source_values: {
+      registration_status: registrationSourceValue(registration, observedAt),
+      registration_source: registrationSourceMetadata(registration),
+    },
+  }
+}
+
+export function registrationCoverage(participants = [], registrations = [], maps = [], eventId = null) {
+  const activeParticipants = participants.filter(isActiveParticipant)
+  const validRegistrationKeys = new Set(
+    registrations
+      .filter((registration) => isValidCurrentRegistration(registration, eventId))
+      .map(registrationSourceKey)
+      .filter(Boolean),
+  )
+  const linkedParticipantIds = new Set(
+    maps
+      .filter((map) => map.source_type === REGISTRATION_SOURCE_TYPE || !map.source_type)
+      .filter((map) => validRegistrationKeys.has(map.source_key))
+      .map((map) => map.participant_id)
+      .filter(Boolean),
+  )
+  const registered = activeParticipants.filter((participant) => linkedParticipantIds.has(participant.id)).length
+  const total = activeParticipants.length
+  return {
+    registered,
+    total,
+    percent: total ? Math.round((registered / total) * 100) : 0,
+  }
+}
+
 export function candidateMatches(registration, participants = [], confirmedParticipantId = null) {
   if (confirmedParticipantId) return []
   const regEmail = normalizeIdentity(registration?.email)

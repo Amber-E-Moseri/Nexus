@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Eye, Search, UserPlus } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useICPLC } from '../ICPLCContext.jsx'
@@ -7,6 +7,10 @@ import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx
 import Badge from '../../../components/ui/Badge.jsx'
 import {
   REGISTRATION_SOURCE_TYPE,
+  isValidCurrentRegistration,
+  participantInsertFromRegistration,
+  registrationSourceMetadata,
+  registrationSourceValue,
   registrationDisplayName,
   registrationSourceKey,
   reconciliationState,
@@ -25,6 +29,7 @@ export default function RegistrationsPage({ canWrite }) {
   const qc = useQueryClient()
   const [reviewing, setReviewing] = useState(null)
   const [sourceRow, setSourceRow] = useState(null)
+  const autoAddingRef = useRef(new Set())
 
   const { data: participants = [], isLoading: participantsLoading } = useICPLCParticipants(eventId, {})
   const { data: registrations = [], isLoading: registrationsLoading } = useQuery({
@@ -79,20 +84,12 @@ export default function RegistrationsPage({ canWrite }) {
     mutationFn: async ({ registration, participant }) => {
       const sourceKey = registrationSourceKey(registration)
       if (!sourceKey) throw new Error('Registration is missing a stable id')
-      const sourceValue = {
-        value: 'registered',
-        source: REGISTRATION_SOURCE_TYPE,
-        registration_id: registration.id,
-        observed_at: new Date().toISOString(),
-      }
+      if (!isValidCurrentRegistration(registration, eventId)) throw new Error('Registration is not valid for this ICPLC event')
+      const sourceValue = registrationSourceValue(registration)
       const nextSourceValues = {
         ...(participant.source_values || {}),
         registration_status: sourceValue,
-        registration_source: {
-          registration_id: registration.id,
-          email: registration.email || null,
-          submitted_at: registration.submitted_at || null,
-        },
+        registration_source: registrationSourceMetadata(registration),
       }
 
       const { error: mapError } = await supabase
@@ -122,56 +119,68 @@ export default function RegistrationsPage({ canWrite }) {
   })
 
   const createFromRegistration = useMutation({
-    mutationFn: async (registration) => {
+    mutationFn: async ({ registration }) => {
       const sourceKey = registrationSourceKey(registration)
-      const fullName = registrationDisplayName(registration)
       if (!sourceKey) throw new Error('Registration is missing a stable id')
-      if (!fullName) throw new Error('Registration is missing a name')
+      if (!isValidCurrentRegistration(registration, eventId)) throw new Error('Registration is not valid for this ICPLC event')
+
+      const existingMap = mapBySourceKey.get(sourceKey)
+      if (existingMap?.participant_id) {
+        return participants.find((p) => p.id === existingMap.participant_id) || { id: existingMap.participant_id }
+      }
+
+      const existingByEmail = registration.email
+        ? participants.find((p) => p.email?.toLowerCase() === registration.email.toLowerCase())
+        : null
+      if (existingByEmail) {
+        await confirmMatch.mutateAsync({ registration, participant: existingByEmail })
+        return existingByEmail
+      }
 
       const { data: participant, error: createError } = await supabase
         .from('icplc_participants')
-        .insert({
-          event_id: eventId,
-          full_name: fullName,
-          email: registration.email || null,
-          subgroup: registration.subgroup || null,
-          registration_status: 'registered',
-          source_values: {
-            registration_status: {
-              value: 'registered',
-              source: REGISTRATION_SOURCE_TYPE,
-              registration_id: registration.id,
-              observed_at: new Date().toISOString(),
-            },
-            registration_source: {
-              registration_id: registration.id,
-              email: registration.email || null,
-              submitted_at: registration.submitted_at || null,
-            },
-          },
-        })
+        .insert(participantInsertFromRegistration(registration, eventId))
         .select()
         .single()
       if (createError) throw createError
 
       const { error: mapError } = await supabase
         .from('icplc_identity_maps')
-        .insert({
+        .upsert({
           event_id: eventId,
           source_type: REGISTRATION_SOURCE_TYPE,
           source_key: sourceKey,
           participant_id: participant.id,
-        })
+        }, { onConflict: 'event_id,source_type,source_key' })
       if (mapError) throw mapError
       return participant
     },
-    onSuccess: (participant) => {
+    onSuccess: (participant, variables) => {
       qc.invalidateQueries({ queryKey: ['icplc_registration_identity_maps', eventId] })
       qc.invalidateQueries({ queryKey: ['icplc_participants', eventId] })
       setReviewing(null)
-      openProfile(participant.id, 'registration')
+      if (variables?.openAfter !== false) openProfile(participant.id, 'registration')
     },
   })
+
+  useEffect(() => {
+    if (!canWrite || !eventId || createFromRegistration.isPending) return
+    const next = rows.find((row) => {
+      const key = registrationSourceKey(row.registration)
+      return row.state === 'UNMATCHED'
+        && key
+        && !autoAddingRef.current.has(key)
+        && isValidCurrentRegistration(row.registration, eventId)
+        && registrationDisplayName(row.registration)
+    })
+    if (!next) return
+
+    const key = registrationSourceKey(next.registration)
+    autoAddingRef.current.add(key)
+    createFromRegistration.mutate({ registration: next.registration, openAfter: false }, {
+      onError: () => autoAddingRef.current.delete(key),
+    })
+  }, [canWrite, createFromRegistration, eventId, rows])
 
   const loading = participantsLoading || registrationsLoading || mapsLoading
   if (loading) return <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading registrations...</div>
@@ -179,10 +188,10 @@ export default function RegistrationsPage({ canWrite }) {
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
-        <Stat label="Registered" value={summary.registered} />
+        <Stat label="Source Records" value={summary.registered} />
         <Stat label="Matched" value={summary.matched} tone="success" />
         <Stat label="Needs Review" value={summary.review} tone="warn" />
-        <Stat label="New / Unmatched" value={summary.unmatched} />
+        <Stat label="Adding to Working List" value={summary.unmatched} />
       </div>
 
       <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
@@ -230,11 +239,13 @@ export default function RegistrationsPage({ canWrite }) {
                       <button onClick={() => openProfile(row.participant.id, 'registration')} style={smallBtn}><Eye size={13} /> View participant</button>
                     )}
                     <button onClick={() => setSourceRow(row.registration)} style={smallBtn}>View source</button>
-                    {row.state !== 'MATCHED' && canWrite && (
+                    {row.state === 'POSSIBLE_MATCH' && canWrite && (
                       <>
                         <button onClick={() => setReviewing(row)} style={smallBtn}><Search size={13} /> Review</button>
-                        <button onClick={() => createFromRegistration.mutate(row.registration)} disabled={createFromRegistration.isPending} style={smallBtn}><UserPlus size={13} /> Create participant</button>
                       </>
+                    )}
+                    {row.state === 'UNMATCHED' && canWrite && (
+                        <button onClick={() => createFromRegistration.mutate({ registration: row.registration })} disabled={createFromRegistration.isPending} style={smallBtn}><UserPlus size={13} /> Add to Working List</button>
                     )}
                   </div>
                 </td>
@@ -250,7 +261,7 @@ export default function RegistrationsPage({ canWrite }) {
           participants={participants}
           onClose={() => setReviewing(null)}
           onConfirm={(participant) => confirmMatch.mutate({ registration: reviewing.registration, participant })}
-          onCreate={() => createFromRegistration.mutate(reviewing.registration)}
+          onCreate={() => createFromRegistration.mutate({ registration: reviewing.registration })}
           saving={confirmMatch.isPending || createFromRegistration.isPending}
         />
       )}
@@ -375,8 +386,8 @@ function Stat({ label, value, tone }) {
 
 function stateLabel(state) {
   if (state === 'MATCHED') return 'Matched'
-  if (state === 'POSSIBLE_MATCH') return 'Possible match'
-  return 'New / unmatched'
+  if (state === 'POSSIBLE_MATCH') return 'Possible match / needs review'
+  return 'Adding to Working List'
 }
 
 function formatDate(value) {
