@@ -714,10 +714,12 @@ const DEFAULT_TABS = [
   { key: 'documentation', label: 'Documentation', icon: FileCheck2, hidden: true },
 ];
 
-export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false, userTeamNames = [], initialTab }) {
+export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false, userTeamNames = [], initialTab, eventConfig: eventConfigProp }) {
   const { profile, role } = useAuth();
   const { config, reload: reloadConfig } = useEventConfig();
-  const eventConfig = config || {
+  // Prop wins so callers (e.g. RegistrationPage) can inject a specific event config
+  // even when it is no longer the globally-active config (e.g. TII is historical).
+  const eventConfig = eventConfigProp || config || {
     event_name: 'This Is It 2.0', sprint_pattern: '%This Is It 2.0%',
     early_cutoff_at: '2026-08-06T00:00:00Z', early_fee: 250, standard_fee: 350,
     local_detection_regex: 'manitoba|winnipeg',

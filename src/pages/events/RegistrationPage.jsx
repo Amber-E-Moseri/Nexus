@@ -3,11 +3,10 @@ import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import PageSpinner from '../../components/ui/PageSpinner'
 import RegistrationEcosystem from '../../features/registration/RegistrationEcosystem'
-import { useEventConfig } from '../../features/registration/EventConfigContext'
 
-// Preserve the live TII 2.0 behaviour until an administrator deliberately
-// activates a configuration for a subsequent event.
-const LEGACY_TII_CONFIG = {
+// Fallback permissions used when the DB row can't be fetched.
+// id is intentionally absent here — it gets filled from the DB row.
+const TII_PERMISSIONS = {
   sprint_pattern: '%This Is It 2.0%',
   team_permissions: {
     unscoped_edit: ['Programs', 'Secretariat'],
@@ -20,8 +19,8 @@ const LEGACY_TII_CONFIG = {
 
 export default function RegistrationPage() {
   const { profile, role } = useAuth()
-  const { config, loading: configLoading } = useEventConfig()
-  const eventConfig = config || LEGACY_TII_CONFIG
+  const [eventConfig, setEventConfig] = useState(null)
+  const [configLoading, setConfigLoading] = useState(true)
   const [canAccess, setCanAccess] = useState(null)
   const [loading, setLoading] = useState(true)
   const [limitedToSubgroups, setLimitedToSubgroups] = useState(null)
@@ -31,10 +30,30 @@ export default function RegistrationPage() {
   const [needsSubgroupAssignment, setNeedsSubgroupAssignment] = useState(false)
   const [userTeamNames, setUserTeamNames] = useState([])
 
+  // Load the TII event config by name so we always have an id for data scoping.
+  // We query regardless of is_active so the historical TII record is found.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setConfigLoading(true)
+      const { data } = await supabase
+        .from('event_configs')
+        .select('*')
+        .ilike('event_name', '%This Is It%')
+        .limit(1)
+        .maybeSingle()
+      if (!cancelled) {
+        setEventConfig(data ? { ...TII_PERMISSIONS, ...data } : TII_PERMISSIONS)
+        setConfigLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   useEffect(() => {
     if (configLoading) return
     checkAccess()
-  }, [profile?.id, role, configLoading, config])
+  }, [profile?.id, role, configLoading, eventConfig])
 
   async function checkAccess() {
     setLoading(true)
@@ -305,6 +324,7 @@ export default function RegistrationPage() {
         <span style={{ color: '#8A7F99' }}>— 2026 BLW Canada event system preserved for historical records &amp; reporting</span>
       </div>
       <RegistrationEcosystem
+        eventConfig={eventConfig}
         limitedToSubgroups={canAccess === 'limited' ? limitedToSubgroups : null}
         sprintEditAccess={sprintEditAccess}
         financeAccess={financeAccess}
