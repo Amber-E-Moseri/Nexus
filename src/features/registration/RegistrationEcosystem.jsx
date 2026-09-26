@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Unlock, Car, Bus, X, LayoutList, ScanLine, Mail, TriangleAlert, BarChart3 } from 'lucide-react';
+import { Upload, Users, CheckCircle2, Circle, Filter, Download, RefreshCw, ChevronDown, ChevronRight, AlertCircle, Home, Church, Droplets, DoorOpen, Trash2, Plus, Crown, DollarSign, Pencil, Plane, Settings, Lock, Unlock, Car, Bus, X, LayoutList, ScanLine, Mail, TriangleAlert, BarChart3, FileCheck2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import RegistrationEditModal from './RegistrationEditModal';
 import RegistrationDataTab from './RegistrationDataTab';
 import SettingsTab from './SettingsTab';
 import TiiReportTab from './components/TiiReportTab';
+import DocumentationTab from './DocumentationTab';
 import { useEventConfig } from './EventConfigContext';
 
 // ---------- brand tokens ----------
@@ -216,7 +217,7 @@ function downloadCSV(filename, rows, columns) {
   URL.revokeObjectURL(url);
 }
 
-function printTransportManifest(notFlying, byDriving, byInState, byBus, crossCountrySubgroups) {
+function printTransportManifest(notFlying, byDriving, byInState, byBus, crossCountrySubgroups, eventName = 'This Is It 2.0') {
   const win = window.open('', '_blank');
   const printDate = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -290,7 +291,7 @@ function printTransportManifest(notFlying, byDriving, byInState, byBus, crossCou
 
   win.document.write(`<!doctype html><html><head>
 <meta charset="utf-8">
-<title>Ground Transport Manifest — This Is It 2.0</title>
+<title>Ground Transport Manifest — ${eventName}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -344,7 +345,7 @@ function printTransportManifest(notFlying, byDriving, byInState, byBus, crossCou
 <div class="page">
   <div class="cover">
     <div class="cover-inner">
-      <div class="event-label">This Is It 2.0 · BLW Canada Sub-Region</div>
+      <div class="event-label">${eventName} · BLW Canada Sub-Region</div>
       <h1>Ground Transport Manifest</h1>
       <div class="cover-subtitle">Driving · Bus · Cross-country delegates — organized by subgroup</div>
       <div class="cover-date">${printDate}</div>
@@ -374,7 +375,7 @@ function printTransportManifest(notFlying, byDriving, byInState, byBus, crossCou
   setTimeout(() => win.print(), 600);
 }
 
-function printFlightManifest(withFlight, byArrivalDate, byDepartureDate) {
+function printFlightManifest(withFlight, byArrivalDate, byDepartureDate, eventName = 'This Is It 2.0') {
   const win = window.open('', '_blank');
   const printDate = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -428,7 +429,7 @@ function printFlightManifest(withFlight, byArrivalDate, byDepartureDate) {
 
   win.document.write(`<!doctype html><html><head>
 <meta charset="utf-8">
-<title>Flight Manifest — This Is It 2.0</title>
+<title>Flight Manifest — ${eventName}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -476,7 +477,7 @@ function printFlightManifest(withFlight, byArrivalDate, byDepartureDate) {
 <div class="page">
   <div class="cover">
     <div class="cover-inner">
-      <div class="event-label">This Is It 2.0 · BLW Canada Sub-Region</div>
+      <div class="event-label">${eventName} · BLW Canada Sub-Region</div>
       <h1>Flight Manifest</h1>
       <div class="cover-subtitle">Arrivals organized by date — out-of-province delegates</div>
       <div class="cover-date">${printDate}</div>
@@ -496,7 +497,7 @@ function printFlightManifest(withFlight, byArrivalDate, byDepartureDate) {
   setTimeout(() => win.print(), 600);
 }
 
-function printDepartureManifest(withFlight, byDepartureDate) {
+function printDepartureManifest(withFlight, byDepartureDate, eventName = 'This Is It 2.0') {
   const win = window.open('', '_blank');
   const printDate = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -558,7 +559,7 @@ function printDepartureManifest(withFlight, byDepartureDate) {
 
   win.document.write(`<!doctype html><html><head>
 <meta charset="utf-8">
-<title>Departure Manifest — This Is It 2.0</title>
+<title>Departure Manifest — ${eventName}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -597,7 +598,7 @@ function printDepartureManifest(withFlight, byDepartureDate) {
 <div class="page">
   <div class="cover">
     <div class="cover-inner">
-      <div class="event-label">This Is It 2.0 · BLW Canada Sub-Region</div>
+      <div class="event-label">${eventName} · BLW Canada Sub-Region</div>
       <h1>Departure Manifest</h1>
       <div class="cover-subtitle">Departures organized by date · 15-minute window batching</div>
       <div class="cover-date">${printDate}</div>
@@ -616,31 +617,31 @@ function printDepartureManifest(withFlight, byDepartureDate) {
 }
 
 // ---------- storage helpers (Supabase-backed) ----------
-async function loadKey(key, fallback) {
+// prefix isolates config rows per event (e.g. ICPLC uses its event_config_id as prefix).
+// TII (is_active=true) uses empty prefix to stay backward-compatible with existing rows.
+async function loadKey(key, fallback, prefix = '') {
   try {
     const { data } = await supabase
       .from('registration_config')
       .select('value')
-      .eq('key', key)
+      .eq('key', prefix + key)
       .maybeSingle()
     return data ? data.value : fallback
   } catch { return fallback; }
 }
-async function saveKey(key, value) {
+async function saveKey(key, value, prefix = '') {
+  const fullKey = prefix + key
   try {
     const { error } = await supabase
       .from('registration_config')
-      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
-    // A save that silently no-ops (e.g. an RLS write policy rejecting this user/key)
-    // is worse than one that errors loudly: the UI keeps showing the in-memory change,
-    // so nothing looks wrong until a refresh reverts it. Surface it instead.
+      .upsert({ key: fullKey, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
     if (error) {
-      console.error('saveKey failed:', key, error.message);
-      alert(`Couldn't save your change (${key}) — it may not survive a refresh. ${error.message}`);
+      console.error('saveKey failed:', fullKey, error.message);
+      alert(`Couldn't save your change (${fullKey}) — it may not survive a refresh. ${error.message}`);
     }
   } catch (e) {
-    console.error('saveKey error:', key, e.message);
-    alert(`Couldn't save your change (${key}) — it may not survive a refresh. ${e.message}`);
+    console.error('saveKey error:', fullKey, e.message);
+    alert(`Couldn't save your change (${fullKey}) — it may not survive a refresh. ${e.message}`);
   }
 }
 
@@ -707,6 +708,10 @@ const DEFAULT_TABS = [
   { key: 'transport', label: 'Transportation', icon: Plane },
   { key: 'finance', label: 'Finance', icon: DollarSign, restricted: true },
   { key: 'import', label: 'Import Data', icon: Upload },
+  // Documentation tab is ICPLC-specific — hidden by default, shown only for ICPLC
+  // events via the visibleTabs check below (not via tab_config, to avoid requiring
+  // a TII tab_config migration).
+  { key: 'documentation', label: 'Documentation', icon: FileCheck2, hidden: true },
 ];
 
 export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false, userTeamNames = [], initialTab }) {
@@ -719,6 +724,10 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     exempt_fellowships: ['BLW University of Manitoba', 'BLW University of Winnipeg', 'BLW University College of the North'],
     public_token_key: 'tii2_public_token', tab_config: [],
   };
+  // Namespace registration_config keys per event so ICPLC and TII don't share rows.
+  // Active event (TII) uses empty prefix to stay compatible with existing DB rows.
+  // Inactive events (ICPLC) use their event_config_id as a prefix.
+  const cfgPrefix = (eventConfig?.id && !eventConfig.is_active) ? `${eventConfig.id}:` : '';
   const [tab, setTab] = useState(initialTab || 'overview');
   const exemptFellowships = useMemo(() => new Set(eventConfig.exempt_fellowships || []), [eventConfig]);
   const crossCountrySubgroups = useMemo(() => new Set(eventConfig.cross_country_subgroups || []), [eventConfig]);
@@ -810,6 +819,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         inState: r.in_state ?? false,
         transportMode: r.transport_mode || null,
         checkedInAt: r.checked_in_at || null,
+        canadaResidencyStatus: r.canada_residency_status || null,
+        canadaStatusDocumentReadiness: r.canada_status_document_readiness || null,
       }));
       // Merge: keep local version for any record edited in the last 10 s
       setRegistrations(prev => {
@@ -986,11 +997,12 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       let cachedReg = [], cachedRoster = [], roomConfig = null;
       let configQuerySucceeded = false;
       try {
+        const BASE_CFG_KEYS = ['roster', 'registrations', 'confirmations', 'targets', 'last-import', 'room-assignments'];
         const { data: configRows } = await supabase
           .from('registration_config')
           .select('key, value')
-          .in('key', ['roster', 'registrations', 'confirmations', 'targets', 'last-import', 'room-assignments']);
-        const byKey = Object.fromEntries((configRows || []).map(r => [r.key, r.value]));
+          .in('key', BASE_CFG_KEYS.map(k => cfgPrefix + k));
+        const byKey = Object.fromEntries((configRows || []).map(r => [r.key.slice(cfgPrefix.length), r.value]));
         cachedRoster = byKey['roster'] || [];
         cachedReg = byKey['registrations'] || [];
         conf = byKey['confirmations'] || {};
@@ -1106,7 +1118,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
 
       setLoaded(true);
     })();
-  }, []);
+  }, [cfgPrefix]);
 
   // ---------- derived: merged registrant records ----------
   const regByEmail = useMemo(() => Object.fromEntries(registrations.map(r => [r.email, r])), [registrations]);
@@ -1242,6 +1254,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       // Import Data: super admin only
       if (t.key === 'import' && role !== 'super_admin') return false;
       if (isGloballyScoped && ['import', 'finance'].includes(t.key)) return false;
+      // Documentation tab is ICPLC-specific — hide for any non-ICPLC event
+      if (t.key === 'documentation' && !eventConfig?.event_name?.toLowerCase().includes('icplc')) return false;
       return true;
     });
     return allowed;
@@ -1251,7 +1265,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   const setTarget = useCallback((sg, field, val) => {
     setTargets(prev => {
       const next = { ...prev, [sg]: { ...(prev[sg] || {}), [field]: val } };
-      saveKey('targets', next);
+      saveKey('targets', next, cfgPrefix);
       return next;
     });
   }, []);
@@ -1294,16 +1308,16 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       people: [],
     }));
     setRooms(newRooms);
-    saveKey('room-assignments', { rooms: newRooms, numRooms: count, peoplePerRoom: capacity });
+    saveKey('room-assignments', { rooms: newRooms, numRooms: count, peoplePerRoom: capacity }, cfgPrefix);
   }
 
   function saveRoomData(roomsToSave, numR, perRoom, note) {
-    saveKey('room-assignments', { rooms: roomsToSave, numRooms: numR, peoplePerRoom: perRoom, roomsNote: note ?? roomsNote });
+    saveKey('room-assignments', { rooms: roomsToSave, numRooms: numR, peoplePerRoom: perRoom, roomsNote: note ?? roomsNote }, cfgPrefix);
   }
 
   function handleUpdateRoomsNote(note) {
     setRoomsNote(note);
-    saveKey('room-assignments', { rooms, numRooms, peoplePerRoom, roomsNote: note });
+    saveKey('room-assignments', { rooms, numRooms, peoplePerRoom, roomsNote: note }, cfgPrefix);
   }
 
   const handleCheckIn = useCallback(async (registrationId, checkedInAt) => {
@@ -1430,19 +1444,19 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     if (!text || !text.trim()) return;
     const rows = parseCSV(text);
     const now = new Date().toISOString();
-    if (kind === 'roster') { setRoster(rows); await saveKey('roster', rows); }
+    if (kind === 'roster') { setRoster(rows); await saveKey('roster', rows, cfgPrefix); }
     if (kind === 'registrations') {
       // Merge: new rows override existing by email; records not in the new import are kept
       setRegistrations(prev => {
         const byEmail = new Map(prev.map(r => [(r.email || '').toLowerCase(), r]));
         rows.forEach(r => byEmail.set((r.email || '').toLowerCase(), r));
         const merged = Array.from(byEmail.values());
-        saveKey('registrations', merged);
+        saveKey('registrations', merged, cfgPrefix);
         return merged;
       });
     }
     const li = { ...lastImport, [kind]: now };
-    setLastImport(li); await saveKey('last-import', li);
+    setLastImport(li); await saveKey('last-import', li, cfgPrefix);
   }
 
   async function handleImportWorkingList(text) {
@@ -1508,7 +1522,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       alert('Failed to save working list to database: ' + e.message);
     }
     const li = { ...lastImport, 'working-list': now };
-    setLastImport(li); await saveKey('last-import', li);
+    setLastImport(li); await saveKey('last-import', li, cfgPrefix);
   }
 
   async function handleAddToWorkingList(person) {
@@ -1788,7 +1802,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, role, viewDefaults: eventConfig.discipleship_view_defaults, onSaveViewDefaults: async (defaults) => { if (!config?.id) return; await supabase.from('event_configs').update({ discipleship_view_defaults: defaults }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'tii-report' && <TiiReportTab {...{ registrations: registrationsFiltered, eventId: config?.id, eventConfig }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
-        {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited }} />}
+        {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited, eventName: eventConfig.event_name }} />}
         {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, onToggleFlightLock: handleToggleFlightLock, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onSetTransportMode: setTransportMode, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'finance' && (hasFinanceAccess
           ? <FinanceTab {...{ registrations: registrationsFiltered.filter(r => !absentEmailsForMerge.has(r.email)), payments, setPayments, userId: profile?.id, eventConfigId: eventConfig?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />
@@ -1799,6 +1813,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
             </div>
         )}
         {tab === 'import' && <ImportTab {...{ handleImport, handleImportWorkingList, roster: rosterFiltered, registrations: registrationsFiltered, workingListDb, lastImport, isLimited, onApiSyncApplied: refetchRegistrations }} />}
+        {tab === 'documentation' && <DocumentationTab merged={merged} />}
         {tab === 'settings' && role === 'super_admin' && <SettingsTab config={config} onSaved={reloadConfig} />}
       </div>
     </div>
@@ -3876,8 +3891,8 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
           </Btn>
           <Btn tone="ghost" small onClick={() =>
             viewMode === 'departures'
-              ? printDepartureManifest(withFlight, byDepartureDate)
-              : printFlightManifest(withFlight, byArrivalDate, byDepartureDate)
+              ? printDepartureManifest(withFlight, byDepartureDate, eventConfig.event_name)
+              : printFlightManifest(withFlight, byArrivalDate, byDepartureDate, eventConfig.event_name)
           }>
             <Download size={13} /> PDF
           </Btn>
@@ -4072,7 +4087,7 @@ function TransportTab({ merged, isLimited, subgroups: allSubgroups, onApplied, o
                 { key: 'email', label: 'Email' },
                 { get: r => r.transportMode === 'bus' ? 'Bus' : r.transportMode === 'driving' ? 'Driving' : crossCountrySubgroups.has(r.subgroup) ? 'Cross-country' : 'Local', label: 'Transport' },
               ])}><Download size={13} /> CSV</Btn>
-              <Btn tone="ghost" small onClick={() => printTransportManifest(notFlying, byDriving, byInState, byBus, crossCountrySubgroups)}><Download size={13} /> PDF</Btn>
+              <Btn tone="ghost" small onClick={() => printTransportManifest(notFlying, byDriving, byInState, byBus, crossCountrySubgroups, eventConfig.event_name)}><Download size={13} /> PDF</Btn>
             </div>
           </div>
         );
@@ -4340,7 +4355,7 @@ function ImportBlock({ title, hint, count, last, onImport }) {
 }
 
 // ============ ROOM ASSIGNMENTS ============
-function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited }) {
+function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited, eventName = 'This Is It 2.0' }) {
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState(peoplePerRoom);
   const [bulkPrefix, setBulkPrefix] = useState('Room');
@@ -4349,7 +4364,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
   const [sendingRoomEmails, setSendingRoomEmails] = useState(false);
   const [roomEmailResult, setRoomEmailResult] = useState(null);
   const [showRoomEmailModal, setShowRoomEmailModal] = useState(false);
-  const [roomEmailSubject, setRoomEmailSubject] = useState('Your room assignment — This Is It 2.0');
+  const [roomEmailSubject, setRoomEmailSubject] = useState(`Your room assignment — ${eventName}`);
   const [roomEmailNote, setRoomEmailNote] = useState('');
   const [roomEmailSelected, setRoomEmailSelected] = useState(new Set()); // emails checked in modal
 
@@ -4375,7 +4390,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
       const { data, error } = await supabase.functions.invoke('send-room-assignments', {
         body: {
           rooms: filteredRooms,
-          eventName: 'This Is It 2.0',
+          eventName,
           subject: roomEmailSubject.trim() || undefined,
           customNote: roomEmailNote.trim() || undefined,
         },
@@ -4483,7 +4498,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
 
     win.document.write(`<!doctype html><html><head>
 <meta charset="utf-8">
-<title>Room Assignments — This Is It 2.0</title>
+<title>Room Assignments — ${eventName}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4550,7 +4565,7 @@ function RoomAssignmentTab({ merged, rooms, handleAddRoom, handleBulkCreateRooms
 
   <div class="cover">
     <div class="cover-inner">
-      <div class="event-label">This Is It 2.0 · BLW Canada Sub-Region</div>
+      <div class="event-label">${eventName} · BLW Canada Sub-Region</div>
       <h1>Room Assignments</h1>
       <div class="cover-date">${printDate}</div>
       <div class="stats-row">
