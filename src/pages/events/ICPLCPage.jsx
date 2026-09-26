@@ -211,9 +211,11 @@ export default function ICPLCPage() {
   // Legacy tab content — RegistrationEcosystem receives the same props as before.
   // ICPLCPortal renders it in legacy tabs via the legacyContent prop, never importing
   // RegistrationEcosystem itself.
-  // initialTab="rooms" ensures RegistrationEcosystem starts on a visible tab
-  // (overview is hidden by ICPLC_HIDDEN_TABS, which would otherwise render
-  // TII overview content with no active button highlighted).
+  // initialTab: finance-only users (financeAccess=true, sprintEditAccess=false) land on
+  // 'finance' because 'rooms' is hidden for them (no rooms grant, not on Accommodation team).
+  // All other ICPLC users land on 'rooms' — avoids the hidden 'overview' tab rendering
+  // TII overview content with no active button highlighted.
+  const legacyInitialTab = financeAccess && !sprintEditAccess ? 'finance' : 'rooms'
   const legacyContent = (
     <RegistrationEcosystem
       limitedToSubgroups={canAccess === 'limited' ? [] : null}
@@ -221,7 +223,7 @@ export default function ICPLCPage() {
       financeAccess={financeAccess}
       limitedToRegistrationDataOnly={false}
       userTeamNames={userTeamNames}
-      initialTab="rooms"
+      initialTab={legacyInitialTab}
     />
   )
 
