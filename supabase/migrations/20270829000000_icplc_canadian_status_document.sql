@@ -239,47 +239,65 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_reg registrations%ROWTYPE;
+  v_event_config_id uuid;
+  v_row_count       int;
 BEGIN
   IF auth.uid() IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'error', 'unauthenticated');
   END IF;
 
-  SELECT * INTO v_reg
-  FROM registrations
-  WHERE id = p_registration_id;
-
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'not_found');
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM event_configs ec
-    WHERE ec.id = v_reg.event_config_id
-      AND ec.event_name ILIKE '%ICPLC%'
-  ) THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'not_icplc_event');
-  END IF;
-
-  -- Verify user is authorized to edit registrations for this event
-  -- Allow: super_admin only (resume form sync is a staff operation, not delegated to all dept staff)
+  -- Verify user is authorized
+  -- Allow: super_admin only (resume form sync is a staff operation, not delegated)
   IF (auth.jwt() ->> 'user_role') != 'super_admin' THEN
     RETURN jsonb_build_object('ok', false, 'error', 'unauthorized');
   END IF;
 
+  -- Verify registration exists and belongs to an ICPLC event
+  SELECT ec.id INTO v_event_config_id
+  FROM registrations r
+  JOIN event_configs ec ON r.event_config_id = ec.id
+  WHERE r.id = p_registration_id
+    AND ec.event_name ILIKE '%ICPLC%'
+  LIMIT 1;
+
+  IF v_event_config_id IS NULL THEN
+    -- Registration not found or not ICPLC event
+    IF NOT EXISTS (SELECT 1 FROM registrations WHERE id = p_registration_id) THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'not_found');
+    ELSE
+      RETURN jsonb_build_object('ok', false, 'error', 'not_icplc_event');
+    END IF;
+  END IF;
+
+  -- Atomic update: read and adopt latest _participant value in single UPDATE
+  -- This prevents race conditions where _participant changes between initial SELECT and UPDATE
   IF p_field = 'residency_status' THEN
     UPDATE registrations SET
-      canada_residency_status        = coalesce(v_reg.canada_residency_status_participant, v_reg.canada_residency_status),
+      canada_residency_status        = coalesce(canada_residency_status_participant, canada_residency_status),
       canada_residency_status_source = 'PARTICIPANT_FORM',
       updated_at                     = now()
-    WHERE id = p_registration_id;
+    WHERE id = p_registration_id
+      AND canada_residency_status_source = 'NEXUS_MANUAL';
+
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
+    IF v_row_count = 0 THEN
+      -- Field was not locked by a Nexus manual override, no-op
+      RETURN jsonb_build_object('ok', true, 'note', 'field_not_locked');
+    END IF;
 
   ELSIF p_field = 'doc_readiness' THEN
     UPDATE registrations SET
-      canada_status_document_readiness     = coalesce(v_reg.canada_status_doc_readiness_participant, v_reg.canada_status_document_readiness),
+      canada_status_document_readiness     = coalesce(canada_status_doc_readiness_participant, canada_status_document_readiness),
       canada_status_doc_readiness_source   = 'PARTICIPANT_FORM',
       updated_at                           = now()
-    WHERE id = p_registration_id;
+    WHERE id = p_registration_id
+      AND canada_status_doc_readiness_source = 'NEXUS_MANUAL';
+
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
+    IF v_row_count = 0 THEN
+      -- Field was not locked by a Nexus manual override, no-op
+      RETURN jsonb_build_object('ok', true, 'note', 'field_not_locked');
+    END IF;
 
   ELSE
     RETURN jsonb_build_object('ok', false, 'error', 'unknown_field');

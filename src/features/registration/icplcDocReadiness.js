@@ -87,6 +87,24 @@ export const DOCUMENT_READINESS_LABELS = {
   NOT_APPLICABLE:      'Not applicable',
 };
 
+// ── Field source authority ────────────────────────────────────────────────────
+//
+// Tracks how a Canadian status field was last written.
+// NEXUS_MANUAL acts as the lock signal: participant form cannot overwrite.
+// PARTICIPANT_FORM or null means the field follows participant submissions.
+
+export const FIELD_SOURCE = {
+  PARTICIPANT_FORM: 'PARTICIPANT_FORM',
+  NEXUS_MANUAL:     'NEXUS_MANUAL',
+  CSV_IMPORT:       'CSV_IMPORT',
+};
+
+export const FIELD_SOURCE_LABELS = {
+  PARTICIPANT_FORM: 'Updated through participant form',
+  NEXUS_MANUAL:     'Updated manually in Nexus',
+  CSV_IMPORT:       'Updated via import',
+};
+
 // ── Overall readiness vocabulary (not persisted — derived in JS) ──────────────
 // Precedence (highest → lowest severity): BLOCKED > ACTION_REQUIRED > IN_PROGRESS > READY > UNKNOWN
 
