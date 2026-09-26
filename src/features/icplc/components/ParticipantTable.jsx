@@ -81,50 +81,53 @@ export default function ParticipantTable({ participants, loading }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((p) => (
-            <tr
-              key={p.id}
-              onClick={() => openProfile(p.id)}
-              style={{ cursor: 'pointer' }}
-            >
-              <td style={tdStyle}>
-                <div style={{ fontWeight: 500, fontSize: 13 }}>{p.full_name}</div>
-                {p.email && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.email}</div>}
-              </td>
-              <td style={tdStyle}>{p.region || '-'}</td>
-              <td style={tdStyle}>{p.subgroup || '-'}</td>
-              <td style={tdStyle}>
-                <Badge
-                  tone={PARTICIPATION_TONES[p.participation_status] || 'mute'}
-                  label={p.participation_status}
-                />
-              </td>
-              <td style={tdStyle}>
-                <Badge
-                  tone={REGISTRATION_TONES[p.registration_status] || 'mute'}
-                  label={p.registration_status}
-                />
-              </td>
-              <td style={tdStyle}>
-                <ReadinessChip participant={p} />
-              </td>
-              <td style={tdStyle}><span style={{ fontSize: 12 }}>{p.passport_readiness}</span></td>
-              <td style={tdStyle}><span style={{ fontSize: 12 }}>{p.visa_requirement}</span></td>
-              <td style={tdStyle}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {p.tags?.map((t) => (
-                    <span
-                      key={t.id}
-                      className="fchip"
-                      style={{ fontSize: 11, background: t.color || 'var(--surface-2)' }}
-                    >
-                      {t.name}
-                    </span>
-                  ))}
-                </div>
-              </td>
-            </tr>
-          ))}
+          {sorted.map((p) => {
+            const registrationStatus = p.registration_link_status || p.registration_status
+            return (
+              <tr
+                key={p.id}
+                onClick={() => openProfile(p.id)}
+                style={{ cursor: 'pointer' }}
+              >
+                <td style={tdStyle}>
+                  <div style={{ fontWeight: 500, fontSize: 13 }}>{p.full_name}</div>
+                  {p.email && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.email}</div>}
+                </td>
+                <td style={tdStyle}>{p.region || '-'}</td>
+                <td style={tdStyle}>{p.subgroup || '-'}</td>
+                <td style={tdStyle}>
+                  <Badge
+                    tone={PARTICIPATION_TONES[p.participation_status] || 'mute'}
+                    label={p.participation_status}
+                  />
+                </td>
+                <td style={tdStyle}>
+                  <Badge
+                    tone={REGISTRATION_TONES[registrationStatus] || 'mute'}
+                    label={registrationStatus}
+                  />
+                </td>
+                <td style={tdStyle}>
+                  <ReadinessChip participant={p} />
+                </td>
+                <td style={tdStyle}><span style={{ fontSize: 12 }}>{p.passport_readiness}</span></td>
+                <td style={tdStyle}><span style={{ fontSize: 12 }}>{p.visa_requirement}</span></td>
+                <td style={tdStyle}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {p.tags?.map((t) => (
+                      <span
+                        key={t.id}
+                        className="fchip"
+                        style={{ fontSize: 11, background: t.color || 'var(--surface-2)' }}
+                      >
+                        {t.name}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

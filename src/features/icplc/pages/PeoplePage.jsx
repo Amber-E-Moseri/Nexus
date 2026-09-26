@@ -1,36 +1,83 @@
 import React, { useMemo, useState } from 'react'
-import { UserPlus, Users } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
+import { UserPlus } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useCreateParticipant, useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import ParticipantTable from '../components/ParticipantTable.jsx'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
-import { POOL_SOURCE_TYPE, poolSourceKey } from '../lib/reconciliation.js'
+import { deriveReadiness } from '../lib/readinessEngine.js'
+import {
+  REGISTRATION_SOURCE_TYPE,
+  filterParticipantsByWorkingListView,
+  registrationLinkedParticipantIds,
+} from '../lib/reconciliation.js'
 
 export default function PeoplePage({ canWrite }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
-  const [showPool, setShowPool] = useState(false)
 
   const { data: participants, isLoading, error } = useICPLCParticipants(eventId, {
     search: filters.search,
     participation_status: filters.participation_status,
-    registration_status: filters.registration_status,
     passport_readiness: filters.passport_readiness,
     visa_requirement: filters.visa_requirement,
     visa_process_status: filters.visa_process_status,
     subgroup: filters.subgroup,
   })
+  const { data: registrations = [], isLoading: registrationsLoading } = useQuery({
+    queryKey: ['icplc_working_list_registrations', eventId],
+    enabled: !!eventId,
+    queryFn: async () => {
+      const { data, error: registrationsError } = await supabase
+        .from('registrations')
+        .select('id, event_config_id, submitted_at, status, registration_status')
+        .eq('event_config_id', eventId)
+      if (registrationsError) throw registrationsError
+      return data || []
+    },
+  })
+  const { data: registrationMaps = [], isLoading: mapsLoading } = useQuery({
+    queryKey: ['icplc_working_list_registration_maps', eventId],
+    enabled: !!eventId,
+    queryFn: async () => {
+      const { data, error: mapsError } = await supabase
+        .from('icplc_identity_maps')
+        .select('source_type, source_key, participant_id')
+        .eq('event_id', eventId)
+        .eq('source_type', REGISTRATION_SOURCE_TYPE)
+      if (mapsError) throw mapsError
+      return data || []
+    },
+  })
+
+  const participantsWithRegistrationCoverage = useMemo(() => {
+    const linkedParticipantIds = registrationLinkedParticipantIds(registrations, registrationMaps, eventId)
+    return (participants || []).map((participant) => ({
+      ...participant,
+      registration_link_status: linkedParticipantIds.has(participant.id) ? 'registered' : 'not_registered',
+    }))
+  }, [eventId, participants, registrationMaps, registrations])
+
+  const displayedParticipants = useMemo(() => (
+    filterParticipantsByWorkingListView(
+      participantsWithRegistrationCoverage,
+      registrations,
+      registrationMaps,
+      eventId,
+      filters.working_list_view || 'all',
+      (participant) => deriveReadiness(participant).readiness,
+    )
+  ), [eventId, filters.working_list_view, participantsWithRegistrationCoverage, registrationMaps, registrations])
+  const loading = isLoading || registrationsLoading || mapsLoading
 
   return (
     <div>
       {canWrite && (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
           <button onClick={() => setShowAdd(true)} style={primaryBtn}><UserPlus size={14} /> Add Person</button>
-          <button onClick={() => setShowPool(true)} style={ghostBtn}><Users size={14} /> Add from Pool</button>
         </div>
       )}
 
@@ -43,9 +90,9 @@ export default function PeoplePage({ canWrite }) {
       <ParticipantFilters />
 
       {/* Count */}
-      {!isLoading && (
+      {!loading && (
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
-          {participants?.length ?? 0} participant{participants?.length !== 1 ? 's' : ''}
+          {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
         </div>
       )}
 
@@ -55,7 +102,7 @@ export default function PeoplePage({ canWrite }) {
         </div>
       )}
 
-      <ParticipantTable participants={participants} loading={isLoading} />
+      <ParticipantTable participants={displayedParticipants} loading={loading} />
 
       {/* Canonical profile drawer */}
       {activeProfileId && (
@@ -75,15 +122,6 @@ export default function PeoplePage({ canWrite }) {
             setShowAdd(false)
             openProfile(participant.id)
           }}
-        />
-      )}
-
-      {showPool && (
-        <PoolCopyModal
-          eventId={eventId}
-          participants={participants || []}
-          onClose={() => setShowPool(false)}
-          onCopied={(participant) => openProfile(participant.id)}
         />
       )}
     </div>
@@ -143,185 +181,6 @@ function AddPersonModal({ eventId, onClose, onCreated }) {
           <button onClick={onClose} style={ghostButtonStyle}>Cancel</button>
           <button onClick={submit} disabled={!form.full_name.trim() || createParticipant.isPending} style={primaryButtonStyle}>
             {createParticipant.isPending ? 'Saving...' : 'Create participant'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function PoolCopyModal({ eventId, participants, onClose, onCopied }) {
-  const qc = useQueryClient()
-  const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState(new Set())
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-  const [poolRows, setPoolRows] = useState([])
-  const [loading, setLoading] = useState(false)
-
-  async function searchPool(q) {
-    setLoading(true)
-    setError(null)
-    try {
-      let req = supabase
-        .from('mi_members')
-        .select('id, cmp_id, name, phone, email, subgroup_id, fellowship_id, mi_subgroups(name), mi_fellowships(name)')
-        .eq('is_active', true)
-        .order('name')
-        .limit(50)
-      if (q.trim()) {
-        req = req.or(`name.ilike.%${q.trim()}%,email.ilike.%${q.trim()}%,phone.ilike.%${q.trim()}%`)
-      }
-      const { data, error: poolError } = await req
-      if (poolError) throw poolError
-      setPoolRows(data || [])
-    } catch (err) {
-      setError(err.message || 'Could not load pool.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  React.useEffect(() => {
-    searchPool('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const existingEmails = useMemo(
-    () => new Set(participants.map((p) => String(p.email || '').toLowerCase()).filter(Boolean)),
-    [participants],
-  )
-
-  function toggle(id) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  async function copySelected() {
-    setSaving(true)
-    setError(null)
-    try {
-      let lastCreated = null
-      for (const person of poolRows.filter((p) => selected.has(p.id))) {
-        const key = poolSourceKey(person)
-        if (!key) continue
-
-        const { data: existingMap, error: mapLookupError } = await supabase
-          .from('icplc_identity_maps')
-          .select('participant_id')
-          .eq('event_id', eventId)
-          .eq('source_type', POOL_SOURCE_TYPE)
-          .eq('source_key', key)
-          .maybeSingle()
-        if (mapLookupError) throw mapLookupError
-        if (existingMap?.participant_id) continue
-
-        const { data: participant, error: createError } = await supabase
-          .from('icplc_participants')
-          .insert({
-            event_id: eventId,
-            full_name: person.name,
-            email: person.email || null,
-            subgroup: person.mi_subgroups?.name || null,
-            registration_status: 'not_registered',
-            source_values: {
-              pool_source: {
-                source: POOL_SOURCE_TYPE,
-                mi_member_id: person.id,
-                cmp_id: person.cmp_id,
-                observed_at: new Date().toISOString(),
-              },
-            },
-          })
-          .select()
-          .single()
-        if (createError) throw createError
-
-        const { error: identityError } = await supabase
-          .from('icplc_identity_maps')
-          .insert({
-            event_id: eventId,
-            source_type: POOL_SOURCE_TYPE,
-            source_key: key,
-            participant_id: participant.id,
-          })
-        if (identityError) throw identityError
-        lastCreated = participant
-      }
-      qc.invalidateQueries({ queryKey: ['icplc_participants', eventId] })
-      setSelected(new Set())
-      if (lastCreated) onCopied(lastCreated)
-      onClose()
-    } catch (err) {
-      setError(err.message || 'Could not copy selected people.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div style={modalOverlay}>
-      <div style={{ ...modalCard, width: 'min(760px, 96vw)' }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 16 }}>Add from Pool</h3>
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
-          Copies active CMP member records into ICPLC. Future pool changes will not sync automatically.
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && searchPool(query)}
-            placeholder="Search pool by name, email, or phone..."
-            style={{ ...inputStyle, flex: 1 }}
-          />
-          <button onClick={() => searchPool(query)} style={ghostButtonStyle}>Search</button>
-        </div>
-        {error && <div style={{ color: '#991B1B', fontSize: 12, marginBottom: 10 }}>{error}</div>}
-        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'auto', maxHeight: 360 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={thStyleSmall}></th>
-                <th style={thStyleSmall}>Person</th>
-                <th style={thStyleSmall}>Subgroup</th>
-                <th style={thStyleSmall}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {poolRows.map((person) => {
-                const duplicate = person.email && existingEmails.has(String(person.email).toLowerCase())
-                return (
-                  <tr key={person.id}>
-                    <td style={tdStyleSmall}>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(person.id)}
-                        disabled={duplicate}
-                        onChange={() => toggle(person.id)}
-                      />
-                    </td>
-                    <td style={tdStyleSmall}>
-                      <div style={{ fontWeight: 600 }}>{person.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{person.email || person.phone || 'No contact'}</div>
-                    </td>
-                    <td style={tdStyleSmall}>{person.mi_subgroups?.name || '-'}</td>
-                    <td style={tdStyleSmall}>{duplicate ? 'Already in ICPLC by email' : 'Available'}</td>
-                  </tr>
-                )
-              })}
-              {!loading && poolRows.length === 0 && (
-                <tr><td colSpan={4} style={{ ...tdStyleSmall, color: 'var(--text-secondary)' }}>No pool records found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button onClick={onClose} style={ghostButtonStyle}>Cancel</button>
-          <button onClick={copySelected} disabled={selected.size === 0 || saving} style={primaryButtonStyle}>
-            {saving ? 'Copying...' : `Copy ${selected.size || ''}`.trim()}
           </button>
         </div>
       </div>

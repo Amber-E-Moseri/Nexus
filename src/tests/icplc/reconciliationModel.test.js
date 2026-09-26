@@ -3,10 +3,12 @@ import {
   POOL_SOURCE_TYPE,
   REGISTRATION_SOURCE_TYPE,
   candidateMatches,
+  filterParticipantsByWorkingListView,
   isValidCurrentRegistration,
   participantInsertFromRegistration,
   poolSourceKey,
   registrationCoverage,
+  registrationLinkedParticipantIds,
   reconciliationState,
   registrationSourceKey,
 } from '../../features/icplc/lib/reconciliation.js'
@@ -172,6 +174,62 @@ describe('ICPLC reconciliation model', () => {
       total: 2,
       percent: 50,
     })
+  })
+
+  it('filters Working List registration coverage from the same identity-link truth as Overview', () => {
+    const workingList = [
+      { id: 'p1', participation_status: 'pending', registration_status: 'not_registered' },
+      { id: 'p2', participation_status: 'confirmed', registration_status: 'registered' },
+      { id: 'p3', participation_status: 'confirmed', registration_status: 'registered' },
+    ]
+    const registrations = [
+      { id: 'r1', event_config_id: eventId, submitted_at: '2027-01-01T00:00:00Z' },
+      { id: 'expired', event_config_id: eventId, submitted_at: null },
+    ]
+    const maps = [
+      { source_type: REGISTRATION_SOURCE_TYPE, source_key: 'r1', participant_id: 'p1' },
+      { source_type: REGISTRATION_SOURCE_TYPE, source_key: 'expired', participant_id: 'p3' },
+    ]
+
+    expect([...registrationLinkedParticipantIds(registrations, maps, eventId)]).toEqual(['p1'])
+    expect(filterParticipantsByWorkingListView(workingList, registrations, maps, eventId, 'registered'))
+      .toEqual([workingList[0]])
+    expect(filterParticipantsByWorkingListView(workingList, registrations, maps, eventId, 'not_registered'))
+      .toEqual([workingList[1], workingList[2]])
+  })
+
+  it('keeps registration coverage independent from participation filters', () => {
+    const workingList = [
+      { id: 'p1', participation_status: 'confirmed' },
+      { id: 'p2', participation_status: 'pending' },
+      { id: 'p3', participation_status: 'confirmed' },
+    ]
+    const registrations = [
+      { id: 'r1', event_config_id: eventId, submitted_at: '2027-01-01T00:00:00Z' },
+      { id: 'r2', event_config_id: eventId, submitted_at: '2027-01-01T00:00:00Z' },
+    ]
+    const maps = [
+      { source_type: REGISTRATION_SOURCE_TYPE, source_key: 'r1', participant_id: 'p1' },
+      { source_type: REGISTRATION_SOURCE_TYPE, source_key: 'r2', participant_id: 'p2' },
+    ]
+
+    expect(filterParticipantsByWorkingListView(workingList, registrations, maps, eventId, 'registered'))
+      .toEqual([workingList[0], workingList[1]])
+    expect(filterParticipantsByWorkingListView(workingList, registrations, maps, eventId, 'confirmed'))
+      .toEqual([workingList[0], workingList[2]])
+  })
+
+  it('filters the Working List needs-attention view from derived readiness', () => {
+    const workingList = [{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }]
+
+    expect(filterParticipantsByWorkingListView(
+      workingList,
+      [],
+      [],
+      eventId,
+      'needs_attention',
+      (participant) => (participant.id === 'p1' ? 'blocked' : participant.id === 'p2' ? 'action_required' : 'ready'),
+    )).toEqual([workingList[0], workingList[1]])
   })
 
   it('is idempotent when the same registration link is processed repeatedly', () => {

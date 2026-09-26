@@ -2,7 +2,13 @@ import React from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 
 const PARTICIPATION_OPTIONS = ['tracking', 'likely', 'confirmed', 'uncertain', 'not_attending']
-const REGISTRATION_OPTIONS = ['unknown', 'not_registered', 'registered', 'issue']
+const WORKING_LIST_VIEW_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'registered', label: 'Registered' },
+  { value: 'not_registered', label: 'Not Registered' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'needs_attention', label: 'Needs Attention' },
+]
 const PASSPORT_OPTIONS = ['unknown', 'ready', 'renewal_needed', 'renewal_in_progress', 'no_passport', 'unsure', 'issue']
 const READINESS_OPTIONS = ['unknown', 'in_progress', 'action_required', 'blocked', 'ready']
 const VISA_REQ_OPTIONS = ['review', 'required', 'not_required']
@@ -25,8 +31,8 @@ export default function ParticipantFilters() {
   function clearAll() {
     setFilters((prev) => ({
       ...prev,
+      working_list_view: 'all',
       participation_status: [],
-      registration_status: [],
       passport_readiness: [],
       visa_requirement: [],
       readiness: [],
@@ -34,23 +40,23 @@ export default function ParticipantFilters() {
   }
 
   const hasFilters = [
-    filters.participation_status, filters.registration_status,
+    filters.participation_status,
     filters.passport_readiness, filters.visa_requirement, filters.readiness,
-  ].some((a) => a?.length > 0)
+  ].some((a) => a?.length > 0) || (filters.working_list_view || 'all') !== 'all'
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: '12px 0', alignItems: 'flex-start' }}>
+      <SegmentedFilter
+        label="Working List"
+        options={WORKING_LIST_VIEW_OPTIONS}
+        active={filters.working_list_view || 'all'}
+        onChange={(value) => setFilters((prev) => ({ ...prev, working_list_view: value }))}
+      />
       <FilterGroup
         label="Participation"
         options={PARTICIPATION_OPTIONS}
         active={filters.participation_status}
         onToggle={(v) => toggle('participation_status', v)}
-      />
-      <FilterGroup
-        label="Registration"
-        options={REGISTRATION_OPTIONS}
-        active={filters.registration_status}
-        onToggle={(v) => toggle('registration_status', v)}
       />
       <FilterGroup
         label="Readiness"
@@ -81,6 +87,37 @@ export default function ParticipantFilters() {
           Clear filters
         </button>
       )}
+    </div>
+  )
+}
+
+function SegmentedFilter({ label, options, active, onChange }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>{label}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {options.map((opt) => {
+          const isActive = active === opt.value
+          return (
+            <button
+              key={opt.value}
+              onClick={() => onChange(opt.value)}
+              style={{
+                padding: '3px 10px',
+                fontSize: 12,
+                borderRadius: 12,
+                border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                background: isActive ? 'var(--accent)' : 'transparent',
+                color: isActive ? 'white' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontWeight: isActive ? 500 : 400,
+              }}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

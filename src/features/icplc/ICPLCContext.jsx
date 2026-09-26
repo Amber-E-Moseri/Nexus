@@ -10,6 +10,7 @@ export function ICPLCProvider({ config, accessTier, children }) {
   // Shared filter state across pages
   const [filters, setFilters] = useState({
     search: '',
+    working_list_view: 'all',
     participation_status: [],
     registration_status: [],
     passport_readiness: [],

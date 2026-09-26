@@ -103,7 +103,7 @@ export default function ICPLCPortal({
           )}
 
           {/* New ICPLC operational tabs */}
-          {!isLegacyTab && resolvedTab === 'overview' && <OverviewPage />}
+          {!isLegacyTab && resolvedTab === 'overview' && <OverviewPage onShowPeople={() => setActiveTab('people')} />}
           {!isLegacyTab && resolvedTab === 'people' && <PeoplePage canWrite={canWrite} />}
           {!isLegacyTab && resolvedTab === 'registrations' && <RegistrationsPage canWrite={canWrite} />}
           {!isLegacyTab && resolvedTab === 'board' && <BoardPage canWrite={canWrite} />}

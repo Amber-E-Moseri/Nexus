@@ -13,8 +13,8 @@ import {
   reconciliationState,
 } from '../lib/reconciliation.js'
 
-export default function OverviewPage({ canWrite }) {
-  const { config, activeProfileId, activeProfileTab, closeProfile } = useICPLC()
+export default function OverviewPage({ canWrite, onShowPeople }) {
+  const { config, activeProfileId, activeProfileTab, closeProfile, setFilters } = useICPLC()
   const eventId = config?.id
   const { data: participants, isLoading } = useICPLCParticipants(eventId, {})
   const { data: registrations = [] } = useQuery({
@@ -75,7 +75,16 @@ export default function OverviewPage({ canWrite }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
         <StatCard label="Working List" value={`${stats.total} people`} />
-        <StatCard label="Registered" value={`${stats.coverage.registered} of ${stats.coverage.total}`} detail={`${stats.coverage.percent}%`} tone="success" />
+        <StatCard
+          label="Registered"
+          value={`${stats.coverage.registered} of ${stats.coverage.total}`}
+          detail={`${stats.coverage.percent}%`}
+          tone="success"
+          onClick={() => {
+            setFilters((prev) => ({ ...prev, working_list_view: 'registered' }))
+            onShowPeople?.()
+          }}
+        />
         <StatCard label="Confirmed" value={`${stats.byParticipation.confirmed || 0} of ${stats.total}`} tone="success" />
         <StatCard label="Ready" value={`${stats.byReadiness.ready || 0} of ${stats.total}`} tone="success" />
       </div>
@@ -149,15 +158,28 @@ export default function OverviewPage({ canWrite }) {
   )
 }
 
-function StatCard({ label, value, detail, tone }) {
+function StatCard({ label, value, detail, tone, onClick }) {
   const bg = tone === 'success' ? '#F0FDF4' : tone === 'warn' ? '#FFFBEB' : tone === 'danger' ? '#FEF2F2' : 'var(--surface-2)'
   const color = tone === 'success' ? '#166534' : tone === 'warn' ? '#92400E' : tone === 'danger' ? '#991B1B' : 'var(--text-primary)'
+  const Component = onClick ? 'button' : 'div'
   return (
-    <div style={{ padding: 16, borderRadius: 8, background: bg, border: '1px solid var(--border)' }}>
+    <Component
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      style={{
+        padding: 16,
+        borderRadius: 8,
+        background: bg,
+        border: '1px solid var(--border)',
+        textAlign: 'left',
+        cursor: onClick ? 'pointer' : 'default',
+        font: 'inherit',
+      }}
+    >
       <div style={{ fontSize: 28, fontWeight: 700, color }}>{value}</div>
       {detail && <div style={{ fontSize: 12, fontWeight: 700, color, marginTop: 2 }}>{detail}</div>}
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{label}</div>
-    </div>
+    </Component>
   )
 }
 

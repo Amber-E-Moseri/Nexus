@@ -77,6 +77,17 @@ export function participantInsertFromRegistration(registration, eventId, observe
 
 export function registrationCoverage(participants = [], registrations = [], maps = [], eventId = null) {
   const activeParticipants = participants.filter(isActiveParticipant)
+  const linkedParticipantIds = registrationLinkedParticipantIds(registrations, maps, eventId)
+  const registered = activeParticipants.filter((participant) => linkedParticipantIds.has(participant.id)).length
+  const total = activeParticipants.length
+  return {
+    registered,
+    total,
+    percent: total ? Math.round((registered / total) * 100) : 0,
+  }
+}
+
+export function registrationLinkedParticipantIds(registrations = [], maps = [], eventId = null) {
   const validRegistrationKeys = new Set(
     registrations
       .filter((registration) => isValidCurrentRegistration(registration, eventId))
@@ -90,13 +101,30 @@ export function registrationCoverage(participants = [], registrations = [], maps
       .map((map) => map.participant_id)
       .filter(Boolean),
   )
-  const registered = activeParticipants.filter((participant) => linkedParticipantIds.has(participant.id)).length
-  const total = activeParticipants.length
-  return {
-    registered,
-    total,
-    percent: total ? Math.round((registered / total) * 100) : 0,
-  }
+  return linkedParticipantIds
+}
+
+export function filterParticipantsByWorkingListView(
+  participants = [],
+  registrations = [],
+  maps = [],
+  eventId = null,
+  view = 'all',
+  getReadiness = null,
+) {
+  if (!view || view === 'all') return participants
+  const linkedParticipantIds = registrationLinkedParticipantIds(registrations, maps, eventId)
+
+  return participants.filter((participant) => {
+    if (view === 'registered') return linkedParticipantIds.has(participant.id)
+    if (view === 'not_registered') return !linkedParticipantIds.has(participant.id)
+    if (view === 'confirmed') return participant.participation_status === 'confirmed'
+    if (view === 'needs_attention') {
+      const readiness = getReadiness ? getReadiness(participant) : null
+      return readiness === 'action_required' || readiness === 'blocked'
+    }
+    return true
+  })
 }
 
 export function candidateMatches(registration, participants = [], confirmedParticipantId = null) {
