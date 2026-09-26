@@ -804,10 +804,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     try {
       let q = supabase.from('registrations').select('*').order('submitted_at', { ascending: false })
       if (eventId) {
-        const isTii = (eventConfig?.event_name || '').toLowerCase().includes('this is it')
-        q = isTii
-          ? q.or(`event_config_id.eq.${eventId},event_config_id.is.null`)
-          : q.eq('event_config_id', eventId)
+        q = q.eq('event_config_id', eventId)
       }
       const { data: dbRegs } = await q;
       const mapped = (dbRegs || []).map(r => ({
@@ -1035,24 +1032,16 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         return
       }
 
-      // TII rows that pre-date the event_config_id backfill migration have NULL event_config_id.
-      // Include those rows by using an OR filter so TII data is visible before the migration runs.
-      // ICPLC rows are always explicitly tagged so this never leaks cross-event data.
-      const isTii = (eventConfig?.event_name || '').toLowerCase().includes('this is it')
-      const scopeFilter = (q) => isTii
-        ? q.or(`event_config_id.eq.${eventId},event_config_id.is.null`)
-        : q.eq('event_config_id', eventId)
-
-      let rosterQ = scopeFilter(supabase.from('roster').select('*').order('last_name', { ascending: true }));
+      let rosterQ = supabase.from('roster').select('*').order('last_name', { ascending: true }).eq('event_config_id', eventId);
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) rosterQ = rosterQ.in('subgroup', limitedToSubgroups);
 
-      let regsQ = scopeFilter(supabase.from('registrations').select('*').order('submitted_at', { ascending: false }));
+      let regsQ = supabase.from('registrations').select('*').order('submitted_at', { ascending: false }).eq('event_config_id', eventId);
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) regsQ = regsQ.in('subgroup', limitedToSubgroups);
 
-      let wlQ = scopeFilter(supabase.from('working_list').select('*').order('subgroup', { ascending: true }));
+      let wlQ = supabase.from('working_list').select('*').order('subgroup', { ascending: true }).eq('event_config_id', eventId);
       if (limitedToSubgroups?.length && !limitedToRegistrationDataOnly) wlQ = wlQ.in('subgroup', limitedToSubgroups);
 
-      let paymentsQ = scopeFilter(supabase.from('event_payments').select('*').order('subgroup', { ascending: true }));
+      let paymentsQ = supabase.from('event_payments').select('*').order('subgroup', { ascending: true }).eq('event_config_id', eventId);
 
       const [rosterRes, regsRes, wlRes, payRes] = await Promise.all([rosterQ, regsQ, wlQ, paymentsQ]);
 
