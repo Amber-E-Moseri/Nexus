@@ -1,6 +1,10 @@
-import React from 'react'
+import React, { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { deriveReadiness, readinessTone, readinessLabel, deriveTravelStatus } from '../../lib/readinessEngine.js'
 import Badge from '../../../../components/ui/Badge.jsx'
+import { supabase } from '../../../../lib/supabase.js'
+import { useAddTag, useRemoveTag } from '../../hooks/useICPLCProfile.js'
+import { useAuth } from '../../../../hooks/useAuth.js'
 
 const PARTICIPATION_LABELS = {
   tracking: 'Tracking',
@@ -18,7 +22,7 @@ const PARTICIPATION_TONES = {
   not_attending: 'blocked',
 }
 
-export default function OverviewTab({ participant }) {
+export default function OverviewTab({ participant, canWrite }) {
   const { readiness, reasons } = deriveReadiness(participant)
   const travelStatus = deriveTravelStatus(participant)
 
@@ -73,22 +77,7 @@ export default function OverviewTab({ participant }) {
       </section>
 
       {/* Tags */}
-      {participant.tags?.length > 0 && (
-        <section>
-          <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Tags</h4>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {participant.tags.map((t) => (
-              <span
-                key={t.id}
-                className="fchip"
-                style={{ background: t.color || 'var(--surface-2)', fontSize: 12 }}
-              >
-                {t.name}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
+      <TagsSection participant={participant} canWrite={canWrite} />
 
       {/* Notes */}
       {participant.notes && (
@@ -100,6 +89,113 @@ export default function OverviewTab({ participant }) {
         </section>
       )}
     </div>
+  )
+}
+
+function TagsSection({ participant, canWrite }) {
+  const { profile } = useAuth()
+  const [showPicker, setShowPicker] = useState(false)
+  const addTag = useAddTag()
+  const removeTag = useRemoveTag()
+
+  const { data: allTags } = useQuery({
+    queryKey: ['icplc_tags', participant.event_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('icplc_tags')
+        .select('*')
+        .or(`event_id.eq.${participant.event_id},event_id.is.null`)
+        .order('sort_order')
+      if (error) throw error
+      return data || []
+    },
+    enabled: canWrite,
+    staleTime: 60_000,
+  })
+
+  const assignedIds = new Set((participant.tags || []).map((t) => t.id))
+  const unassigned = (allTags || []).filter((t) => !assignedIds.has(t.id))
+  const hasTags = participant.tags?.length > 0
+
+  if (!hasTags && !canWrite) return null
+
+  return (
+    <section>
+      <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Tags</h4>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+        {(participant.tags || []).map((t) => (
+          <span
+            key={t.id}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '3px 8px', borderRadius: 12, fontSize: 12,
+              background: t.color || 'var(--surface-2)',
+              color: '#fff',
+            }}
+          >
+            {t.name}
+            {canWrite && (
+              <button
+                onClick={() => removeTag.mutate({ participantId: participant.id, tagId: t.id })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1, opacity: 0.7, fontSize: 13 }}
+                title="Remove tag"
+              >
+                ×
+              </button>
+            )}
+          </span>
+        ))}
+
+        {canWrite && unassigned.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowPicker((p) => !p)}
+              style={{
+                padding: '3px 10px', borderRadius: 12, fontSize: 12, cursor: 'pointer',
+                background: 'transparent', border: '1px dashed var(--border)',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              + Add tag
+            </button>
+
+            {showPicker && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 10,
+                background: 'var(--surface-1)', border: '1px solid var(--border)',
+                borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                padding: 8, minWidth: 180, display: 'flex', flexDirection: 'column', gap: 2,
+              }}>
+                {unassigned.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      addTag.mutate({ participantId: participant.id, tagId: t.id, addedBy: profile?.id })
+                      setShowPicker(false)
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
+                      background: 'none', border: 'none', cursor: 'pointer', borderRadius: 4,
+                      fontSize: 13, color: 'var(--text-primary)', textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-2)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                  >
+                    <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: t.color || 'var(--surface-2)' }} />
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {canWrite && !hasTags && unassigned.length === 0 && (
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>No tags available. Add some in Settings.</span>
+        )}
+      </div>
+    </section>
   )
 }
 

@@ -104,7 +104,7 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
             {participant && (
               <>
                 {activeTab === 'overview' && (
-                  <OverviewTab participant={participant} />
+                  <OverviewTab participant={participant} canWrite={canWrite} />
                 )}
                 {activeTab === 'registration' && (
                   <RegistrationTab participant={participant} canWrite={canWrite} />
