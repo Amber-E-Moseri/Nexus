@@ -709,7 +709,7 @@ const DEFAULT_TABS = [
   { key: 'import', label: 'Import Data', icon: Upload },
 ];
 
-export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false, userTeamNames = [] }) {
+export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false, userTeamNames = [], initialTab }) {
   const { profile, role } = useAuth();
   const { config, reload: reloadConfig } = useEventConfig();
   const eventConfig = config || {
@@ -719,7 +719,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
     exempt_fellowships: ['BLW University of Manitoba', 'BLW University of Winnipeg', 'BLW University College of the North'],
     public_token_key: 'tii2_public_token', tab_config: [],
   };
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(initialTab || 'overview');
   const exemptFellowships = useMemo(() => new Set(eventConfig.exempt_fellowships || []), [eventConfig]);
   const crossCountrySubgroups = useMemo(() => new Set(eventConfig.cross_country_subgroups || []), [eventConfig]);
   // isGloballyScoped: user has a subgroup scope — controls tab visibility

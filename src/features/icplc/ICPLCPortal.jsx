@@ -23,10 +23,11 @@ const NEW_TABS = [
   { key: 'settings', label: 'Settings' },
 ]
 
+// Single legacy tab — RegistrationEcosystem handles its own sub-navigation
+// (rooms / transport / finance). Collapsing to one prevents three outer tabs
+// from all rendering the same legacyContent instance with no internal navigation.
 const LEGACY_TABS = [
-  { key: 'rooms', label: 'Room Assignments' },
-  { key: 'transport', label: 'Transportation' },
-  { key: 'finance', label: 'Finance' },
+  { key: 'legacy', label: 'Room / Transport / Finance' },
 ]
 
 export default function ICPLCPortal({
@@ -49,16 +50,15 @@ export default function ICPLCPortal({
         return true
       })
 
-  const visibleLegacyTabs = LEGACY_TABS.filter((t) => {
-    if (t.key === 'finance') return financeAccess || canAdmin
-    return !isFinanceOnly
-  })
+  // Legacy tab is visible to anyone who has finance or general access;
+  // finance-only tier sees it as their only tab.
+  const visibleLegacyTabs = LEGACY_TABS.filter(() => financeAccess || !isFinanceOnly || canAdmin)
 
   const allTabs = [...visibleNewTabs, ...visibleLegacyTabs]
 
   // If current tab is not visible (e.g. finance only), redirect to first available
   const resolvedTab = allTabs.find((t) => t.key === activeTab) ? activeTab
-    : allTabs[0]?.key || 'finance'
+    : allTabs[0]?.key || 'legacy'
 
   const isLegacyTab = LEGACY_TABS.some((t) => t.key === resolvedTab)
 
