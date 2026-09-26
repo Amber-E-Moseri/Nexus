@@ -1,14 +1,14 @@
 # ICPLC Event Scoping Deployment Plan
 
-**Status:** PREPARED FOR CONTROLLED DEPLOYMENT REVIEW  
+**Status:** PREPARED FOR CONTROLLED DEPLOYMENT REVIEW
 **Deployment Status:** NOT DEPLOYED — EVENT-SCOPING MIGRATION PREPARATION REQUIRED
 
 ---
 
 ## 1. GIT STATE RECONCILIATION
 
-**Current HEAD:** `9597cf1365e55fa05f8bcad8ab046cbad6529822`  
-**Branch:** `main` (14 commits ahead of origin/main)  
+**Current HEAD:** `9597cf1365e55fa05f8bcad8ab046cbad6529822`
+**Branch:** `main` (14 commits ahead of origin/main)
 **Working Tree:** CLEAN (no uncommitted changes)
 
 **Architecture Lock Commit 9597cf1:**
@@ -75,7 +75,7 @@ v_icplc_id := '37db5b0d-6651-4fc6-8ffb-f4f81c9139e4'::uuid;
 
 **Safety Gates:**
 - Verify TII event exists and name matches known pattern
-- Verify ICPLC event exists  
+- Verify ICPLC event exists
 - Detect and reject ambiguous (duplicate) TII/ICPLC events
 
 ---
@@ -200,10 +200,10 @@ row_num, full_name, subgroup, fellowship, registration_status, manually_confirme
 
 1. Primary: Match token against event_configs.public_token_key
    - Finds the owning event deterministically
-   
+
 2. Fallback: Legacy tii2_public_token key
    - Maps to known TII UUID `6c68fd1b-04ea-4b2d-9bba-d2b4307a83c1`
-   
+
 3. No match: Return empty result set (auth error)
 
 **TII Backward Compatibility:** Existing TII public registration URL continues working (resolves via legacy token key)
@@ -285,7 +285,7 @@ row_num, full_name, subgroup, fellowship, registration_status, manually_confirme
 
 ## 20. COMMIT HASH
 
-**Commit containing forward migration:**  
+**Commit containing forward migration:**
 (Will be created after review)
 
 **Worktree Status:** CLEAN
@@ -294,7 +294,7 @@ row_num, full_name, subgroup, fellowship, registration_status, manually_confirme
 
 ## 21. MIGRATION HISTORY DISPOSITION
 
-**Old local migrations (202609 chain):** 
+**Old local migrations (202609 chain):**
 
 Must NOT be deployed. Recommend:
 
