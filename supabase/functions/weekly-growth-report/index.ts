@@ -130,37 +130,79 @@ async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array>
     current: rgb(0.169, 0.376, 0.647),
   }
 
-  const sorted = [...rows].sort((a, b) => b.total_attendance - a.total_attendance)
+  // Group by status
+  const byStatus: Record<string, WeekRow[]> = {
+    reported: rows.filter(r => r.status === 'reported').sort((a, b) => b.total_attendance - a.total_attendance),
+    merged: rows.filter(r => r.status === 'merged'),
+    did_not_meet: rows.filter(r => r.status === 'did_not_meet'),
+    missing: rows.filter(r => r.status === 'missing'),
+    current: rows.filter(r => r.status === 'current'),
+  }
 
-  for (const row of sorted) {
-    const name = row.church_name.length > 26 ? row.church_name.slice(0, 25) + '…' : row.church_name
+  const statusOrder = ['reported', 'merged', 'did_not_meet', 'missing', 'current']
+  const statusGroupBG: Record<string, any> = {
+    reported: rgb(0.973, 0.984, 0.973),
+    merged: rgb(0.984, 0.945, 0.910),
+    did_not_meet: rgb(0.961, 0.957, 0.961),
+    missing: rgb(0.984, 0.933, 0.933),
+    current: rgb(0.925, 0.945, 0.973),
+  }
 
-    // Status color indicator
-    const statusColor = STATUS_COLOR[row.status] || GRAY
-    page.drawRectangle({ x: 48, y: y - 11, width: 2, height: 10, color: statusColor, borderColor: statusColor })
+  // Draw each status group
+  for (const status of statusOrder) {
+    const group = byStatus[status]
+    if (group.length === 0) continue
 
-    page.drawText(name, { x: COLS[0].x, y, font: regular, size: 9, color: INK })
-
-    const draw = (text: string, col: typeof COLS[0], color = INK) => {
-      const tw = regular.widthOfTextAtSize(text, 9)
-      const x  = col.align === 'right' ? col.x + col.w - tw : col.x
-      page.drawText(text, { x, y, font: regular, size: 9, color })
+    if (y < 100) {
+      // New page if running out of space
+      page = doc.addPage([612, 792])
+      y = 792 - 40
     }
 
-    draw(row.status === 'reported' ? fmt(row.total_attendance) : '—', COLS[1])
-    draw(row.status === 'reported' ? fmt(row.first_timers)     : '—', COLS[2])
+    // Section header with colored background
+    const sectionColor = STATUS_COLOR[status] || GRAY
+    const sectionBG = statusGroupBG[status]
+    page.drawRectangle({ x: 50, y: y - 16, width: 512, height: 16, color: sectionBG })
+    page.drawText(STATUS_LABEL[status] + ` (${group.length})`, { x: 60, y: y - 13, font: bold, size: 8, color: sectionColor })
+    y -= 18
 
-    if (row.status === 'reported' && row.wow_delta != null) {
-      draw(delta(row.wow_delta), COLS[3], row.wow_delta >= 0 ? GREEN : RED)
-    } else {
-      draw('—', COLS[3], GRAY)
+    // Rows in this group
+    for (const row of group) {
+      if (y < 50) {
+        // New page
+        page = doc.addPage([612, 792])
+        y = 792 - 40
+      }
+
+      const name = row.church_name.length > 26 ? row.church_name.slice(0, 25) + '…' : row.church_name
+
+      // Status color bar on left
+      page.drawRectangle({ x: 48, y: y - 11, width: 2, height: 10, color: sectionColor })
+      page.drawText(name, { x: COLS[0].x, y, font: regular, size: 9, color: INK })
+
+      const draw = (text: string, col: typeof COLS[0], color = INK) => {
+        const tw = regular.widthOfTextAtSize(text, 9)
+        const x  = col.align === 'right' ? col.x + col.w - tw : col.x
+        page.drawText(text, { x, y, font: regular, size: 9, color })
+      }
+
+      draw(row.status === 'reported' ? fmt(row.total_attendance) : '—', COLS[1])
+      draw(row.status === 'reported' ? fmt(row.first_timers)     : '—', COLS[2])
+
+      if (row.status === 'reported' && row.wow_delta != null) {
+        draw(delta(row.wow_delta), COLS[3], row.wow_delta >= 0 ? GREEN : RED)
+      } else {
+        draw('—', COLS[3], GRAY)
+      }
+
+      draw(fmt(row.rolling_avg_4wk), COLS[4], GRAY)
+      draw(STATUS_LABEL[row.status] ?? row.status, COLS[5], sectionColor)
+
+      y -= 12
+      page.drawLine({ start: { x: 50, y: y + 1 }, end: { x: 562, y: y + 1 }, thickness: 0.2, color: LINE })
     }
 
-    draw(fmt(row.rolling_avg_4wk), COLS[4], GRAY)
-    draw(STATUS_LABEL[row.status] ?? row.status, COLS[5], statusColor)
-
-    y -= 12
-    page.drawLine({ start: { x: 50, y: y + 1 }, end: { x: 562, y: y + 1 }, thickness: 0.2, color: LINE })
+    y -= 4 // Extra space between sections
   }
 
   // Footer
