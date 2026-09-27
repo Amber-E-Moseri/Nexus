@@ -51,44 +51,54 @@ async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array>
   const PURPLE = rgb(0.298, 0.165, 0.573)
   const GRAY   = rgb(0.541, 0.498, 0.600)
   const GREEN  = rgb(0.122, 0.541, 0.298)
+  const YELLOW = rgb(0.722, 0.557, 0.039)
   const RED    = rgb(0.769, 0.220, 0.227)
   const LINE   = rgb(0.906, 0.886, 0.933)
+  const CREAM  = rgb(0.980, 0.980, 0.972)
 
   const reported = rows.filter(r => r.status === 'reported')
   const netTotal = reported.reduce((s, r) => s + r.total_attendance, 0)
   const netFT    = reported.reduce((s, r) => s + r.first_timers, 0)
   const netDelta = reported.reduce((s, r) => s + (r.wow_delta ?? 0), 0)
 
-  let y = height - 50
+  let y = height - 40
 
-  // Title block
-  page.drawText('BLW CANADA', { x: 50, y, font: bold, size: 8, color: GRAY })
-  y -= 22
-  page.drawText('Weekly Growth Report', { x: 50, y, font: bold, size: 18, color: INK })
-  y -= 16
-  page.drawText('Week of ' + weekLabel, { x: 50, y, font: regular, size: 11, color: GRAY })
+  // Header with background
+  page.drawText('BLW CANADA', { x: 50, y, font: bold, size: 9, color: GRAY })
   y -= 20
-
-  page.drawLine({ start: { x: 50, y }, end: { x: 562, y }, thickness: 0.5, color: LINE })
-  y -= 18
-
-  // Network summary
-  page.drawText('NETWORK ATTENDANCE', { x: 50,  y, font: bold, size: 7, color: GRAY })
-  page.drawText('FIRST-TIMERS',       { x: 220, y, font: bold, size: 7, color: GRAY })
-  page.drawText('CENTERS REPORTING',  { x: 370, y, font: bold, size: 7, color: GRAY })
-  y -= 16
-  page.drawText(netTotal.toLocaleString(), { x: 50,  y, font: bold, size: 20, color: INK })
-  page.drawText(netFT.toLocaleString(),    { x: 220, y, font: bold, size: 20, color: INK })
-  page.drawText(`${reported.length} / ${rows.length}`, { x: 370, y, font: bold, size: 20, color: INK })
-  y -= 14
-  const dStr = netDelta >= 0 ? `+${netDelta} vs prev week` : `${netDelta} vs prev week`
-  page.drawText(dStr, { x: 50, y, font: regular, size: 9, color: netDelta >= 0 ? GREEN : RED })
+  page.drawText('Weekly Growth Report', { x: 50, y, font: bold, size: 20, color: INK })
+  y -= 6
+  page.drawText('Week of ' + weekLabel, { x: 50, y, font: regular, size: 12, color: GRAY })
   y -= 24
 
-  page.drawLine({ start: { x: 50, y }, end: { x: 562, y }, thickness: 0.5, color: LINE })
-  y -= 18
+  // Stat cards with colored backgrounds
+  const cardWidth = 160
+  const cardHeight = 50
+  const cardY = y
 
-  // Table columns
+  // Card 1: Network Attendance
+  page.drawRectangle({ x: 50, y: y - cardHeight, width: cardWidth, height: cardHeight, color: CREAM, borderColor: LINE, borderWidth: 0.5 })
+  page.drawText('ATTENDANCE', { x: 60, y: y - 12, font: bold, size: 8, color: GRAY })
+  page.drawText(netTotal.toLocaleString(), { x: 60, y: y - 28, font: bold, size: 16, color: PURPLE })
+
+  // Card 2: First-Timers
+  page.drawRectangle({ x: 220, y: y - cardHeight, width: cardWidth, height: cardHeight, color: CREAM, borderColor: LINE, borderWidth: 0.5 })
+  page.drawText('FIRST-TIMERS', { x: 230, y: y - 12, font: bold, size: 8, color: GRAY })
+  page.drawText(netFT.toLocaleString(), { x: 230, y: y - 28, font: bold, size: 16, color: PURPLE })
+
+  // Card 3: Centers Reporting
+  page.drawRectangle({ x: 390, y: y - cardHeight, width: cardWidth, height: cardHeight, color: CREAM, borderColor: LINE, borderWidth: 0.5 })
+  page.drawText('REPORTING', { x: 400, y: y - 12, font: bold, size: 8, color: GRAY })
+  page.drawText(`${reported.length}/${rows.length}`, { x: 400, y: y - 28, font: bold, size: 16, color: PURPLE })
+
+  y -= cardHeight + 20
+
+  // Delta indicator
+  const dStr = netDelta >= 0 ? `+${netDelta} vs prev week` : `${netDelta} vs prev week`
+  page.drawText(dStr, { x: 50, y, font: regular, size: 9, color: netDelta >= 0 ? GREEN : RED })
+  y -= 20
+
+  // Table header with better styling
   const COLS = [
     { label: 'CENTER',      x: 50,  w: 155, align: 'left'  },
     { label: 'ATTENDANCE',  x: 205, w: 80,  align: 'right' },
@@ -98,24 +108,37 @@ async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array>
     { label: 'STATUS',      x: 480, w: 82,  align: 'right' },
   ]
 
+  // Header background
+  page.drawRectangle({ x: 50, y: y - 14, width: 512, height: 14, color: CREAM })
   for (const col of COLS) {
     const tw = bold.widthOfTextAtSize(col.label, 7)
     const x  = col.align === 'right' ? col.x + col.w - tw : col.x
-    page.drawText(col.label, { x, y, font: bold, size: 7, color: GRAY })
+    page.drawText(col.label, { x, y: y - 11, font: bold, size: 7, color: GRAY })
   }
-  y -= 12
-  page.drawLine({ start: { x: 50, y }, end: { x: 562, y }, thickness: 1.2, color: PURPLE })
-  y -= 14
+  y -= 18
 
   const STATUS_LABEL: Record<string, string> = {
-    reported: 'Reported', merged: 'Merged',
-    did_not_meet: 'Did Not Meet', missing: 'Missing', current: 'In Progress',
+    reported: '✓ Reported', merged: '~ Merged',
+    did_not_meet: '◯ Did Not Meet', missing: '✕ Missing', current: '… In Progress',
+  }
+
+  const STATUS_COLOR: Record<string, any> = {
+    reported: GREEN,
+    merged: YELLOW,
+    did_not_meet: GRAY,
+    missing: RED,
+    current: rgb(0.169, 0.376, 0.647),
   }
 
   const sorted = [...rows].sort((a, b) => b.total_attendance - a.total_attendance)
 
   for (const row of sorted) {
     const name = row.church_name.length > 26 ? row.church_name.slice(0, 25) + '…' : row.church_name
+
+    // Status color indicator
+    const statusColor = STATUS_COLOR[row.status] || GRAY
+    page.drawRectangle({ x: 48, y: y - 11, width: 2, height: 10, color: statusColor, borderColor: statusColor })
+
     page.drawText(name, { x: COLS[0].x, y, font: regular, size: 9, color: INK })
 
     const draw = (text: string, col: typeof COLS[0], color = INK) => {
@@ -134,10 +157,10 @@ async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array>
     }
 
     draw(fmt(row.rolling_avg_4wk), COLS[4], GRAY)
-    draw(STATUS_LABEL[row.status] ?? row.status, COLS[5], GRAY)
+    draw(STATUS_LABEL[row.status] ?? row.status, COLS[5], statusColor)
 
-    y -= 13
-    page.drawLine({ start: { x: 50, y: y + 2 }, end: { x: 562, y: y + 2 }, thickness: 0.3, color: LINE })
+    y -= 12
+    page.drawLine({ start: { x: 50, y: y + 1 }, end: { x: 562, y: y + 1 }, thickness: 0.2, color: LINE })
   }
 
   // Footer
