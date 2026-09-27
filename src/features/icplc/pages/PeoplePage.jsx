@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { UserPlus } from 'lucide-react'
+import * as Dialog from '@radix-ui/react-dialog'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
 import { useICPLC } from '../ICPLCContext.jsx'
@@ -77,7 +78,7 @@ export default function PeoplePage({ canWrite }) {
     <div>
       {canWrite && (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
-          <button onClick={() => setShowAdd(true)} style={primaryBtn}><UserPlus size={14} /> Add Person</button>
+          <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary"><UserPlus size={14} aria-hidden /> Add Participant</button>
         </div>
       )}
 
@@ -91,7 +92,7 @@ export default function PeoplePage({ canWrite }) {
 
       {/* Count */}
       {!loading && (
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+        <div role="status" style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
           {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
         </div>
       )}
@@ -133,13 +134,11 @@ function SearchBar() {
   return (
     <input
       type="search"
+      aria-label="Search participants by name or email"
+      className="icplc-input icplc-search"
       placeholder="Search by name or email…"
       value={filters.search}
       onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-      style={{
-        padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 6,
-        fontSize: 13, width: 280, outline: 'none',
-      }}
     />
   )
 }
@@ -149,8 +148,11 @@ function AddPersonModal({ eventId, onClose, onCreated }) {
   const [form, setForm] = useState({ full_name: '', email: '', region: '', subgroup: '' })
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
-  async function submit() {
-    if (!form.full_name.trim()) return
+  async function submit(e) {
+    e.preventDefault()
+    if (!form.full_name.trim() || createParticipant.isPending) return
+
+    // Manual participants are NOT registered until a registration is linked.
     const participant = await createParticipant.mutateAsync({
       full_name: form.full_name.trim(),
       email: form.email.trim() || null,
@@ -167,53 +169,50 @@ function AddPersonModal({ eventId, onClose, onCreated }) {
     onCreated(participant)
   }
 
+  const err = createParticipant.error
+  const duplicate = err?.code === '23505'
+
   return (
-    <div style={modalOverlay}>
-      <div style={modalCard}>
-        <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>Add ICPLC Person</h3>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <Field label="Full name" value={form.full_name} onChange={set('full_name')} autoFocus />
-          <Field label="Email" value={form.email} onChange={set('email')} />
-          <Field label="Region" value={form.region} onChange={set('region')} />
-          <Field label="Subgroup" value={form.subgroup} onChange={set('subgroup')} />
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button onClick={onClose} style={ghostButtonStyle}>Cancel</button>
-          <button onClick={submit} disabled={!form.full_name.trim() || createParticipant.isPending} style={primaryButtonStyle}>
-            {createParticipant.isPending ? 'Saving...' : 'Create participant'}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
+      <Dialog.Portal>
+        <Dialog.Overlay style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.35)' }} />
+        <Dialog.Content className="icplc-dialog" aria-describedby={undefined}>
+          <form onSubmit={submit}>
+            <Dialog.Title style={{ margin: '0 0 12px', fontSize: 16 }}>Add Participant</Dialog.Title>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <Field label="Full name" value={form.full_name} onChange={set('full_name')} autoFocus required />
+              <Field label="Email" type="email" value={form.email} onChange={set('email')} />
+              <Field label="Region" value={form.region} onChange={set('region')} />
+              <Field label="Subgroup" value={form.subgroup} onChange={set('subgroup')} />
+            </div>
+            <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+              Added as Not Registered. A later registration is linked to this same participant.
+            </p>
+            {err && (
+              <div role="alert" style={{ marginTop: 10, fontSize: 12, color: '#991B1B' }}>
+                {duplicate
+                  ? 'A participant with this email already exists in the Working List. Search for them instead of adding a duplicate.'
+                  : `Could not create participant: ${err.message}`}
+              </div>
+            )}
+            <div className="icplc-actions" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+              <button type="button" onClick={onClose} className="icplc-btn">Cancel</button>
+              <button type="submit" disabled={!form.full_name.trim() || createParticipant.isPending} className="icplc-btn icplc-btn-primary">
+                {createParticipant.isPending ? 'Saving…' : 'Create participant'}
+              </button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 
-function Field({ label, value, onChange, autoFocus }) {
+function Field({ label, value, onChange, autoFocus, type = 'text', required }) {
   return (
     <label style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
       {label}
-      <input value={value} onChange={onChange} autoFocus={autoFocus} style={{ ...inputStyle, marginTop: 4 }} />
+      <input type={type} value={value} onChange={onChange} autoFocus={autoFocus} required={required} className="icplc-input" style={{ marginTop: 4 }} />
     </label>
   )
 }
-
-const primaryBtn = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '7px 12px',
-  border: 'none',
-  borderRadius: 6,
-  background: 'var(--accent)',
-  color: 'white',
-  cursor: 'pointer',
-  fontSize: 13,
-}
-const ghostBtn = { ...primaryBtn, background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border)' }
-const modalOverlay = { position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.35)', display: 'grid', placeItems: 'center', padding: 20 }
-const modalCard = { width: 'min(520px, 96vw)', background: 'var(--surface-1)', borderRadius: 8, padding: 20, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxHeight: '90vh', overflow: 'auto' }
-const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }
-const primaryButtonStyle = { padding: '7px 14px', border: 'none', borderRadius: 6, background: 'var(--accent)', color: 'white', cursor: 'pointer', fontSize: 13 }
-const ghostButtonStyle = { padding: '7px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13 }
-const thStyleSmall = { padding: '8px 10px', textAlign: 'left', fontSize: 12, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)' }
-const tdStyleSmall = { padding: '9px 10px', borderBottom: '1px solid var(--border)', fontSize: 13 }

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 
 const PARTICIPATION_OPTIONS = ['tracking', 'likely', 'confirmed', 'uncertain', 'not_attending']
@@ -15,6 +15,8 @@ const VISA_REQ_OPTIONS = ['review', 'required', 'not_required']
 
 export default function ParticipantFilters() {
   const { filters, setFilters } = useICPLC()
+  // Secondary groups are always shown on desktop; on phones they collapse behind a toggle (see icplc.css).
+  const [moreOpen, setMoreOpen] = useState(false)
 
   function toggle(field, value) {
     setFilters((prev) => {
@@ -45,13 +47,22 @@ export default function ParticipantFilters() {
   ].some((a) => a?.length > 0) || (filters.working_list_view || 'all') !== 'all'
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: '12px 0', alignItems: 'flex-start' }}>
+    <div className="icplc-toolbar" role="group" aria-label="Working List filters">
       <SegmentedFilter
         label="Working List"
         options={WORKING_LIST_VIEW_OPTIONS}
         active={filters.working_list_view || 'all'}
         onChange={(value) => setFilters((prev) => ({ ...prev, working_list_view: value }))}
       />
+      <button
+        type="button"
+        className="icplc-btn icplc-more-toggle"
+        aria-expanded={moreOpen}
+        onClick={() => setMoreOpen((o) => !o)}
+      >
+        {moreOpen ? 'Hide filters' : 'More filters'}
+      </button>
+      <div className="icplc-more" data-open={moreOpen}>
       <FilterGroup
         label="Participation"
         options={PARTICIPATION_OPTIONS}
@@ -76,13 +87,13 @@ export default function ParticipantFilters() {
         active={filters.visa_requirement}
         onToggle={(v) => toggle('visa_requirement', v)}
       />
+      </div>
       {hasFilters && (
         <button
+          type="button"
           onClick={clearAll}
-          style={{
-            alignSelf: 'flex-end', background: 'none', border: 'none',
-            color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', padding: '4px 0',
-          }}
+          className="icplc-btn"
+          style={{ alignSelf: 'flex-end', border: 'none', color: 'var(--text-secondary)', fontSize: 12 }}
         >
           Clear filters
         </button>
@@ -101,17 +112,10 @@ function SegmentedFilter({ label, options, active, onChange }) {
           return (
             <button
               key={opt.value}
+              type="button"
+              className="icplc-chip"
+              aria-pressed={isActive}
               onClick={() => onChange(opt.value)}
-              style={{
-                padding: '3px 10px',
-                fontSize: 12,
-                borderRadius: 12,
-                border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
-                background: isActive ? 'var(--accent)' : 'transparent',
-                color: isActive ? 'white' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontWeight: isActive ? 500 : 400,
-              }}
             >
               {opt.label}
             </button>
@@ -128,23 +132,16 @@ function FilterGroup({ label, options, active, onToggle }) {
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>{label}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {options.map((opt) => {
-          const isActive = active?.includes(opt)
+          const isActive = !!active?.includes(opt)
           return (
             <button
               key={opt}
+              type="button"
+              className="icplc-chip"
+              aria-pressed={isActive}
               onClick={() => onToggle(opt)}
-              style={{
-                padding: '3px 10px',
-                fontSize: 12,
-                borderRadius: 12,
-                border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
-                background: isActive ? 'var(--accent)' : 'transparent',
-                color: isActive ? 'white' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontWeight: isActive ? 500 : 400,
-              }}
             >
-              {opt}
+              {opt.charAt(0).toUpperCase() + opt.slice(1).replace(/_/g, ' ')}
             </button>
           )
         })}

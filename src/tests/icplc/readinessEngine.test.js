@@ -29,6 +29,7 @@ describe('Readiness Engine (release gate)', () => {
   // ── Test 11: READY — all gates pass ──
   it('11. Returns READY when passport, visa, and itinerary are all clear', () => {
     const participant = {
+      passport_country: 'Ghana',
       passport_readiness: 'ready',
       visa_requirement: 'not_required',
       visa_process_status: 'not_applicable',
@@ -46,6 +47,7 @@ describe('Readiness Engine (release gate)', () => {
 
   it('11b. Returns READY when visa is required and approved, passport ready, itinerary received', () => {
     const participant = {
+      passport_country: 'Ghana',
       passport_readiness: 'ready',
       visa_requirement: 'required',
       visa_process_status: 'approved',
@@ -64,6 +66,7 @@ describe('Readiness Engine (release gate)', () => {
   // ── Test 12: Unrelated state change does not affect readiness ──
   it('12. Changing notes or subgroup does not change derived readiness', () => {
     const base = {
+      passport_country: 'Ghana',
       passport_readiness: 'ready',
       visa_requirement: 'not_required',
       visa_process_status: 'not_applicable',

@@ -1,9 +1,12 @@
 import React, { useState } from 'react'
+import { useAuth } from '../../../../hooks/useAuth'
 import { useUpdateProfile } from '../../hooks/useICPLCProfile.js'
+import { overrideFieldsForEdit } from '../../lib/fieldAuthority.js'
 import { deriveItineraryStatus, deriveTravelStatus } from '../../lib/readinessEngine.js'
 import Badge from '../../../../components/ui/Badge.jsx'
 
 export default function TravelTab({ participant, canWrite }) {
+  const { profile: authProfile } = useAuth()
   const updateProfile = useUpdateProfile()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
@@ -23,17 +26,25 @@ export default function TravelTab({ participant, canWrite }) {
     for (const key of Object.keys(form)) {
       const val = form[key] || null
       const cur = participant[key] || null
-      if (val !== cur) changed[key] = val || undefined
+      if (val !== cur) changed[key] = val
     }
     if (Object.keys(changed).length === 0) { setEditing(false); return }
-    await updateProfile.mutateAsync({ id: participant.id, fields: changed })
+    // Imports may write itinerary fields — record staff edits as overrides so they survive re-imports.
+    const overrideFields = overrideFieldsForEdit(Object.keys(changed))
+    await updateProfile.mutateAsync({
+      id: participant.id,
+      fields: changed,
+      setOverride: overrideFields.length > 0,
+      overrideFields,
+      userId: authProfile?.id,
+    })
     setEditing(false)
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Derived status chips */}
-      <div style={{ display: 'flex', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Itinerary</div>
           <Badge
@@ -55,7 +66,7 @@ export default function TravelTab({ participant, canWrite }) {
         <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
           Arrival
         </h4>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div className="icplc-field-grid">
           <FlightField
             label="Date" type="date" field="arrival_date"
             form={form} participant={participant} editing={editing && canWrite}
@@ -79,7 +90,7 @@ export default function TravelTab({ participant, canWrite }) {
         <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
           Departure
         </h4>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div className="icplc-field-grid">
           <FlightField
             label="Date" type="date" field="departure_date"
             form={form} participant={participant} editing={editing && canWrite}
@@ -107,20 +118,16 @@ export default function TravelTab({ participant, canWrite }) {
       )}
 
       {canWrite && (
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="icplc-actions">
           {editing ? (
             <>
-              <button
-                onClick={handleSave}
-                disabled={updateProfile.isPending}
-                style={primaryBtn}
-              >
+              <button type="button" onClick={handleSave} disabled={updateProfile.isPending} className="icplc-btn icplc-btn-primary">
                 {updateProfile.isPending ? 'Saving…' : 'Save'}
               </button>
-              <button onClick={() => setEditing(false)} style={ghostBtn}>Cancel</button>
+              <button type="button" onClick={() => setEditing(false)} className="icplc-btn">Cancel</button>
             </>
           ) : (
-            <button onClick={() => setEditing(true)} style={primaryBtn}>Edit</button>
+            <button type="button" onClick={() => setEditing(true)} className="icplc-btn icplc-btn-primary">Edit</button>
           )}
         </div>
       )}
@@ -131,30 +138,18 @@ export default function TravelTab({ participant, canWrite }) {
 function FlightField({ label, type, field, form, participant, editing, onChange }) {
   return (
     <div>
-      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>{label}</div>
+      <label htmlFor={`icplc-travel-${field}`} className="icplc-label">{label}</label>
       {editing ? (
         <input
+          id={`icplc-travel-${field}`}
           type={type}
           value={form[field]}
           onChange={(e) => onChange(e.target.value)}
-          style={inputStyle}
+          className="icplc-input"
         />
       ) : (
         <div style={{ fontSize: 13 }}>{participant[field] || '—'}</div>
       )}
     </div>
   )
-}
-
-const inputStyle = {
-  padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 4,
-  fontSize: 13, width: '100%', boxSizing: 'border-box',
-}
-const primaryBtn = {
-  padding: '6px 14px', background: 'var(--accent)', color: 'white',
-  border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13,
-}
-const ghostBtn = {
-  padding: '6px 14px', background: 'transparent', color: 'var(--text-primary)',
-  border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontSize: 13,
 }

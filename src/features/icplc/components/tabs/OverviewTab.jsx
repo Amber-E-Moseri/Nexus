@@ -30,7 +30,7 @@ export default function OverviewTab({ participant, canWrite }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Identity */}
       <section>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="icplc-field-grid">
           <Field label="Full Name" value={participant.full_name} />
           <Field label="Email" value={participant.email} />
           <Field label="Region" value={participant.region} />
@@ -45,7 +45,7 @@ export default function OverviewTab({ participant, canWrite }) {
         <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
           Operational Status
         </h4>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="icplc-field-grid">
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Participation</div>
             <Badge
@@ -56,10 +56,16 @@ export default function OverviewTab({ participant, canWrite }) {
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Readiness</div>
             <Badge tone={readinessTone(readiness)} label={readinessLabel(readiness)} />
-            {reasons.length > 0 && (
+            {reasons.length > 0 ? (
               <ul style={{ margin: '6px 0 0', padding: '0 0 0 16px', fontSize: 12, color: 'var(--text-secondary)' }}>
                 {reasons.map((r) => <li key={r}>{r}</li>)}
               </ul>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                {readiness === 'ready' && 'All readiness checks pass.'}
+                {readiness === 'in_progress' && 'Work in flight — nothing needed from staff right now.'}
+                {readiness === 'unknown' && 'Not enough information yet to determine readiness.'}
+              </div>
             )}
           </div>
           <div>

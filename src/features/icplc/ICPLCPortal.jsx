@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import './icplc.css'
 import { ICPLCProvider } from './ICPLCContext.jsx'
 import OverviewPage from './pages/OverviewPage.jsx'
 import PeoplePage from './pages/PeoplePage.jsx'
@@ -15,7 +16,7 @@ import SettingsPage from './pages/SettingsPage.jsx'
 // so this component never imports RegistrationEcosystem.jsx.
 const NEW_TABS = [
   { key: 'overview', label: 'Overview' },
-  { key: 'people', label: 'People' },
+  { key: 'people', label: 'Working List' },
   { key: 'registrations', label: 'Registrations' },
   { key: 'board', label: 'Board' },
   { key: 'documentation', label: 'Documentation' },
@@ -66,26 +67,20 @@ export default function ICPLCPortal({
 
   return (
     <ICPLCProvider config={config} accessTier={accessTier}>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Tab bar */}
-        <div style={{
-          display: 'flex', gap: 0, borderBottom: '1px solid var(--border)',
-          overflowX: 'auto', flexShrink: 0,
-        }}>
+      <div className="icplc-root" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Tab bar — scrolls inside itself on narrow screens */}
+        <div className="icplc-tabbar" role="tablist" aria-label="ICPLC sections">
           {allTabs.map((t) => {
             const isLegacy = LEGACY_TABS.some((l) => l.key === t.key)
             return (
               <button
                 key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={resolvedTab === t.key}
+                className="icplc-tab"
                 onClick={() => setActiveTab(t.key)}
-                style={{
-                  padding: '10px 16px', background: 'transparent', border: 'none',
-                  borderBottom: resolvedTab === t.key ? '2px solid var(--accent)' : '2px solid transparent',
-                  color: resolvedTab === t.key ? 'var(--accent)' : 'var(--text-secondary)',
-                  fontWeight: resolvedTab === t.key ? 600 : 400,
-                  cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap',
-                  opacity: isLegacy ? 0.7 : 1,
-                }}
+                style={{ opacity: isLegacy ? 0.7 : 1 }}
               >
                 {t.label}
               </button>
@@ -94,7 +89,7 @@ export default function ICPLCPortal({
         </div>
 
         {/* Page body */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '20px 0' }}>
+        <div role="tabpanel" style={{ flex: 1, overflow: 'auto', padding: '20px 0', minWidth: 0 }}>
           {/* Legacy tabs — render the injected RegistrationEcosystem content */}
           {isLegacyTab && (
             <div data-icplc-legacy-tab={resolvedTab}>
@@ -103,7 +98,7 @@ export default function ICPLCPortal({
           )}
 
           {/* New ICPLC operational tabs */}
-          {!isLegacyTab && resolvedTab === 'overview' && <OverviewPage onShowPeople={() => setActiveTab('people')} />}
+          {!isLegacyTab && resolvedTab === 'overview' && <OverviewPage canWrite={canWrite} onShowPeople={() => setActiveTab('people')} onShowAttention={() => setActiveTab('attention')} />}
           {!isLegacyTab && resolvedTab === 'people' && <PeoplePage canWrite={canWrite} />}
           {!isLegacyTab && resolvedTab === 'registrations' && <RegistrationsPage canWrite={canWrite} />}
           {!isLegacyTab && resolvedTab === 'board' && <BoardPage canWrite={canWrite} />}

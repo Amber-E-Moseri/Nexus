@@ -1,90 +1,34 @@
 import React, { useMemo } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
-import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
-import { deriveReadiness } from '../lib/readinessEngine.js'
+import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import ParticipantTable from '../components/ParticipantTable.jsx'
-import { DOCUMENT_READINESS, RESIDENCY_STATUS } from '../../registration/icplcDocReadiness.js'
+import { ATTENTION_CATEGORIES, attentionCategoryKeys } from '../lib/documentationRules.js'
+import { registrationDisplayName } from '../lib/reconciliation.js'
 
-const COHORTS = [
-  {
-    key: 'blocked',
-    label: 'Blocked',
-    description: 'Passport issue prevents visa processing',
-    filter: (p) => deriveReadiness(p).readiness === 'blocked',
-  },
-  {
-    key: 'action_required',
-    label: 'Action Required',
-    description: 'Staff attention needed',
-    filter: (p) => deriveReadiness(p).readiness === 'action_required',
-  },
-  {
-    key: 'confirmed_no_itinerary',
-    label: 'Confirmed - Missing Itinerary',
-    description: 'Confirmed attendance but no flight details yet',
-    filter: (p) =>
-      p.participation_status === 'confirmed' &&
-      !p.arrival_flight && !p.arrival_date,
-  },
-  {
-    key: 'registered_unconfirmed',
-    label: 'Registered - Not Confirmed',
-    description: 'Registered in system but participation not confirmed',
-    filter: (p) =>
-      p.registration_status === 'registered' &&
-      !['confirmed', 'likely'].includes(p.participation_status),
-  },
-  {
-    key: 'visa_not_started',
-    label: 'Visa Required - Not Started',
-    description: 'Visa required but process not yet started',
-    filter: (p) =>
-      p.visa_requirement === 'required' &&
-      p.visa_process_status === 'not_started',
-  },
-  {
-    key: 'canadian_status_unknown',
-    label: 'Canadian Status Unknown',
-    description: 'Canadian status has not been collected for this participant',
-    filter: (p) => !p.canada_residency_status,
-  },
-  {
-    key: 'canadian_status_review',
-    label: 'Canadian Status Needs Review',
-    description: 'Visitor/Other status requires staff review',
-    filter: (p) => p.canada_residency_status === RESIDENCY_STATUS.VISITOR_OTHER,
-  },
-  {
-    key: 'canadian_doc_renewal',
-    label: 'Canadian Document Renewal Needed',
-    description: 'Required Canadian status document needs renewal',
-    filter: (p) => p.canada_status_document_readiness === DOCUMENT_READINESS.RENEWAL_NEEDED,
-  },
-  {
-    key: 'canadian_doc_issue',
-    label: 'Canadian Document Issue',
-    description: 'Required Canadian status document has an issue',
-    filter: (p) => p.canada_status_document_readiness === DOCUMENT_READINESS.ISSUE,
-  },
-]
-
+/**
+ * Needs Attention — every category is derived from real participant state
+ * (see attentionCategoryKeys). Opening a participant lands on the relevant profile tab.
+ */
 export default function NeedsAttentionPage({ canWrite }) {
   const { config, activeProfileId, activeProfileTab, closeProfile } = useICPLC()
-  const { data: participants, isLoading } = useICPLCParticipants(config?.id, {})
+  const { participants, ambiguousRegistrations, isLoading, error } = useICPLCWorkingList(config?.id)
 
   const cohorts = useMemo(() => {
-    if (!participants) return []
-    return COHORTS.map((c) => ({
-      ...c,
-      participants: participants.filter(c.filter),
-    })).filter((c) => c.participants.length > 0)
+    const byKey = new Map(ATTENTION_CATEGORIES.map((c) => [c.key, []]))
+    for (const p of participants) {
+      for (const key of attentionCategoryKeys(p)) byKey.get(key)?.push(p)
+    }
+    return ATTENTION_CATEGORIES
+      .map((c) => ({ ...c, participants: byKey.get(c.key) }))
+      .filter((c) => c.participants.length > 0)
   }, [participants])
 
-  if (isLoading) return <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading...</div>
-  if (!cohorts.length) {
+  if (isLoading) return <div role="status" style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading…</div>
+  if (error) return <div role="alert" style={{ padding: 40, color: 'var(--text-secondary)' }}>Failed to load attention items.</div>
+  if (!cohorts.length && !ambiguousRegistrations.length) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+      <div role="status" style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
         No items need attention right now.
       </div>
     )
@@ -92,21 +36,32 @@ export default function NeedsAttentionPage({ canWrite }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-      {cohorts.map((c) => (
-        <section key={c.key}>
-          <div style={{ marginBottom: 12 }}>
-            <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600 }}>
-              {c.label}
-              <span style={{
-                marginLeft: 8, fontSize: 12, fontWeight: 400,
-                background: 'var(--surface-2)', borderRadius: 10, padding: '1px 8px',
-              }}>
-                {c.participants.length}
-              </span>
-            </h3>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{c.description}</div>
+      {ambiguousRegistrations.length > 0 && (
+        <section aria-labelledby="attn-ambiguous">
+          <h3 id="attn-ambiguous" style={headingStyle}>
+            Ambiguous Registration Match <span style={countStyle}>{ambiguousRegistrations.length}</span>
+          </h3>
+          <div style={descStyle}>
+            These registrations could belong to an existing participant. They are not linked and no duplicate was created — review them in the Registrations tab.
           </div>
-          <ParticipantTable participants={c.participants} loading={false} />
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
+            {ambiguousRegistrations.slice(0, 20).map((r) => (
+              <li key={r.id}>{registrationDisplayName(r) || r.email || r.id}{r.email ? ` — ${r.email}` : ''}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {cohorts.map((c) => (
+        <section key={c.key} aria-labelledby={`attn-${c.key}`}>
+          <div style={{ marginBottom: 12 }}>
+            <h3 id={`attn-${c.key}`} style={headingStyle}>
+              {c.label} <span style={countStyle}>{c.participants.length}</span>
+              {c.informational && <span style={{ ...countStyle, marginLeft: 6 }}>Informational</span>}
+            </h3>
+            <div style={descStyle}>{c.description}</div>
+          </div>
+          <ParticipantTable participants={c.participants} loading={false} profileTab={c.section} />
         </section>
       ))}
 
@@ -121,3 +76,7 @@ export default function NeedsAttentionPage({ canWrite }) {
     </div>
   )
 }
+
+const headingStyle = { margin: '0 0 4px', fontSize: 15, fontWeight: 600 }
+const descStyle = { fontSize: 12, color: 'var(--text-secondary)' }
+const countStyle = { marginLeft: 8, fontSize: 12, fontWeight: 400, background: 'var(--surface-2)', borderRadius: 10, padding: '1px 8px' }

@@ -16,7 +16,7 @@ export default function ImportsPage() {
   return (
     <div style={{ maxWidth: 800 }}>
       {/* Step indicator */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 24 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 0', marginBottom: 24 }} aria-label="Import progress">
         {IMPORT_STEPS.filter((s) => s !== 'done').map((s, i) => {
           const idx = IMPORT_STEPS.indexOf(s)
           const done = stepIndex > idx
@@ -32,10 +32,10 @@ export default function ImportsPage() {
               }}>
                 {done ? '✓' : i + 1}
               </div>
-              <div style={{ marginLeft: 6, fontSize: 12, color: active ? 'var(--accent)' : 'var(--text-secondary)', marginRight: 16 }}>
+              <div style={{ marginLeft: 6, fontSize: 12, color: active ? 'var(--accent)' : 'var(--text-secondary)', marginRight: 12 }} aria-current={active ? 'step' : undefined}>
                 {s.charAt(0).toUpperCase() + s.slice(1)}
               </div>
-              {i < 3 && <div style={{ width: 24, height: 1, background: 'var(--border)', marginRight: 16 }} />}
+              {i < 3 && <div aria-hidden style={{ width: 16, height: 1, background: 'var(--border)', marginRight: 12 }} />}
             </div>
           )
         })}

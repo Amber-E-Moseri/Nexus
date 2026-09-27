@@ -15,9 +15,11 @@ const TONE_MAP = {
   high:        { bg: 'var(--prio-high-bg)',       text: 'var(--prio-high-text)',       dot: 'var(--amber)' },
   medium:      { bg: 'var(--prio-medium-bg)',     text: 'var(--prio-medium-text)',     dot: '#1E40AF' },
   low:         { bg: 'var(--prio-low-bg)',        text: 'var(--prio-low-text)',        dot: 'var(--text-tertiary)' },
+  mute:        { bg: 'var(--status-backlog-bg)',   text: 'var(--status-backlog-text)',  dot: 'var(--text-tertiary)' },
+  warn:        { bg: 'var(--status-review-bg)',   text: 'var(--status-review-text)',   dot: 'var(--amber)' },
 }
 
-export default function Badge({ tone = 'backlog', dot = false, children }) {
+export default function Badge({ tone = 'backlog', dot = false, label, children }) {
   const colours = TONE_MAP[tone] ?? TONE_MAP.backlog
 
   return (
@@ -34,7 +36,7 @@ export default function Badge({ tone = 'backlog', dot = false, children }) {
           style={{ background: colours.dot }}
         />
       )}
-      {children}
+      {children ?? label}
     </span>
   )
 }

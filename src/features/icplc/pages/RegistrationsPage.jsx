@@ -3,6 +3,7 @@ import { Eye, Search, UserPlus } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
+import { isFieldOverridden } from '../lib/fieldAuthority.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
 import {
@@ -105,7 +106,8 @@ export default function RegistrationsPage({ canWrite }) {
       const { error: participantError } = await supabase
         .from('icplc_participants')
         .update({
-          registration_status: 'registered',
+          // A staff override on registration_status is preserved; the source value is still recorded.
+          ...(isFieldOverridden(participant, 'registration_status') ? {} : { registration_status: 'registered' }),
           source_values: nextSourceValues,
         })
         .eq('id', participant.id)

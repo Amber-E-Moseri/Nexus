@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useICPLCProfile } from '../hooks/useICPLCProfile.js'
 import OverviewTab from './tabs/OverviewTab.jsx'
@@ -12,7 +12,7 @@ const TABS = [
   { key: 'registration',   label: 'Registration' },
   { key: 'documentation',  label: 'Documentation' },
   { key: 'travel',         label: 'Travel' },
-  { key: 'activity',       label: 'Activity' },
+  { key: 'activity',       label: 'Notes & Activity' },
 ]
 
 /**
@@ -22,6 +22,8 @@ const TABS = [
  */
 export default function ParticipantProfileDrawer({ participantId, initialTab = 'overview', onClose, canWrite }) {
   const [activeTab, setActiveTab] = useState(initialTab)
+  // The drawer opens programmatically (no Dialog.Trigger), so remember the opener to restore focus.
+  const openerRef = useRef(typeof document !== 'undefined' ? document.activeElement : null)
   const { data: participant, isLoading, error } = useICPLCProfile(participantId)
 
   return (
@@ -35,13 +37,11 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
         />
         <Dialog.Content
           aria-describedby={undefined}
-          style={{
-            position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 50,
-            width: 560, maxWidth: '95vw',
-            background: 'var(--surface-1, #fff)',
-            display: 'flex', flexDirection: 'column',
-            boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
-            overflow: 'hidden',
+          className="icplc-drawer"
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            const opener = openerRef.current
+            if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus()
           }}
         >
           {/* Header */}
@@ -65,25 +65,22 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
                   </div>
                 )}
               </div>
-              <Dialog.Close
-                style={{
-                  background: 'none', border: 'none', fontSize: 20,
-                  color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px 6px',
-                  lineHeight: 1, flexShrink: 0,
-                }}
-              >
-                ×
+              <Dialog.Close className="icplc-drawer-close" aria-label="Close profile">
+                <span aria-hidden>×</span>
               </Dialog.Close>
             </div>
 
             {/* Tab bar */}
-            <div style={{ display: 'flex', gap: 0, marginBottom: -1 }}>
+            <div className="icplc-drawer-tabs" role="tablist" aria-label="Participant sections">
               {TABS.map((t) => (
                 <button
                   key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === t.key}
                   onClick={() => setActiveTab(t.key)}
                   style={{
-                    padding: '8px 14px',
+                    padding: '8px 14px', minHeight: 44,
                     background: 'none', border: 'none',
                     borderBottom: activeTab === t.key ? '2px solid var(--accent)' : '2px solid transparent',
                     color: activeTab === t.key ? 'var(--accent)' : 'var(--text-secondary)',
@@ -98,7 +95,7 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
           </div>
 
           {/* Body */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px' }}>
+          <div role="tabpanel" style={{ flex: 1, overflowY: 'auto', padding: '20px 20px' }}>
             {isLoading && <div style={{ color: 'var(--text-secondary)' }}>Loading…</div>}
             {error && <div style={{ color: 'var(--text-secondary)' }}>Failed to load profile.</div>}
             {participant && (
@@ -116,7 +113,7 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
                   <TravelTab participant={participant} canWrite={canWrite} />
                 )}
                 {activeTab === 'activity' && (
-                  <ActivityTab participantId={participant.id} />
+                  <ActivityTab participant={participant} canWrite={canWrite} />
                 )}
               </>
             )}

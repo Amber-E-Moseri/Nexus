@@ -4,6 +4,8 @@
 // CRITICAL is explicitly deferred until deadline configuration exists.
 
 import { DOCUMENT_READINESS, docNeedsAttention } from '../../registration/icplcDocReadiness.js'
+import { PASSPORT_REGION, classifyPassportRegion } from './passportRegion.js'
+import { isCommitted } from './documentationRules.js'
 
 /**
  * Derives whether a participant has itinerary data.
@@ -51,8 +53,19 @@ export function deriveReadiness(p) {
   if (p.passport_readiness !== 'unknown' && p.passport_readiness !== 'ready') {
     reasons.push('Passport action needed')
   }
+  // Passport country drives region classification; committed participants (or anyone whose
+  // passport is marked ready) must have one. Region never feeds visa requirement.
+  if (
+    classifyPassportRegion(p.passport_country) === PASSPORT_REGION.UNKNOWN &&
+    (isCommitted(p) || p.passport_readiness === 'ready')
+  ) {
+    reasons.push('Passport country missing')
+  }
   if (p.visa_requirement === 'required' && p.visa_process_status === 'not_started') {
-    reasons.push('Visa not started')
+    reasons.push('Visa required but not started')
+  }
+  if (p.visa_requirement === 'review' && isCommitted(p)) {
+    reasons.push('Visa requirement unknown')
   }
   if (p.visa_process_status === 'issue') {
     reasons.push('Visa issue')
@@ -84,6 +97,7 @@ export function deriveReadiness(p) {
   // READY — all critical gates pass
   if (
     p.passport_readiness === 'ready' &&
+    p.visa_requirement !== 'review' &&
     (p.visa_requirement !== 'required' || p.visa_process_status === 'approved') &&
     deriveItineraryStatus(p) === 'received'
   ) {
