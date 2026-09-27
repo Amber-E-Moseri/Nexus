@@ -100,6 +100,7 @@ serve(async (req) => {
   let totalUpserted = 0
   const errors: string[] = []
   const reactivated: string[] = []
+  const unmatchedHosts = new Map<string, number>()
 
   for (const { from, to } of monthRange(fromDate, toDate)) {
     let csvText: string
@@ -128,6 +129,20 @@ serve(async (req) => {
       !r['Service date'].startsWith('TRUNCATED') &&
       churchByName.has(r['Host unit'].toLowerCase().trim())
     )
+
+    // Track unmatched hosts (not in schedule or history) for debugging
+    const potentialRows = rows.filter(r =>
+      PHASE1_KINDS.has(r['Kind']) &&
+      r['Status'] === 'Submitted' &&
+      r['Host unit'] &&
+      !r['Service date'].startsWith('TRUNCATED')
+    )
+    for (const row of potentialRows) {
+      const nameKey = row['Host unit'].toLowerCase().trim()
+      if (!churchByName.has(nameKey)) {
+        unmatchedHosts.set(nameKey, (unmatchedHosts.get(nameKey) ?? 0) + 1)
+      }
+    }
 
     // Aggregate per (church, kind, date, service name)
     type Agg = { church_unit_id: string; church_name: string; service_kind: string; service_date: string; service_name: string; total: number; ft: number }
@@ -212,11 +227,34 @@ serve(async (req) => {
     }
   }
 
+  // Log unmatched hosts for debugging
+  if (unmatchedHosts.size > 0) {
+    const unmatchedRecords = [...unmatchedHosts.entries()].map(([hostName, count]) => ({
+      sync_date: new Date().toISOString(),
+      host_name: hostName,
+      service_kind: 'SundayService|SundayGathering',
+      report_count: count,
+      notes: 'Dropped during sync — not in service_center_schedule or host_name_history',
+    }))
+
+    await supabase
+      .from('growth_sync_unmatched_hosts')
+      .insert(unmatchedRecords)
+      .then(() => {
+        // Log recorded
+      })
+      .catch((e) => {
+        // If logging fails, don't block the sync
+        console.error('Failed to log unmatched hosts:', e.message)
+      })
+  }
+
   return json(200, {
     ok: errors.length === 0,
     upserted: totalUpserted,
     reactivated: reactivated.length > 0 ? reactivated : undefined,
     range: { from: fromDate.toISOString().split('T')[0], to: toDate.toISOString().split('T')[0] },
     errors: errors.length > 0 ? errors : undefined,
+    unmatched_hosts: unmatchedHosts.size > 0 ? Object.fromEntries(unmatchedHosts) : undefined,
   })
 })
