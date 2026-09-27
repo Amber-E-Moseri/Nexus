@@ -42,7 +42,13 @@ const STATUS_META = {
 
 function Card({ children, style, className }) {
   return (
-    <div className={className} style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, ...style }}>
+    <div className={className} style={{
+      background: C.paper,
+      border: `1px solid ${C.line}`,
+      borderRadius: 14,
+      boxShadow: '0 1px 3px rgba(26, 18, 32, 0.08)',
+      ...style
+    }}>
       {children}
     </div>
   )
@@ -76,10 +82,14 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
       fontFamily: 'Inter', fontWeight: 600,
       fontSize: small ? 12 : 13.5,
       padding: small ? '5px 11px' : '8px 16px',
-      borderRadius: 9, cursor: disabled ? 'not-allowed' : 'pointer',
+      borderRadius: 9,
+      cursor: disabled ? 'not-allowed' : 'pointer',
       opacity: disabled ? 0.55 : 1,
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      transition: 'opacity .15s',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      transition: 'all 0.15s ease',
+      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
     }}>
       {children}
     </button>
@@ -1271,7 +1281,38 @@ export default function GrowthTrackingPage({ embedded = false }) {
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .growth-row:hover td { background: ${C.cream} !important; }
+
+        /* Polish: smooth transitions */
+        * { transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; }
+
+        /* Table row hover with smooth effect */
+        .growth-row { cursor: pointer; }
+        .growth-row:hover td { background: ${C.cream} !important; box-shadow: inset 0 0 8px rgba(76, 42, 146, 0.05); }
+
+        /* Card shadows and depth */
+        .gt-stat-card {
+          box-shadow: 0 1px 3px rgba(26, 18, 32, 0.08) !important;
+          transition: box-shadow 0.2s ease, transform 0.2s ease !important;
+        }
+        .gt-stat-card:hover { box-shadow: 0 2px 8px rgba(76, 42, 146, 0.1) !important; }
+
+        /* Button polish */
+        button {
+          transition: all 0.2s ease;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+        button:hover { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+        button:active { transform: translateY(1px); }
+
+        /* Chart container refinement */
+        .gt-chart { border-radius: 14px; overflow: hidden; }
+
+        /* Status badge polish */
+        span[style*="display: inline-flex"] {
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Responsive polish */
         @media (max-width: 640px) {
           .gt-header { padding: 16px 14px 0 !important; }
           .gt-actions { width: 100%; justify-content: flex-end; }
