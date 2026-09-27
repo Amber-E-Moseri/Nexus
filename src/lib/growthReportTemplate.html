@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLW Canada — Weekly Growth Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    @page {
+      size: letter;
+      margin: 0.5in 0.5in 0.5in 0.5in;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    @media print {
+      body {
+        margin: 0;
+        padding: 0;
+        background: white;
+      }
+      html, body {
+        width: 100%;
+        height: 100%;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #1a1714;
+      background: white;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .report {
+      width: 100%;
+      max-width: 8.5in;
+      margin: 0 auto;
+      background: white;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       HEADER
+       ───────────────────────────────────────────────────────────── */
+
+    .header {
+      background: #4b2c71;
+      color: white;
+      padding: 1.2rem 1.5rem;
+      margin: -0.5in -0.5in 0 -0.5in;
+      margin-bottom: 1.2rem;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .header-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #b89cc4;
+      margin-bottom: 0.3rem;
+    }
+
+    .header-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+
+    .header-subtitle {
+      font-size: 11px;
+      color: #b89cc4;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       KPI CARDS
+       ───────────────────────────────────────────────────────────── */
+
+    .kpi-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.8rem;
+      margin-bottom: 1.2rem;
+      page-break-inside: avoid;
+    }
+
+    .kpi-card {
+      border: 1px solid #e8dde0;
+      border-radius: 4px;
+      padding: 0.8rem;
+      background: #faf8f6;
+      page-break-inside: avoid;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .kpi-card-label {
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #9e9488;
+      margin-bottom: 0.3rem;
+    }
+
+    .kpi-card-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #4b2c71;
+      margin-bottom: 0.2rem;
+      line-height: 1;
+    }
+
+    .kpi-card-meta {
+      font-size: 9px;
+      color: #9e9488;
+    }
+
+    .kpi-card-positive {
+      color: #16a34a;
+    }
+
+    .kpi-card-negative {
+      color: #dc2626;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       CHART SECTION
+       ───────────────────────────────────────────────────────────── */
+
+    .chart-section {
+      margin-bottom: 1.2rem;
+      page-break-inside: avoid;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #4b2c71;
+      margin-bottom: 0.4rem;
+    }
+
+    .chart-container {
+      background: #faf8f6;
+      border: 1px solid #e8dde0;
+      border-radius: 4px;
+      padding: 0.8rem;
+      min-height: 2.5rem;
+      page-break-inside: avoid;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .chart-placeholder {
+      font-size: 9px;
+      color: #9e9488;
+      text-align: center;
+      padding: 0.5rem;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       STATUS SUMMARY
+       ───────────────────────────────────────────────────────────── */
+
+    .status-section {
+      margin-bottom: 1.2rem;
+      page-break-inside: avoid;
+    }
+
+    .status-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      font-size: 9px;
+      font-weight: 600;
+      padding: 0.35rem 0.6rem;
+      border-radius: 3px;
+      border: 1px solid;
+      white-space: nowrap;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .status-chip-reported {
+      background: #dcfce7;
+      border-color: #16a34a;
+      color: #16a34a;
+    }
+
+    .status-chip-merged {
+      background: #fef3c7;
+      border-color: #d97706;
+      color: #d97706;
+    }
+
+    .status-chip-didnotmeet {
+      background: #f3f4f6;
+      border-color: #6b7280;
+      color: #6b7280;
+    }
+
+    .status-chip-missing {
+      background: #fee2e2;
+      border-color: #dc2626;
+      color: #dc2626;
+    }
+
+    .status-chip-current {
+      background: #dbeafe;
+      border-color: #0284c7;
+      color: #0284c7;
+    }
+
+    .status-chip-count {
+      font-weight: 700;
+      margin-right: 0.2rem;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       CENTER TABLE
+       ───────────────────────────────────────────────────────────── */
+
+    .table-section {
+      margin-bottom: 1rem;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+
+    .table thead {
+      background: #faf8f6;
+      border-bottom: 1px solid #e8dde0;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .table thead th {
+      padding: 0.5rem 0.6rem;
+      text-align: left;
+      font-weight: 700;
+      color: #9e9488;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      page-break-inside: avoid;
+    }
+
+    .table tbody tr {
+      border-bottom: 1px solid #f3f0ed;
+      page-break-inside: avoid;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .table tbody tr:last-child {
+      border-bottom: 1px solid #e8dde0;
+    }
+
+    .table tbody td {
+      padding: 0.5rem 0.6rem;
+      vertical-align: middle;
+    }
+
+    .table-center-name {
+      font-weight: 600;
+      color: #1a1714;
+    }
+
+    .table-status {
+      display: inline-flex;
+      align-items: center;
+      font-size: 8px;
+      font-weight: 600;
+      padding: 0.2rem 0.4rem;
+      border-radius: 2px;
+      white-space: nowrap;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .table-status-reported {
+      background: #dcfce7;
+      color: #16a34a;
+      border: 0.5px solid #16a34a;
+    }
+
+    .table-status-merged {
+      background: #fef3c7;
+      color: #d97706;
+      border: 0.5px solid #d97706;
+    }
+
+    .table-status-didnotmeet {
+      background: #f3f4f6;
+      color: #6b7280;
+      border: 0.5px solid #6b7280;
+    }
+
+    .table-status-missing {
+      background: #fee2e2;
+      color: #dc2626;
+      border: 0.5px solid #dc2626;
+    }
+
+    .table-status-current {
+      background: #dbeafe;
+      color: #0284c7;
+      border: 0.5px solid #0284c7;
+    }
+
+    .table-number {
+      text-align: right;
+      font-family: 'SF Mono', 'Roboto Mono', monospace;
+    }
+
+    .table-positive {
+      color: #16a34a;
+      font-weight: 600;
+    }
+
+    .table-negative {
+      color: #dc2626;
+      font-weight: 600;
+    }
+
+    .table-neutral {
+      color: #9e9488;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       FOOTER
+       ───────────────────────────────────────────────────────────── */
+
+    .footer {
+      margin-top: 1rem;
+      padding-top: 0.8rem;
+      border-top: 1px solid #e8dde0;
+      font-size: 9px;
+      color: #9e9488;
+      page-break-inside: avoid;
+    }
+
+    .footer-text {
+      margin: 0.2rem 0;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       UTILITY CLASSES
+       ───────────────────────────────────────────────────────────── */
+
+    .text-center {
+      text-align: center;
+    }
+
+    .text-right {
+      text-align: right;
+    }
+
+    .mt-small { margin-top: 0.4rem; }
+    .mb-small { margin-bottom: 0.4rem; }
+    .mb-medium { margin-bottom: 0.8rem; }
+
+    /* ─────────────────────────────────────────────────────────────
+       RESPONSIVE ADJUSTMENTS FOR PRINT
+       ───────────────────────────────────────────────────────────── */
+
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+
+      body, html {
+        margin: 0;
+        padding: 0;
+      }
+
+      .report {
+        box-shadow: none;
+        max-width: 100%;
+      }
+
+      /* Prevent orphan rows */
+      .table tbody tr {
+        page-break-inside: avoid;
+      }
+
+      .table {
+        page-break-inside: avoid;
+      }
+
+      /* Ensure sections don't break awkwardly */
+      .kpi-section,
+      .chart-section,
+      .status-section {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="report">
+    <!-- HEADER -->
+    <div class="header">
+      <div class="header-label">BLW CANADA</div>
+      <div class="header-title">Weekly Growth Report</div>
+      <div class="header-subtitle">{{WEEK_LABEL}}</div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-section">
+      <div class="kpi-card">
+        <div class="kpi-card-label">Network Attendance</div>
+        <div class="kpi-card-value">{{NETWORK_ATTENDANCE}}</div>
+        <div class="kpi-card-meta">
+          <span class="{{DELTA_CLASS}}">{{DELTA_TEXT}}</span> vs last week
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">First-Timers</div>
+        <div class="kpi-card-value">{{FIRST_TIMERS}}</div>
+        <div class="kpi-card-meta">network total</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">Centers Reporting</div>
+        <div class="kpi-card-value">{{REPORTING_COUNT}}</div>
+        <div class="kpi-card-meta">{{REPORTING_PCT}}% of {{TOTAL_CENTERS}}</div>
+      </div>
+    </div>
+
+    <!-- ATTENDANCE TREND (Chart placeholder for now) -->
+    <div class="chart-section">
+      <div class="section-title">Attendance Trend</div>
+      <div class="chart-container">
+        <div class="chart-placeholder">
+          [Chart: 12-week attendance history will render here]
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER REPORTING STATUS -->
+    <div class="status-section">
+      <div class="section-title">Center Reporting Status</div>
+      <div class="status-chips">
+        {{STATUS_CHIPS}}
+      </div>
+    </div>
+
+    <!-- CENTER BREAKDOWN TABLE -->
+    <div class="table-section">
+      <div class="section-title">Center Breakdown</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Center</th>
+            <th style="text-align: right;">Attendance</th>
+            <th style="text-align: right;">1st-Timers</th>
+            <th style="text-align: right;">WoW</th>
+            <th style="text-align: right;">4-Wk Avg</th>
+            <th style="text-align: center;">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{TABLE_ROWS}}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+      <div class="footer-text">WoW = week-over-week attendance change · 4-Wk Avg = rolling 4-week average</div>
+      <div class="footer-text">Generated {{GENERATED_AT}}</div>
+    </div>
+  </div>
+</body>
+</html>
