@@ -97,10 +97,43 @@ serve(async (req) => {
     churchByName.set(h.old_host_name.toLowerCase().trim(), h.church_unit_id)
   }
 
+  // Helper: auto-provision a new fellowship
+  const autoProvisionFellowship = async (hostName: string): Promise<string | null> => {
+    // Generate a deterministic but unique unit_id based on host name hash
+    const encoder = new TextEncoder()
+    const data = encoder.encode(`blw-${hostName.toLowerCase().trim()}`)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+    const unit_id = `auto-${hashHex.slice(0, 20)}`
+
+    try {
+      const { error } = await supabase.from('service_center_schedule').insert({
+        church_name: hostName,
+        church_unit_id: unit_id,
+        active: true,
+      })
+
+      if (error && error.code !== '23505') {
+        // 23505 = unique constraint (already exists), that's ok
+        console.error(`Failed to auto-provision ${hostName}:`, error.message)
+        return null
+      }
+
+      newFellowships.push({ name: hostName, unit_id })
+      churchByName.set(hostName.toLowerCase().trim(), unit_id)
+      return unit_id
+    } catch (e) {
+      console.error(`Exception auto-provisioning ${hostName}:`, String(e))
+      return null
+    }
+  }
+
   let totalUpserted = 0
   const errors: string[] = []
   const reactivated: string[] = []
   const unmatchedHosts = new Map<string, number>()
+  const newFellowships: { name: string; unit_id: string }[] = []
 
   for (const { from, to } of monthRange(fromDate, toDate)) {
     let csvText: string
@@ -121,6 +154,28 @@ serve(async (req) => {
 
     const rows = parseCSV(csvText)
 
+    // Get potential rows and auto-provision any missing hosts
+    const potentialRows = rows.filter(r =>
+      PHASE1_KINDS.has(r['Kind']) &&
+      r['Status'] === 'Submitted' &&
+      r['Host unit'] &&
+      !r['Service date'].startsWith('TRUNCATED')
+    )
+
+    // Auto-provision unmatched hosts
+    const autoProvisionedThisRound = new Set<string>()
+    for (const row of potentialRows) {
+      const nameKey = row['Host unit'].toLowerCase().trim()
+      if (!churchByName.has(nameKey) && !autoProvisionedThisRound.has(nameKey)) {
+        const unitId = await autoProvisionFellowship(row['Host unit'])
+        if (unitId) {
+          autoProvisionedThisRound.add(nameKey)
+        } else {
+          unmatchedHosts.set(nameKey, (unmatchedHosts.get(nameKey) ?? 0) + 1)
+        }
+      }
+    }
+
     // Filter: phase-1 scope only, submitted, non-truncation rows
     const phaseRows = rows.filter(r =>
       PHASE1_KINDS.has(r['Kind']) &&
@@ -129,20 +184,6 @@ serve(async (req) => {
       !r['Service date'].startsWith('TRUNCATED') &&
       churchByName.has(r['Host unit'].toLowerCase().trim())
     )
-
-    // Track unmatched hosts (not in schedule or history) for debugging
-    const potentialRows = rows.filter(r =>
-      PHASE1_KINDS.has(r['Kind']) &&
-      r['Status'] === 'Submitted' &&
-      r['Host unit'] &&
-      !r['Service date'].startsWith('TRUNCATED')
-    )
-    for (const row of potentialRows) {
-      const nameKey = row['Host unit'].toLowerCase().trim()
-      if (!churchByName.has(nameKey)) {
-        unmatchedHosts.set(nameKey, (unmatchedHosts.get(nameKey) ?? 0) + 1)
-      }
-    }
 
     // Aggregate per (church, kind, date, service name)
     type Agg = { church_unit_id: string; church_name: string; service_kind: string; service_date: string; service_name: string; total: number; ft: number }
@@ -253,6 +294,7 @@ serve(async (req) => {
     ok: errors.length === 0,
     upserted: totalUpserted,
     reactivated: reactivated.length > 0 ? reactivated : undefined,
+    auto_provisioned: newFellowships.length > 0 ? newFellowships : undefined,
     range: { from: fromDate.toISOString().split('T')[0], to: toDate.toISOString().split('T')[0] },
     errors: errors.length > 0 ? errors : undefined,
     unmatched_hosts: unmatchedHosts.size > 0 ? Object.fromEntries(unmatchedHosts) : undefined,
