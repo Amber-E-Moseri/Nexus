@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const BASE_URL = 'https://leaders.lwcanada.org'
 const ROOT_UNIT_ID = 'cmotpb106000ewkxbi3md8xs6'  // BLW Canada — returns all sub-unit data
-const PHASE1_KINDS = new Set(['SundayService', 'GlobalService'])
+const PHASE1_KINDS = new Set(['SundayService', 'SundayGathering', 'GlobalService'])
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -74,17 +74,28 @@ serve(async (req) => {
     ? new Date(body.from)
     : new Date(toDate.getTime() - 14 * 24 * 60 * 60 * 1000)
 
-  // Build name → unit_id map from schedule table
+  // Build name → unit_id map from current schedule + historical names
   const { data: schedule, error: schedErr } = await supabase
     .from('service_center_schedule')
     .select('church_unit_id, church_name')
   if (schedErr) return json(500, { error: 'Could not load schedule', details: schedErr.message })
 
-  const churchByName = new Map<string, string>(
-    (schedule ?? []).map((s: { church_unit_id: string; church_name: string }) =>
-      [s.church_name.toLowerCase().trim(), s.church_unit_id]
-    )
-  )
+  const { data: history, error: histErr } = await supabase
+    .from('host_name_history')
+    .select('church_unit_id, old_host_name')
+  if (histErr) return json(500, { error: 'Could not load host name history', details: histErr.message })
+
+  const churchByName = new Map<string, string>()
+
+  // Add current names from schedule
+  for (const s of (schedule ?? [])) {
+    churchByName.set(s.church_name.toLowerCase().trim(), s.church_unit_id)
+  }
+
+  // Add historical names (old_host_name → church_unit_id)
+  for (const h of (history ?? [])) {
+    churchByName.set(h.old_host_name.toLowerCase().trim(), h.church_unit_id)
+  }
 
   let totalUpserted = 0
   const errors: string[] = []
@@ -126,12 +137,17 @@ serve(async (req) => {
       const nameKey = row['Host unit'].toLowerCase().trim()
       const churchUnitId = churchByName.get(nameKey)!
       const serviceDate = row['Service date'].split(' ')[0]  // strip time component
+
+      // Look up current church name from schedule to ensure consistency
+      const currentCenter = (schedule ?? []).find((s: { church_unit_id: string }) => s.church_unit_id === churchUnitId)
+      const currentChurchName = currentCenter?.church_name ?? row['Host unit']
+
       const key = `${churchUnitId}::${row['Kind']}::${serviceDate}::${row['Service']}`
 
       if (!agg.has(key)) {
         agg.set(key, {
           church_unit_id: churchUnitId,
-          church_name:    row['Host unit'],
+          church_name:    currentChurchName,
           service_kind:   row['Kind'],
           service_date:   serviceDate,
           service_name:   row['Service'],
