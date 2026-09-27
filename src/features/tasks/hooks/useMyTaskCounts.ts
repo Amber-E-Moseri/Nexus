@@ -26,18 +26,20 @@ export function useMyTaskCounts(userId: string | null | undefined): MyTaskCounts
 
   const load = useCallback(async () => {
     if (!userId) return
+    const today = localDateOnly()
+    const tomorrow = localTomorrowDateOnly()
     const { data, error } = await supabase
       .from('tasks')
       .select(COUNT_SELECT)
       .eq('assignee_id', userId)
       .is('deleted_at', null)
+      .gte('due_date', today)
+      .lte('due_date', tomorrow)
 
     // Badges are best-effort; leave the previous counts rather than toasting
     if (error) return
 
     const actionable = normalizeTaskRows(data ?? []).filter(isTaskActionable)
-    const today = localDateOnly()
-    const tomorrow = localTomorrowDateOnly()
     setCounts({
       todayTomorrow: actionable.filter((t) => {
         const due = t.due_date?.slice(0, 10)

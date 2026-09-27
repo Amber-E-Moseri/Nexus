@@ -52,6 +52,9 @@ export default defineConfig({
           if (id.includes('node_modules/lucide-react') || id.includes('node_modules/date-fns')) {
             return 'vendor-ui'
           }
+          if (id.includes('node_modules/framer-motion')) {
+            return 'vendor-framer'
+          }
         },
       },
     },
