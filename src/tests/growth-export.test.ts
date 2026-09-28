@@ -41,9 +41,9 @@ describe('Growth Report Export UX', () => {
     expect(fetchCalls[0][0]).toBe('/api/growth-report-pdf')
   })
 
-  it('Z: synchronous ref lock blocks direct re-entrancy before request resolves', async () => {
+  it('Z: synchronous ref lock blocks direct re-entrancy before request resolves, releases for retry', async () => {
     // Simulate the actual handler pattern with synchronous ref lock
-    let exportInFlightRef = { current: false }
+    const exportInFlightRef = { current: false }
     let isExporting = false
     let clickCount = 0
 
@@ -55,14 +55,12 @@ describe('Growth Report Export UX', () => {
       clickCount++
 
       try {
-        // Simulate async fetch
         const reportData = { reportingWeek: 'Test', networkAttendance: 100 }
         mockFetch('/api/growth-report-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(reportData),
         })
-        // Simulate await on response
         await Promise.resolve()
       } finally {
         exportInFlightRef.current = false
@@ -70,20 +68,59 @@ describe('Growth Report Export UX', () => {
       }
     }
 
-    // First click
+    // Step 1-4: first invocation starts, second blocked before first resolves
     const firstClick = handleClick()
-    // Second click BEFORE first promise resolves — should be blocked by ref lock
-    const secondClick = handleClick()
+    const secondClick = handleClick() // ref is true → exits immediately
 
     await Promise.all([firstClick, secondClick])
 
-    // Only one click handler should have executed
     expect(clickCount).toBe(1)
-    // Only one fetch should have been issued
     expect(fetchCalls).toHaveLength(1)
-    // Lock should be released
+    // Step 5-6: lock released, state reset
     expect(exportInFlightRef.current).toBe(false)
     expect(isExporting).toBe(false)
+
+    // Step 7-8: invoke again after first resolves — must produce a new request
+    await handleClick()
+    expect(clickCount).toBe(2)
+    expect(fetchCalls).toHaveLength(2)
+    expect(exportInFlightRef.current).toBe(false)
+  })
+
+  it('Z2: ref lock releases after failure — retry produces exactly one new request', async () => {
+    const exportInFlightRef = { current: false }
+    let isExporting = false
+    let clickCount = 0
+
+    const handleClick = async (shouldFail = false) => {
+      if (exportInFlightRef.current) return
+      exportInFlightRef.current = true
+      isExporting = true
+      clickCount++
+
+      try {
+        mockFetch('/api/growth-report-pdf', { method: 'POST' })
+        await Promise.resolve()
+        if (shouldFail) throw new Error('PDF generation failed')
+      } finally {
+        exportInFlightRef.current = false
+        isExporting = false
+      }
+    }
+
+    // First invocation fails
+    await expect(handleClick(true)).rejects.toThrow('PDF generation failed')
+
+    // Lock must be released after failure
+    expect(exportInFlightRef.current).toBe(false)
+    expect(isExporting).toBe(false)
+    expect(fetchCalls).toHaveLength(1)
+
+    // Retry: exactly one new request
+    await handleClick(false)
+    expect(clickCount).toBe(2)
+    expect(fetchCalls).toHaveLength(2)
+    expect(exportInFlightRef.current).toBe(false)
   })
 
   it('B: button enters disabled state while request is pending', () => {
