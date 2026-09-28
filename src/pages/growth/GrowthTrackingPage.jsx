@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { TrendingUp, Trash2, ToggleLeft, ToggleRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -386,6 +386,8 @@ async function exportProfessionalPDF(activeWeek, activeRows, growthData, network
 function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
   const [selectedCenter, setSelectedCenter] = useState('all')
   const [weekCount, setWeekCount] = useState(12)
+  const [isExporting, setIsExporting] = useState(false)
+  const exportInFlightRef = useRef(false)
 
   if (loading) return (
     <div style={{ padding: 64, textAlign: 'center', color: C.mute, fontFamily: 'Inter' }}>
@@ -489,12 +491,23 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
         {/* Export Professional PDF via Puppeteer renderer */}
         <Btn
           tone="primary"
-          onClick={() => exportProfessionalPDF(activeWeek, activeRows, growthData, networkTotal, networkFT, reportingCount, allWeeks.length)}
+          disabled={isExporting}
+          onClick={async () => {
+            if (exportInFlightRef.current) return
+            exportInFlightRef.current = true
+            setIsExporting(true)
+            try {
+              await exportProfessionalPDF(activeWeek, activeRows, growthData, networkTotal, networkFT, reportingCount, allWeeks.length)
+            } finally {
+              exportInFlightRef.current = false
+              setIsExporting(false)
+            }
+          }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Export PDF
+          {isExporting ? 'Generating PDF…' : 'Export PDF'}
         </Btn>
       </div>
 

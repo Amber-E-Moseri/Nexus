@@ -41,6 +41,51 @@ describe('Growth Report Export UX', () => {
     expect(fetchCalls[0][0]).toBe('/api/growth-report-pdf')
   })
 
+  it('Z: synchronous ref lock blocks direct re-entrancy before request resolves', async () => {
+    // Simulate the actual handler pattern with synchronous ref lock
+    let exportInFlightRef = { current: false }
+    let isExporting = false
+    let clickCount = 0
+
+    const handleClick = async () => {
+      // Synchronous lock check — this is what prevents re-entrancy
+      if (exportInFlightRef.current) return
+      exportInFlightRef.current = true
+      isExporting = true
+      clickCount++
+
+      try {
+        // Simulate async fetch
+        const reportData = { reportingWeek: 'Test', networkAttendance: 100 }
+        mockFetch('/api/growth-report-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(reportData),
+        })
+        // Simulate await on response
+        await Promise.resolve()
+      } finally {
+        exportInFlightRef.current = false
+        isExporting = false
+      }
+    }
+
+    // First click
+    const firstClick = handleClick()
+    // Second click BEFORE first promise resolves — should be blocked by ref lock
+    const secondClick = handleClick()
+
+    await Promise.all([firstClick, secondClick])
+
+    // Only one click handler should have executed
+    expect(clickCount).toBe(1)
+    // Only one fetch should have been issued
+    expect(fetchCalls).toHaveLength(1)
+    // Lock should be released
+    expect(exportInFlightRef.current).toBe(false)
+    expect(isExporting).toBe(false)
+  })
+
   it('B: button enters disabled state while request is pending', () => {
     // Verify the onClick handler sets isExporting=true immediately (synchronously)
     // before awaiting the request, creating the disabled state
