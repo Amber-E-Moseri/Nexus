@@ -316,6 +316,71 @@ function downloadReport(activeWeek, activeRows, growthData) {
   setTimeout(() => win.print(), 400)
 }
 
+async function exportProfessionalPDF(activeWeek, activeRows, growthData, networkTotal, networkFT, reportingCount, totalCenters) {
+  try {
+    // Collect trend data for chart
+    const allWeeks = [...new Set(growthData.map(r => r.week_start_date))].sort()
+    const trendData = allWeeks.slice(-12).map(week => {
+      const weekRows = growthData.filter(r => r.week_start_date === week && r.status === 'reported')
+      return {
+        week,
+        attendance: weekRows.reduce((s, r) => s + r.total_attendance, 0),
+        firstTimers: weekRows.reduce((s, r) => s + r.first_timers, 0),
+      }
+    })
+
+    // Build report object matching GrowthReport type
+    const reported = activeRows.filter(r => r.status === 'reported')
+    const attendanceDelta = reported.reduce((s, r) => s + (r.wow_delta ?? 0), 0)
+
+    const reportData = {
+      reportingWeek: formatWeekFull(activeWeek),
+      networkAttendance: networkTotal,
+      attendanceDelta: attendanceDelta !== 0 ? attendanceDelta : null,
+      firstTimers: networkFT,
+      reportingCenters: reportingCount,
+      totalCenters,
+      reportingPercentage: Math.round((reportingCount / totalCenters) * 100),
+      trend: trendData,
+      centers: activeRows.map(r => ({
+        church_name: r.church_name,
+        total_attendance: r.total_attendance,
+        first_timers: r.first_timers,
+        status: r.status,
+        wow_delta: r.wow_delta,
+        rolling_avg_4wk: r.rolling_avg_4wk,
+      })),
+    }
+
+    // Call the Puppeteer PDF renderer
+    const response = await fetch('/api/growth-report-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reportData),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      alert(`Failed to generate PDF: ${error.error}`)
+      return
+    }
+
+    // Download the PDF
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `growth-report-${formatWeekFull(activeWeek).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+  } catch (err) {
+    console.error('PDF export error:', err)
+    alert('Failed to export PDF: ' + err.message)
+  }
+}
+
 // ── Dashboard tab ──────────────────────────────────────────────────────────────
 
 function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
@@ -421,23 +486,16 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
             Back to current
           </button>
         )}
-        {/* Download PDF — opens browser print dialog for save-as-PDF */}
-        <button
-          className="gt-pdf-btn"
-          onClick={() => downloadReport(activeWeek, activeRows, growthData)}
-          title="Open print dialog to save as PDF"
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            padding: '6px 12px', borderRadius: 8,
-            border: `1px solid ${C.line}`, background: C.paper, color: C.mute,
-            fontSize: 12, fontWeight: 600, fontFamily: 'Inter', cursor: 'pointer',
-          }}
+        {/* Export Professional PDF via Puppeteer renderer */}
+        <Btn
+          tone="primary"
+          onClick={() => exportProfessionalPDF(activeWeek, activeRows, growthData, networkTotal, networkFT, reportingCount, allWeeks.length)}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Download PDF
-        </button>
+          Export PDF
+        </Btn>
       </div>
 
       {/* Network stat cards */}
