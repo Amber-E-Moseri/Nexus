@@ -141,8 +141,9 @@ describe('Growth Report Models', () => {
 
       const report = buildGrowthReport('Test Week', centers)
 
-      // Delta should not count null values
-      expect(report.attendanceDelta).toBe(0)
+      // When all wow_delta values are null (missing previous week), delta should be null
+      // because we cannot report a valid delta without source data
+      expect(report.attendanceDelta).toBeNull()
     })
 
     it('handles merged services with zero attendance', () => {
