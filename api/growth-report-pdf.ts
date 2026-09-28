@@ -1,19 +1,46 @@
 // Vercel Serverless Function: Growth Report PDF Rendering
-// Renders HTML growth report to PDF using Puppeteer
-//
-// Usage:
-//   POST /api/growth-report-pdf
-//   Content-Type: application/json
+// POST /api/growth-report-pdf
+// Orchestrates Chromium PDF generation using the canonical renderer.
 
-import { VercelRequest, VercelResponse } from '@vercel/node'
-import puppeteer from 'puppeteer'
-import { renderGrowthReportHTML } from '../src/lib/growthReportRendererBackend'
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+import puppeteer from 'puppeteer-core'
+import { renderGrowthReportHTMLWithTemplate } from '../src/lib/growthReportRenderer.js'
+import type { GrowthReport } from '../src/lib/reportModels.js'
 
-async function renderReportHTML(report: any): Promise<string> {
-  // Use canonical backend renderer (no duplicate code)
-  return renderGrowthReportHTML(report)
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+function loadTemplate(): string {
+  const templatePath = join(__dirname, '../src/lib/growthReportTemplate.html')
+  try {
+    return readFileSync(templatePath, 'utf-8')
+  } catch (err) {
+    throw new Error(`Cannot load report template at ${templatePath}: ${err instanceof Error ? err.message : String(err)}`)
+  }
 }
 
+async function getBrowserArgs() {
+  const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME
+  if (isServerless) {
+    const chromium = await import('@sparticuz/chromium')
+    return {
+      args: chromium.default.args,
+      defaultViewport: chromium.default.defaultViewport,
+      executablePath: await chromium.default.executablePath(),
+      headless: chromium.default.headless as true,
+    }
+  }
+  // Local development: use puppeteer's bundled Chromium
+  const localPuppeteer = await import('puppeteer')
+  return {
+    executablePath: localPuppeteer.default.executablePath(),
+    headless: true as const,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') {
@@ -24,30 +51,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  const report = req.body as GrowthReport
+
+  if (!report?.reportingWeek || report.networkAttendance === undefined) {
+    return res.status(400).json({ error: 'Missing required report fields' })
+  }
+
   let browser = null
   try {
-    const report = req.body
+    const templateStr = loadTemplate()
+    const html = renderGrowthReportHTMLWithTemplate(report, templateStr)
 
-    // Validation
-    if (!report.reportingWeek || report.networkAttendance === undefined) {
-      return res.status(400).json({ error: 'Missing required report fields' })
-    }
+    const launchArgs = await getBrowserArgs()
+    browser = await puppeteer.launch(launchArgs)
 
-    // Render HTML
-    const html = await renderReportHTML(report)
-
-    // Launch Puppeteer
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    })
-
-    const page = await browser.createPage()
-
-    // Set content and wait for fonts/images
+    const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
 
-    // Generate PDF with print settings
     const pdfBuffer = await page.pdf({
       format: 'Letter',
       margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' },
@@ -55,20 +75,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       preferCSSPageSize: true,
     })
 
-    // Return PDF
+    const safeFilename = `growth-report-${report.reportingWeek.replace(/[^a-z0-9]/gi, '_')}.pdf`
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename="growth-report-${report.reportingWeek.replace(/[^a-z0-9]/gi, '_')}.pdf"`)
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`)
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
 
     return res.status(200).send(pdfBuffer)
   } catch (error) {
-    console.error('Error generating PDF:', error)
+    console.error('Growth report PDF error:', error)
+    const isProduction = !!process.env.VERCEL
     return res.status(500).json({
       error: 'Failed to generate PDF',
-      details: error instanceof Error ? error.message : String(error),
+      ...(isProduction ? {} : { details: error instanceof Error ? error.message : String(error) }),
     })
   } finally {
-    // Always close browser
     if (browser) {
       await browser.close().catch(e => console.error('Browser close error:', e))
     }
