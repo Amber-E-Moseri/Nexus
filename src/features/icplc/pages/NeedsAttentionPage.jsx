@@ -24,15 +24,40 @@ export default function NeedsAttentionPage({ canWrite }) {
       .filter((c) => c.participants.length > 0)
   }, [participants])
 
-  if (isLoading) return <div role="status" style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading…</div>
-  if (error) return <div role="alert" style={{ padding: 40, color: 'var(--text-secondary)' }}>Failed to load attention items.</div>
-  if (!cohorts.length && !ambiguousRegistrations.length) {
-    return (
-      <div role="status" style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
-        No items need attention right now.
+  if (isLoading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {[1, 2, 3].map((i) => (
+        <div key={i} style={{ height: 80, background: 'var(--surface-2)', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+      ))}
+    </div>
+  )
+
+  if (error) return (
+    <div style={{
+      border: '1px solid #F3BDB8', borderRadius: 8, padding: '16px 20px',
+      background: '#FEF2F2', display: 'flex', alignItems: 'flex-start', gap: 12,
+    }}>
+      <span style={{ fontSize: 18, lineHeight: 1 }}>⚠</span>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#991B1B', marginBottom: 4 }}>Failed to load attention items</div>
+        <div style={{ fontSize: 12, color: '#B91C1C' }}>
+          {error?.message || 'An error occurred. Please refresh the page.'}
+        </div>
       </div>
-    )
-  }
+    </div>
+  )
+
+  if (!cohorts.length && !ambiguousRegistrations.length) return (
+    <div style={{
+      padding: '48px 20px', textAlign: 'center',
+      border: '1px dashed var(--border)', borderRadius: 8,
+      color: 'var(--text-secondary)',
+    }}>
+      <div style={{ fontSize: 28, marginBottom: 10 }}>✅</div>
+      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>All clear</div>
+      <div style={{ fontSize: 13 }}>No items need attention right now.</div>
+    </div>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -52,9 +77,16 @@ export default function NeedsAttentionPage({ canWrite }) {
         </section>
       )}
 
-      {cohorts.map((c) => (
+      {cohorts.map((c) => {
+        const severity = CATEGORY_SEVERITY[c.key] || 'warn'
+        const borderColor = SEVERITY_BORDER[severity]
+        return (
         <section key={c.key} aria-labelledby={`attn-${c.key}`}>
-          <div style={{ marginBottom: 12 }}>
+          <div style={{
+            marginBottom: 12,
+            borderLeft: `3px solid ${borderColor}`,
+            paddingLeft: 12,
+          }}>
             <h3 id={`attn-${c.key}`} style={headingStyle}>
               {c.label} <span style={countStyle}>{c.participants.length}</span>
               {c.informational && <span style={{ ...countStyle, marginLeft: 6 }}>Informational</span>}
@@ -63,7 +95,8 @@ export default function NeedsAttentionPage({ canWrite }) {
           </div>
           <ParticipantTable participants={c.participants} loading={false} profileTab={c.section} />
         </section>
-      ))}
+        )
+      })}
 
       {activeProfileId && (
         <ParticipantProfileDrawer
@@ -75,6 +108,29 @@ export default function NeedsAttentionPage({ canWrite }) {
       )}
     </div>
   )
+}
+
+const SEVERITY_BORDER = {
+  danger: '#C94830',
+  warn: '#C97820',
+  info: '#4C6FBF',
+}
+
+const CATEGORY_SEVERITY = {
+  not_registered: 'warn',
+  canadian_status_unknown: 'warn',
+  canadian_status_review: 'warn',
+  pr_card: 'warn',
+  study_permit: 'warn',
+  pgwp: 'warn',
+  work_permit: 'warn',
+  passport_country_missing: 'warn',
+  passport_incomplete: 'danger',
+  non_ecowas_review: 'info',
+  visa_unknown: 'warn',
+  visa_not_started: 'warn',
+  visa_blocked: 'danger',
+  travel_incomplete: 'warn',
 }
 
 const headingStyle = { margin: '0 0 4px', fontSize: 15, fontWeight: 600 }

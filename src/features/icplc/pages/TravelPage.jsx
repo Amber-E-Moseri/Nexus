@@ -8,10 +8,52 @@ import Badge from '../../../components/ui/Badge.jsx'
 
 export default function TravelPage({ canWrite }) {
   const { config, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
-  const { data: participants, isLoading, error } = useICPLCParticipants(config?.id, {})
+  const { data: participants, isLoading, error, refetch } = useICPLCParticipants(config?.id, {})
 
-  if (isLoading) return <div role="status" style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading…</div>
-  if (error) return <div role="alert" style={{ padding: 40, color: 'var(--text-secondary)' }}>Failed to load travel data.</div>
+  if (isLoading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {[1,2,3,4,5].map((i) => (
+        <div key={i} style={{ height: 44, background: 'var(--surface-2)', borderRadius: 6, animation: 'pulse 1.5s ease-in-out infinite', opacity: 0.6 }} />
+      ))}
+    </div>
+  )
+
+  if (error) return (
+    <div style={{
+      border: '1px solid #F3BDB8', borderRadius: 8, padding: '16px 20px',
+      background: '#FEF2F2', display: 'flex', alignItems: 'flex-start', gap: 12,
+    }}>
+      <span style={{ fontSize: 18, lineHeight: 1 }}>⚠</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#991B1B', marginBottom: 4 }}>Failed to load travel data</div>
+        <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 10 }}>
+          {error?.message || 'An error occurred while fetching travel records.'}
+        </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          style={{
+            padding: '5px 12px', background: '#991B1B', color: '#fff',
+            border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+  )
+
+  if (!participants?.length) return (
+    <div style={{
+      padding: '40px 20px', textAlign: 'center',
+      border: '1px dashed var(--border)', borderRadius: 8,
+      color: 'var(--text-secondary)',
+    }}>
+      <div style={{ fontSize: 24, marginBottom: 8 }}>✈️</div>
+      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>No travel records yet</div>
+      <div style={{ fontSize: 12 }}>Travel itineraries will appear here once participants are added.</div>
+    </div>
+  )
 
   return (
     <div>

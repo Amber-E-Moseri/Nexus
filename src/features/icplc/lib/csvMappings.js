@@ -14,6 +14,7 @@ export const CSV_MAPPING_V1 = {
   'Sub Group':        'subgroup',
   'Group':            'group_name',
   'Group Name':       'group_name',
+  'Fellowship':       'group_name',
   'Leadership':       'leadership',
   'Leadership Category': 'leadership',
 

@@ -51,6 +51,7 @@ on conflict do nothing;
 -- so the existing "authenticated users read active event config" policy doesn't
 -- cover it). This policy is scoped to ICPLC by name so it doesn't expose all
 -- inactive/template configs.
+drop policy if exists "authenticated users read icplc event config" on public.event_configs;
 create policy "authenticated users read icplc event config"
   on public.event_configs for select
   to authenticated

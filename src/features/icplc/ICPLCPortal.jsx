@@ -1,9 +1,19 @@
 import React, { useState } from 'react'
+import {
+  AlertTriangle,
+  ClipboardList,
+  FileText,
+  FolderInput,
+  LayoutDashboard,
+  Plane,
+  Settings,
+  TableProperties,
+  Users,
+} from 'lucide-react'
 import './icplc.css'
 import { ICPLCProvider } from './ICPLCContext.jsx'
 import OverviewPage from './pages/OverviewPage.jsx'
 import PeoplePage from './pages/PeoplePage.jsx'
-import RegistrationsPage from './pages/RegistrationsPage.jsx'
 import BoardPage from './pages/BoardPage.jsx'
 import DocumentationPage from './pages/DocumentationPage.jsx'
 import TravelPage from './pages/TravelPage.jsx'
@@ -15,22 +25,21 @@ import SettingsPage from './pages/SettingsPage.jsx'
 // Legacy tabs are rendered via the `legacyContent` prop injected by ICPLCPage
 // so this component never imports RegistrationEcosystem.jsx.
 const NEW_TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'people', label: 'Working List' },
-  { key: 'registrations', label: 'Registrations' },
-  { key: 'board', label: 'Board' },
-  { key: 'documentation', label: 'Documentation' },
-  { key: 'travel', label: 'Travel' },
-  { key: 'attention', label: 'Needs Attention' },
-  { key: 'imports', label: 'Imports' },
-  { key: 'settings', label: 'Settings' },
+  { key: 'overview',      label: 'Overview',        short: 'Overview', icon: LayoutDashboard },
+  { key: 'people',        label: 'Working List',    short: 'List',     icon: Users },
+  { key: 'board',         label: 'Board',           short: 'Board',    icon: TableProperties },
+  { key: 'documentation', label: 'Documentation',   short: 'Docs',     icon: FileText },
+  { key: 'travel',        label: 'Travel',          short: 'Travel',   icon: Plane },
+  { key: 'attention',     label: 'Needs Attention', short: 'Alerts',   icon: AlertTriangle },
+  { key: 'imports',       label: 'Imports',         short: 'Imports',  icon: FolderInput },
+  { key: 'settings',      label: 'Settings',        short: 'Settings', icon: Settings },
 ]
 
 // Single legacy tab — RegistrationEcosystem handles its own sub-navigation
 // (rooms / transport / finance). Collapsing to one prevents three outer tabs
 // from all rendering the same legacyContent instance with no internal navigation.
 const LEGACY_TABS = [
-  { key: 'legacy', label: 'Room / Transport / Finance' },
+  { key: 'legacy', label: 'Room / Transport / Finance', short: 'R/T/F', icon: ClipboardList },
 ]
 
 export default function ICPLCPortal({
@@ -64,14 +73,33 @@ export default function ICPLCPortal({
     : allTabs[0]?.key || 'legacy'
 
   const isLegacyTab = LEGACY_TABS.some((t) => t.key === resolvedTab)
+  const accessLabel = accessTier === 'admin'
+    ? 'Admin'
+    : accessTier === 'write'
+      ? 'Edit access'
+      : accessTier === 'finance_only'
+        ? 'Finance'
+        : 'Read only'
 
   return (
     <ICPLCProvider config={config} accessTier={accessTier}>
-      <div className="icplc-root" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="icplc-root">
+        <header className="icplc-header">
+          <div>
+            <div className="icplc-title">{config?.event_name || 'ICPLC'}</div>
+            <div className="icplc-subtitle">International Cell Leaders Pastors Conference</div>
+          </div>
+          <div className="icplc-header-stats" aria-label="ICPLC access and scope">
+            <span>{accessLabel}</span>
+            <span>{isFinanceOnly ? 'Finance workspace' : 'Operations workspace'}</span>
+          </div>
+        </header>
+
         {/* Tab bar — scrolls inside itself on narrow screens */}
         <div className="icplc-tabbar" role="tablist" aria-label="ICPLC sections">
           {allTabs.map((t) => {
             const isLegacy = LEGACY_TABS.some((l) => l.key === t.key)
+            const Icon = t.icon
             return (
               <button
                 key={t.key}
@@ -82,14 +110,16 @@ export default function ICPLCPortal({
                 onClick={() => setActiveTab(t.key)}
                 style={{ opacity: isLegacy ? 0.7 : 1 }}
               >
-                {t.label}
+                {Icon && <Icon size={14} aria-hidden />}
+                <span className="icplc-tab-label">{t.label}</span>
+                <span className="icplc-tab-label-short" aria-hidden>{t.short}</span>
               </button>
             )
           })}
         </div>
 
         {/* Page body */}
-        <div role="tabpanel" style={{ flex: 1, overflow: 'auto', padding: '20px 0', minWidth: 0 }}>
+        <div role="tabpanel" className="icplc-panel">
           {/* Legacy tabs — render the injected RegistrationEcosystem content */}
           {isLegacyTab && (
             <div data-icplc-legacy-tab={resolvedTab}>
@@ -98,15 +128,18 @@ export default function ICPLCPortal({
           )}
 
           {/* New ICPLC operational tabs */}
-          {!isLegacyTab && resolvedTab === 'overview' && <OverviewPage canWrite={canWrite} onShowPeople={() => setActiveTab('people')} onShowAttention={() => setActiveTab('attention')} />}
-          {!isLegacyTab && resolvedTab === 'people' && <PeoplePage canWrite={canWrite} />}
-          {!isLegacyTab && resolvedTab === 'registrations' && <RegistrationsPage canWrite={canWrite} />}
-          {!isLegacyTab && resolvedTab === 'board' && <BoardPage canWrite={canWrite} />}
-          {!isLegacyTab && resolvedTab === 'documentation' && <DocumentationPage canWrite={canWrite} />}
-          {!isLegacyTab && resolvedTab === 'travel' && <TravelPage canWrite={canWrite} />}
-          {!isLegacyTab && resolvedTab === 'attention' && <NeedsAttentionPage canWrite={canWrite} />}
-          {!isLegacyTab && resolvedTab === 'imports' && canWrite && <ImportsPage />}
-          {!isLegacyTab && resolvedTab === 'settings' && canAdmin && <SettingsPage />}
+          {!isLegacyTab && (
+            <div className="icplc-content">
+              {resolvedTab === 'overview' && <OverviewPage canWrite={canWrite} onShowPeople={() => setActiveTab('people')} onShowAttention={() => setActiveTab('attention')} />}
+              {resolvedTab === 'people' && <PeoplePage canWrite={canWrite} />}
+              {resolvedTab === 'board' && <BoardPage canWrite={canWrite} />}
+              {resolvedTab === 'documentation' && <DocumentationPage canWrite={canWrite} />}
+              {resolvedTab === 'travel' && <TravelPage canWrite={canWrite} />}
+              {resolvedTab === 'attention' && <NeedsAttentionPage canWrite={canWrite} />}
+              {resolvedTab === 'imports' && canWrite && <ImportsPage />}
+              {resolvedTab === 'settings' && canAdmin && <SettingsPage />}
+            </div>
+          )}
         </div>
       </div>
     </ICPLCProvider>

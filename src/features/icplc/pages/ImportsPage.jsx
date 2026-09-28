@@ -61,13 +61,44 @@ export default function ImportsPage() {
             onChange={(e) => e.target.files[0] && uploadCSV(e.target.files[0])}
             style={{ display: 'none' }}
           />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={loading}
-            style={primaryBtn}
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Upload CSV file"
+            onClick={() => !loading && fileRef.current?.click()}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !loading && fileRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault()
+              const file = e.dataTransfer.files[0]
+              if (file && !loading) uploadCSV(file)
+            }}
+            style={{
+              border: '2px dashed var(--border)',
+              borderRadius: 10,
+              padding: '40px 24px',
+              textAlign: 'center',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+              background: 'var(--surface-2)',
+              transition: 'border-color 0.15s',
+            }}
+            onMouseEnter={(e) => { if (!loading) e.currentTarget.style.borderColor = 'var(--accent)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)' }}
           >
-            {loading ? 'Uploading…' : 'Choose CSV file'}
-          </button>
+            <div style={{ fontSize: 32, marginBottom: 10, lineHeight: 1 }}>📂</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+              {loading ? 'Uploading…' : 'Drag & drop a CSV file here'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14 }}>
+              or click to browse your files
+            </div>
+            {!loading && (
+              <span style={{ ...primaryBtn, display: 'inline-block', pointerEvents: 'none' }}>
+                Choose CSV file
+              </span>
+            )}
+          </div>
         </div>
       )}
 

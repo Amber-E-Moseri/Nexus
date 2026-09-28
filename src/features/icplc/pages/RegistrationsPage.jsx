@@ -15,6 +15,9 @@ import {
   registrationDisplayName,
   registrationSourceKey,
   reconciliationState,
+  normalizeEmail,
+  lookupEmailClaim,
+  isOwnershipConflict,
 } from '../lib/reconciliation.js'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -46,6 +49,19 @@ export default function RegistrationsPage({ canWrite }) {
       return data || []
     },
   })
+  const { data: emailClaims = [], isLoading: claimsLoading } = useQuery({
+    queryKey: ['icplc_email_claims', eventId],
+    enabled: !!eventId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('icplc_email_claims')
+        .select('*')
+        .eq('event_id', eventId)
+      if (error) throw error
+      return data || []
+    },
+  })
+
   const { data: maps = [], isLoading: mapsLoading } = useQuery({
     queryKey: ['icplc_registration_identity_maps', eventId],
     enabled: !!eventId,
@@ -126,25 +142,54 @@ export default function RegistrationsPage({ canWrite }) {
       if (!sourceKey) throw new Error('Registration is missing a stable id')
       if (!isValidCurrentRegistration(registration, eventId)) throw new Error('Registration is not valid for this ICPLC event')
 
+      // 1. Durable identity map — highest priority (staff-confirmed link)
       const existingMap = mapBySourceKey.get(sourceKey)
       if (existingMap?.participant_id) {
         return participants.find((p) => p.id === existingMap.participant_id) || { id: existingMap.participant_id }
       }
 
-      const existingByEmail = registration.email
-        ? participants.find((p) => p.email?.toLowerCase() === registration.email.toLowerCase())
+      // 2. Canonical email claim lookup — exact cross-slot ownership authority
+      const regNormalizedEmail = normalizeEmail(registration.email)
+      const claimedParticipantId = await lookupEmailClaim(supabase, eventId, registration.email)
+      if (claimedParticipantId) {
+        const claimOwner = participants.find((p) => p.id === claimedParticipantId) || { id: claimedParticipantId }
+        await confirmMatch.mutateAsync({ registration, participant: claimOwner })
+        return claimOwner
+      }
+
+      // 3. Candidate display match — used for UI review, not as ownership assertion
+      // (candidateMatches may inspect participant fields for display; claims are authoritative)
+      const existingByEmail = regNormalizedEmail
+        ? participants.find((p) =>
+            normalizeEmail(p.email) === regNormalizedEmail ||
+            normalizeEmail(p.alternate_email) === regNormalizedEmail
+          )
         : null
       if (existingByEmail) {
         await confirmMatch.mutateAsync({ registration, participant: existingByEmail })
         return existingByEmail
       }
 
+      // 4. No match — create new participant
       const { data: participant, error: createError } = await supabase
         .from('icplc_participants')
         .insert(participantInsertFromRegistration(registration, eventId))
         .select()
         .single()
-      if (createError) throw createError
+
+      if (createError) {
+        // Race recovery: concurrent worker created a participant with this email first.
+        // The claims trigger (or unique index) raised 23505. Re-read claims to find the winner.
+        if (isOwnershipConflict(createError) && regNormalizedEmail) {
+          const winnerId = await lookupEmailClaim(supabase, eventId, registration.email)
+          if (winnerId) {
+            const winner = participants.find((p) => p.id === winnerId) || { id: winnerId }
+            await confirmMatch.mutateAsync({ registration, participant: winner })
+            return winner
+          }
+        }
+        throw createError
+      }
 
       const { error: mapError } = await supabase
         .from('icplc_identity_maps')
@@ -185,17 +230,37 @@ export default function RegistrationsPage({ canWrite }) {
   }, [canWrite, createFromRegistration, eventId, rows])
 
   const loading = participantsLoading || registrationsLoading || mapsLoading
-  if (loading) return <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading registrations...</div>
+  if (loading) return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        {[1,2,3,4].map((i) => (
+          <div key={i} style={{ height: 64, background: 'var(--surface-2)', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+        ))}
+      </div>
+      <div style={{ height: 240, background: 'var(--surface-2)', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+    </div>
+  )
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
         <Stat label="Source Records" value={summary.registered} />
         <Stat label="Matched" value={summary.matched} tone="success" />
         <Stat label="Needs Review" value={summary.review} tone="warn" />
         <Stat label="Adding to Working List" value={summary.unmatched} />
       </div>
 
+      {rows.length === 0 ? (
+        <div style={{
+          padding: '40px 20px', textAlign: 'center',
+          border: '1px dashed var(--border)', borderRadius: 8,
+          color: 'var(--text-secondary)',
+        }}>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>📥</div>
+          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>No registration records</div>
+          <div style={{ fontSize: 12 }}>Registration form submissions will appear here automatically once received.</div>
+        </div>
+      ) : (
       <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
         <table className="fs-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 860 }}>
           <thead>
@@ -256,6 +321,7 @@ export default function RegistrationsPage({ canWrite }) {
           </tbody>
         </table>
       </div>
+      )}
 
       {reviewing && (
         <MatchReview
@@ -379,9 +445,9 @@ function CompareCard({ title, rows }) {
 function Stat({ label, value, tone }) {
   const color = tone === 'success' ? '#166534' : tone === 'warn' ? '#92400E' : 'var(--text-primary)'
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, background: 'var(--surface-1)' }}>
-      <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</div>
+    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', background: 'var(--surface-1)' }}>
+      <div style={{ fontSize: 22, fontWeight: 700, color, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>{label}</div>
     </div>
   )
 }

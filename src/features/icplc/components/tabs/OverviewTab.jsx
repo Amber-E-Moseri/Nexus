@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { deriveReadiness, readinessTone, readinessLabel, deriveTravelStatus } from '../../lib/readinessEngine.js'
 import Badge from '../../../../components/ui/Badge.jsx'
 import { supabase } from '../../../../lib/supabase.js'
-import { useAddTag, useRemoveTag } from '../../hooks/useICPLCProfile.js'
+import { useAddTag, useRemoveTag, useUpdateProfile } from '../../hooks/useICPLCProfile.js'
 import { useAuth } from '../../../../hooks/useAuth.js'
+import { makePrimaryPayload, isOwnershipConflict } from '../../lib/reconciliation.js'
 
 const PARTICIPATION_LABELS = {
   tracking: 'Tracking',
@@ -32,13 +33,15 @@ export default function OverviewTab({ participant, canWrite }) {
       <section>
         <div className="icplc-field-grid">
           <Field label="Full Name" value={participant.full_name} />
-          <Field label="Email" value={participant.email} />
           <Field label="Region" value={participant.region} />
           <Field label="Subgroup" value={participant.subgroup} />
           <Field label="Group" value={participant.group_name} />
           <Field label="Leadership" value={participant.leadership} />
         </div>
       </section>
+
+      {/* Emails */}
+      <EmailSection participant={participant} canWrite={canWrite} />
 
       {/* Operational Status */}
       <section>
@@ -200,6 +203,178 @@ function TagsSection({ participant, canWrite }) {
         {canWrite && !hasTags && unassigned.length === 0 && (
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>No tags available. Add some in Settings.</span>
         )}
+      </div>
+    </section>
+  )
+}
+
+function EmailSection({ participant, canWrite }) {
+  const { profile: authProfile } = useAuth()
+  const updateProfile = useUpdateProfile()
+  const [editing, setEditing] = useState(null) // null | 'primary' | 'alternate' | 'add_alternate'
+  const [emailInput, setEmailInput] = useState('')
+  const [error, setError] = useState(null)
+
+  const hasPrimary = !!participant.email
+  const hasAlternate = !!participant.alternate_email
+
+  async function saveEmail(field, value) {
+    setError(null)
+    try {
+      await updateProfile.mutateAsync({
+        id: participant.id,
+        fields: { [field]: value || null },
+      })
+      setEditing(null)
+    } catch (err) {
+      if (isOwnershipConflict(err)) {
+        setError('This email is already assigned to another participant in this event.')
+      } else {
+        setError(err.message || 'Failed to update email.')
+      }
+    }
+  }
+
+  async function makePrimary() {
+    setError(null)
+    try {
+      await updateProfile.mutateAsync({
+        id: participant.id,
+        fields: makePrimaryPayload(participant),
+      })
+    } catch (err) {
+      if (isOwnershipConflict(err)) {
+        setError('Email ownership conflict — refresh and try again.')
+      } else {
+        setError(err.message || 'Failed to swap emails.')
+      }
+    }
+  }
+
+  async function removeAlternate() {
+    setError(null)
+    try {
+      await updateProfile.mutateAsync({ id: participant.id, fields: { alternate_email: null } })
+    } catch (err) {
+      setError(err.message || 'Failed to remove alternate email.')
+    }
+  }
+
+  const pending = updateProfile.isPending
+
+  return (
+    <section>
+      <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+        Contact Emails
+      </h4>
+      {error && (
+        <div role="alert" style={{ marginBottom: 8, fontSize: 12, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, padding: '6px 10px' }}>
+          {error}
+        </div>
+      )}
+
+      {/* Primary email */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 100 }}>Primary Email</div>
+          {editing === 'primary' ? (
+            <form onSubmit={(e) => { e.preventDefault(); saveEmail('email', emailInput) }} style={{ display: 'flex', gap: 6, flex: 1 }}>
+              <input
+                autoFocus
+                type="email"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                style={{ flex: 1, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 }}
+              />
+              <button type="submit" disabled={pending} className="icplc-btn icplc-btn-primary" style={{ fontSize: 12, padding: '4px 10px' }}>Save</button>
+              <button type="button" onClick={() => { setEditing(null); setError(null) }} className="icplc-btn" style={{ fontSize: 12, padding: '4px 10px' }}>Cancel</button>
+            </form>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+              <span style={{ fontSize: 13, color: hasPrimary ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                {participant.email || '—'}
+              </span>
+              {canWrite && (
+                <button
+                  type="button"
+                  onClick={() => { setEmailInput(participant.email || ''); setEditing('primary'); setError(null) }}
+                  className="icplc-btn"
+                  style={{ fontSize: 11, padding: '2px 8px' }}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Alternate email */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 100 }}>Alternate Email</div>
+          {editing === 'alternate' || editing === 'add_alternate' ? (
+            <form onSubmit={(e) => { e.preventDefault(); saveEmail('alternate_email', emailInput) }} style={{ display: 'flex', gap: 6, flex: 1 }}>
+              <input
+                autoFocus
+                type="email"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="alternate@example.com"
+                style={{ flex: 1, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 }}
+              />
+              <button type="submit" disabled={pending} className="icplc-btn icplc-btn-primary" style={{ fontSize: 12, padding: '4px 10px' }}>Save</button>
+              <button type="button" onClick={() => { setEditing(null); setError(null) }} className="icplc-btn" style={{ fontSize: 12, padding: '4px 10px' }}>Cancel</button>
+            </form>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, color: hasAlternate ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                {participant.alternate_email || '—'}
+              </span>
+              {canWrite && !hasAlternate && (
+                <button
+                  type="button"
+                  onClick={() => { setEmailInput(''); setEditing('add_alternate'); setError(null) }}
+                  className="icplc-btn"
+                  style={{ fontSize: 11, padding: '2px 8px' }}
+                >
+                  + Add
+                </button>
+              )}
+              {canWrite && hasAlternate && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setEmailInput(participant.alternate_email || ''); setEditing('alternate'); setError(null) }}
+                    className="icplc-btn"
+                    style={{ fontSize: 11, padding: '2px 8px' }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={removeAlternate}
+                    disabled={pending}
+                    className="icplc-btn"
+                    style={{ fontSize: 11, padding: '2px 8px', color: '#991B1B' }}
+                  >
+                    Remove
+                  </button>
+                  <button
+                    type="button"
+                    onClick={makePrimary}
+                    disabled={pending}
+                    className="icplc-btn"
+                    style={{ fontSize: 11, padding: '2px 8px', fontWeight: 600 }}
+                    title="Swap primary and alternate — provenance travels with the values"
+                  >
+                    Make Primary
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </section>
   )

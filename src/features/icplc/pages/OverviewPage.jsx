@@ -16,17 +16,21 @@ export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }
     const total = active.length
     const registered = active.filter((p) => p.registration_link_status === 'registered').length
     const confirmed = active.filter((p) => p.participation_status === 'confirmed').length
-    const ready = active.filter((p) => deriveReadiness(p).readiness === 'ready').length
     const pct = (n) => (total ? Math.round((n / total) * 100) : 0)
     const attention = new Map()
+    const readinessCounts = { ready: 0, in_progress: 0, action_required: 0, blocked: 0, unknown: 0 }
     for (const p of active) {
       for (const key of attentionCategoryKeys(p)) attention.set(key, (attention.get(key) || 0) + 1)
+      const r = deriveReadiness(p).readiness
+      readinessCounts[r] = (readinessCounts[r] || 0) + 1
     }
+    const ready = readinessCounts.ready
     return {
       total, registered, confirmed, ready,
       registeredPct: pct(registered), confirmedPct: pct(confirmed), readyPct: pct(ready),
       attention,
       bySubgroup: countBy(active, 'subgroup'),
+      readinessCounts,
       active,
     }
   }, [participants])
@@ -43,7 +47,6 @@ export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }
           label="Registered"
           value={`${stats.registered} / ${stats.total}`}
           detail={`${stats.registeredPct}%`}
-          tone="success"
           onClick={() => {
             setFilters((prev) => ({ ...prev, working_list_view: 'registered' }))
             onShowPeople?.()
@@ -53,7 +56,6 @@ export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }
           label="Confirmed"
           value={`${stats.confirmed} / ${stats.total}`}
           detail={`${stats.confirmedPct}%`}
-          tone="success"
           onClick={() => {
             setFilters((prev) => ({ ...prev, working_list_view: 'confirmed' }))
             onShowPeople?.()
@@ -63,13 +65,14 @@ export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }
           label="Ready"
           value={`${stats.ready} / ${stats.total}`}
           detail={`${stats.readyPct}%`}
-          tone="success"
           onClick={() => {
             setFilters((prev) => ({ ...prev, working_list_view: 'all', readiness: ['ready'] }))
             onShowPeople?.()
           }}
         />
       </div>
+
+      <ReadinessBar counts={stats.readinessCounts} total={stats.total} />
 
       {ambiguousRegistrations.length > 0 && (
         <div style={{
@@ -153,6 +156,48 @@ export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }
           canWrite={canWrite}
         />
       )}
+    </div>
+  )
+}
+
+const READINESS_SEGMENTS = [
+  { key: 'ready',          label: 'Ready',           color: '#2D8653' },
+  { key: 'in_progress',    label: 'In Progress',     color: '#4C6FBF' },
+  { key: 'action_required',label: 'Action Required', color: '#C97820' },
+  { key: 'blocked',        label: 'Blocked',         color: '#C94830' },
+  { key: 'unknown',        label: 'Unknown',         color: '#C4BBD4' },
+]
+
+function ReadinessBar({ counts, total }) {
+  if (!total) return null
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+          Readiness Distribution
+        </h3>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{total} participants</span>
+      </div>
+      <div style={{ display: 'flex', height: 14, borderRadius: 4, overflow: 'hidden', background: 'var(--surface-2)' }}>
+        {READINESS_SEGMENTS.map(({ key, color }) => {
+          const pct = total ? (counts[key] || 0) / total * 100 : 0
+          if (!pct) return null
+          return <div key={key} style={{ width: `${pct}%`, background: color, transition: 'width 0.3s' }} />
+        })}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 8 }}>
+        {READINESS_SEGMENTS.map(({ key, label, color }) => {
+          const n = counts[key] || 0
+          if (!n) return null
+          return (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
+              <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+              <strong style={{ color: 'var(--text-primary)' }}>{n}</strong>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

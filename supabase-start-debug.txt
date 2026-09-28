@@ -1,0 +1,35 @@
+open C:\Users\moser\.supabase\profile: The system cannot find the file specified.
+Supabase CLI 2.98.2
+Using profile: supabase (supabase.co)
+Loading project ref from file: supabase\.temp\project-ref
+Using access token for profile: supabase
+Using access token for profile: supabase
+2026/09/26 16:04:25 HTTP GET: https://api.supabase.com/v1/projects/kraurtuhflouyorgtpun/api-keys?reveal=true
+2026/09/26 16:04:27 HTTP GET: https://kraurtuhflouyorgtpun.supabase.co/rest/v1/
+2026/09/26 16:04:27 HTTP GET: https://kraurtuhflouyorgtpun.supabase.co/storage/v1/version
+2026/09/26 16:04:27 HTTP GET: https://kraurtuhflouyorgtpun.supabase.co/auth/v1/health
+2026/09/26 16:04:27 HTTP GET: https://api.supabase.com/v1/projects/kraurtuhflouyorgtpun
+WARNING: You are running different service versions locally than your linked project:
+supabase/gotrue:v2.195.0 => v2.197.0
+supabase/storage-api:v1.67.26 => v1.77.5
+Run supabase link to update them.
+ gateway Skipped - Image is already present locally 
+ storage Skipped - Image is already present locally 
+ analytics Skipped - Image is already present locally 
+ api Skipped - Image is already present locally 
+ auth Skipped - Image is already present locally 
+ edgeRuntime Skipped - Image is already present locally 
+ db Skipped - Image is already present locally 
+ mailpit Skipped - Image is already present locally 
+ realtime Skipped - Image is already present locally 
+ imgProxy Skipped - Image is already present locally 
+ pgmeta Skipped - Image is already present locally 
+ studio Skipped - Image is already present locally 
+ vector Skipped - Image is already present locally 
+Starting database...
+Stopping containers...
+Pruned containers: [72a0701c332a7d15df9f9260480ece5afe59e05c4fac099e9f2e61dc18b9c3a5]
+Pruned volumes: [supabase_db_clickup]
+Pruned network: [supabase_network_clickup]
+2026/09/26 16:04:37 HTTP POST: https://eu.i.posthog.com/batch/
+context canceled

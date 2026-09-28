@@ -31,7 +31,7 @@ async function fetchParticipants(eventId, filters) {
     .order('full_name', { ascending: true })
 
   if (filters.search) {
-    q = q.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`)
+    q = q.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,alternate_email.ilike.%${filters.search}%`)
   }
   if (filters.participation_status?.length) {
     q = q.in('participation_status', filters.participation_status)

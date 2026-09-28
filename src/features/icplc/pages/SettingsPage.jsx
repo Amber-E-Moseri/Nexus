@@ -8,8 +8,10 @@ export default function SettingsPage() {
 
   return (
     <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <DeadlinesSection eventId={config?.id} />
       <TagsSection eventId={config?.id} />
       <VisaDefaultsSection eventId={config?.id} />
+      <IntegrationsSection eventId={config?.id} />
     </div>
   )
 }
@@ -243,6 +245,153 @@ function VisaDefaultsSection({ eventId }) {
         </button>
       </div>
     </section>
+  )
+}
+
+/* ── Deadlines ── */
+
+const DEADLINE_FIELDS = [
+  { key: 'registration_deadline', label: 'Registration Deadline', description: 'Last date to accept new registrations' },
+  { key: 'visa_target_date', label: 'Visa Target Date', description: 'Target date for all visa applications to be submitted' },
+  { key: 'flight_booking_deadline', label: 'Flight Booking Deadline', description: 'Last date to book flights' },
+]
+
+function DeadlinesSection({ eventId }) {
+  const qc = useQueryClient()
+
+  const { data: config, isLoading } = useQuery({
+    queryKey: ['icplc_event_config_deadlines', eventId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('event_configs')
+        .select('id, tab_config')
+        .eq('id', eventId)
+        .single()
+      if (error) throw error
+      return data
+    },
+    enabled: !!eventId,
+  })
+
+  const deadlines = config?.tab_config?.icplc_deadlines || {}
+
+  const saveDeadline = useMutation({
+    mutationFn: async ({ key, value }) => {
+      const updated = { ...deadlines, [key]: value || null }
+      const { error } = await supabase
+        .from('event_configs')
+        .update({ tab_config: { ...(config?.tab_config || {}), icplc_deadlines: updated } })
+        .eq('id', eventId)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries(['icplc_event_config_deadlines', eventId]),
+  })
+
+  if (isLoading) return null
+
+  return (
+    <section>
+      <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600 }}>Deadlines</h3>
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--text-secondary)' }}>
+        Key operational dates for this event. Staff-visible only.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {DEADLINE_FIELDS.map(({ key, label, description }) => (
+          <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 16, padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{description}</div>
+            </div>
+            <input
+              type="date"
+              defaultValue={deadlines[key] || ''}
+              onBlur={(e) => {
+                const val = e.target.value
+                if (val !== (deadlines[key] || '')) saveDeadline.mutate({ key, value: val })
+              }}
+              style={{ ...inputStyle, width: 140 }}
+            />
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ── Integrations ── */
+
+function IntegrationsSection({ eventId }) {
+  const { data: lastBatch, isLoading } = useQuery({
+    queryKey: ['icplc_last_import_batch', eventId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('icplc_import_batches')
+        .select('id, created_at, row_count, source_label, status')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+    enabled: !!eventId,
+    staleTime: 30_000,
+  })
+
+  const fmt = (iso) => {
+    if (!iso) return '—'
+    try {
+      return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    } catch { return iso }
+  }
+
+  return (
+    <section>
+      <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600 }}>Integrations</h3>
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--text-secondary)' }}>
+        Status of connected data sources.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <IntegrationRow
+          label="CSV Import"
+          status={isLoading ? 'loading' : lastBatch ? lastBatch.status || 'ok' : 'never'}
+          detail={isLoading ? 'Checking…' : lastBatch
+            ? `Last import: ${fmt(lastBatch.created_at)} · ${lastBatch.row_count ?? '?'} rows · ${lastBatch.source_label || 'CSV'}`
+            : 'No import runs yet'}
+        />
+        <IntegrationRow
+          label="CMP Documentation Sync"
+          status="not_configured"
+          detail="Not configured — contact the admin to enable."
+        />
+        <IntegrationRow
+          label="Registration Form"
+          status="ok"
+          detail="Live — participants link automatically on form submission."
+        />
+      </div>
+    </section>
+  )
+}
+
+function IntegrationRow({ label, status, detail }) {
+  const dot = {
+    ok: { color: '#2D8653', label: 'Active' },
+    loading: { color: '#C97820', label: 'Checking' },
+    never: { color: '#8A7F99', label: 'No data' },
+    not_configured: { color: '#8A7F99', label: 'Not configured' },
+    error: { color: '#C94830', label: 'Error' },
+  }[status] || { color: '#8A7F99', label: status }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8 }}>
+      <span style={{ width: 9, height: 9, borderRadius: '50%', background: dot.color, flexShrink: 0 }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{detail}</div>
+      </div>
+      <span style={{ fontSize: 11, color: dot.color, fontWeight: 600 }}>{dot.label}</span>
+    </div>
   )
 }
 

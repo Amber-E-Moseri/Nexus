@@ -8,6 +8,7 @@ import { useCreateParticipant, useICPLCParticipants } from '../hooks/useICPLCPar
 import ParticipantTable from '../components/ParticipantTable.jsx'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
+import RegistrationsPage from './RegistrationsPage.jsx'
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import {
   REGISTRATION_SOURCE_TYPE,
@@ -19,6 +20,7 @@ export default function PeoplePage({ canWrite }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
+  const [view, setView] = useState('list') // 'list' | 'sources'
 
   const { data: participants, isLoading, error } = useICPLCParticipants(eventId, {
     search: filters.search,
@@ -76,36 +78,70 @@ export default function PeoplePage({ canWrite }) {
 
   return (
     <div>
-      {canWrite && (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
-          <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary"><UserPlus size={14} aria-hidden /> Add Participant</button>
+      {/* Sub-view toggle + primary action */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
+        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', borderRadius: 8, padding: 3 }}>
+          {[{ key: 'list', label: 'Working List' }, { key: 'sources', label: 'Registration Sources' }].map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setView(key)}
+              style={{
+                padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 13, cursor: 'pointer',
+                background: view === key ? 'var(--surface-1, #fff)' : 'transparent',
+                color: view === key ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontWeight: view === key ? 600 : 400,
+                boxShadow: view === key ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                transition: 'background 0.12s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      )}
-
-      {/* Search bar */}
-      <div style={{ marginBottom: 12 }}>
-        <SearchBar />
+        {canWrite && view === 'list' && (
+          <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary">
+            <UserPlus size={14} aria-hidden /> Add Participant
+          </button>
+        )}
       </div>
 
-      {/* Filters */}
-      <ParticipantFilters />
+      {view === 'sources' && <RegistrationsPage canWrite={canWrite} />}
 
-      {/* Count */}
-      {!loading && (
-        <div role="status" style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
-          {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
-        </div>
+      {view === 'list' && (
+        <>
+          {/* Search bar */}
+          <div style={{ marginBottom: 12 }}>
+            <SearchBar />
+          </div>
+
+          {/* Filters */}
+          <ParticipantFilters />
+
+          {/* Count */}
+          {!loading && (
+            <div role="status" style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
+            </div>
+          )}
+
+          {error && (
+            <div style={{
+              border: '1px solid #F3BDB8', borderRadius: 8, padding: '14px 18px',
+              background: '#FEF2F2', display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12,
+            }}>
+              <span style={{ fontSize: 16, lineHeight: 1 }}>⚠</span>
+              <div style={{ fontSize: 13, color: '#991B1B' }}>
+                Failed to load participants. {error?.message || 'Please refresh the page.'}
+              </div>
+            </div>
+          )}
+
+          <ParticipantTable participants={displayedParticipants} loading={loading} />
+        </>
       )}
 
-      {error && (
-        <div style={{ padding: 20, color: 'var(--text-secondary)' }}>
-          Failed to load participants.
-        </div>
-      )}
-
-      <ParticipantTable participants={displayedParticipants} loading={loading} />
-
-      {/* Canonical profile drawer */}
+      {/* Canonical profile drawer (shared across both views) */}
       {activeProfileId && (
         <ParticipantProfileDrawer
           participantId={activeProfileId}
@@ -145,25 +181,30 @@ function SearchBar() {
 
 function AddPersonModal({ eventId, onClose, onCreated }) {
   const createParticipant = useCreateParticipant(eventId)
-  const [form, setForm] = useState({ full_name: '', email: '', region: '', subgroup: '' })
+  const [form, setForm] = useState({ full_name: '', email: '', alternate_email: '', region: '', subgroup: '' })
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
   async function submit(e) {
     e.preventDefault()
     if (!form.full_name.trim() || createParticipant.isPending) return
 
-    // Manual participants are NOT registered until a registration is linked.
+    // Normalize: if primary empty but alternate supplied, promote alternate → primary
+    let primary = form.email.trim() || null
+    let alternate = form.alternate_email.trim() || null
+    if (!primary && alternate) {
+      primary = alternate
+      alternate = null
+    }
+
     const participant = await createParticipant.mutateAsync({
       full_name: form.full_name.trim(),
-      email: form.email.trim() || null,
+      email: primary,
+      alternate_email: alternate,
       region: form.region.trim() || null,
       subgroup: form.subgroup.trim() || null,
       registration_status: 'not_registered',
       source_values: {
-        created_from: {
-          source: 'nexus_manual',
-          observed_at: new Date().toISOString(),
-        },
+        created_from: { source: 'nexus_manual', observed_at: new Date().toISOString() },
       },
     })
     onCreated(participant)
@@ -181,17 +222,18 @@ function AddPersonModal({ eventId, onClose, onCreated }) {
             <Dialog.Title style={{ margin: '0 0 12px', fontSize: 16 }}>Add Participant</Dialog.Title>
             <div style={{ display: 'grid', gap: 10 }}>
               <Field label="Full name" value={form.full_name} onChange={set('full_name')} autoFocus required />
-              <Field label="Email" type="email" value={form.email} onChange={set('email')} />
+              <Field label="Primary Email" type="email" value={form.email} onChange={set('email')} />
+              <Field label="Alternate Email" type="email" value={form.alternate_email} onChange={set('alternate_email')} />
               <Field label="Region" value={form.region} onChange={set('region')} />
               <Field label="Subgroup" value={form.subgroup} onChange={set('subgroup')} />
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-              Added as Not Registered. A later registration is linked to this same participant.
+              Both emails optional. If only alternate is supplied it becomes primary. Added as Not Registered until a registration is linked.
             </p>
             {err && (
               <div role="alert" style={{ marginTop: 10, fontSize: 12, color: '#991B1B' }}>
                 {duplicate
-                  ? 'A participant with this email already exists in the Working List. Search for them instead of adding a duplicate.'
+                  ? 'A participant with this email already exists in this event. Search for them instead.'
                   : `Could not create participant: ${err.message}`}
               </div>
             )}

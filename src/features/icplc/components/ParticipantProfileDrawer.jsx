@@ -6,6 +6,36 @@ import RegistrationTab from './tabs/RegistrationTab.jsx'
 import DocumentationTab from './tabs/DocumentationTab.jsx'
 import TravelTab from './tabs/TravelTab.jsx'
 import ActivityTab from './tabs/ActivityTab.jsx'
+import Badge from '../../../components/ui/Badge.jsx'
+import { deriveReadiness, readinessTone, readinessLabel } from '../lib/readinessEngine.js'
+
+const PARTICIPATION_TONES = {
+  tracking: 'mute', likely: 'in_progress', confirmed: 'done',
+  uncertain: 'at_risk', not_attending: 'blocked',
+}
+const PARTICIPATION_LABELS = {
+  tracking: 'Tracking', likely: 'Likely', confirmed: 'Confirmed',
+  uncertain: 'Uncertain', not_attending: 'Not Attending',
+}
+
+function DrawerStatusBadges({ participant }) {
+  const { readiness } = deriveReadiness(participant)
+  const regTone = participant.registration_link_status === 'registered' ? 'done'
+    : participant.registration_status === 'registered' ? 'done' : 'at_risk'
+  const regLabel = participant.registration_link_status === 'registered' ? 'Registered'
+    : participant.registration_status === 'registered' ? 'Registered' : 'Not Registered'
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+      <Badge
+        tone={PARTICIPATION_TONES[participant.participation_status] || 'mute'}
+        label={PARTICIPATION_LABELS[participant.participation_status] || (participant.participation_status || 'Unknown')}
+      />
+      <Badge tone={regTone} label={regLabel} />
+      <Badge tone={readinessTone(readiness)} label={readinessLabel(readiness)} />
+    </div>
+  )
+}
 
 const TABS = [
   { key: 'overview',       label: 'Overview' },
@@ -64,6 +94,7 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
                     {participant.subgroup}{participant.region ? ` · ${participant.region}` : ''}
                   </div>
                 )}
+                {participant && <DrawerStatusBadges participant={participant} />}
               </div>
               <Dialog.Close className="icplc-drawer-close" aria-label="Close profile">
                 <span aria-hidden>×</span>

@@ -89,8 +89,8 @@ export default function DocumentationTab({ participant, canWrite }) {
       </p>
 
       {/* 1 + 2. Canadian status and its document */}
-      <section aria-labelledby={`${uid}-ca`}>
-        <h4 id={`${uid}-ca`} className="icplc-section-title">Canadian status &amp; document</h4>
+      <section aria-labelledby={`${uid}-ca`} style={sectionPanel('#EEF2FF', '#4C2A92')}>
+        <h4 id={`${uid}-ca`} className="icplc-section-title" style={{ color: '#2D1B69' }}>Canadian status &amp; document</h4>
         <div className="icplc-field-grid">
           <Field id={`${uid}-status`} label="Canadian Status">
             {canEdit ? (
@@ -155,8 +155,8 @@ export default function DocumentationTab({ participant, canWrite }) {
       </section>
 
       {/* 3-6. Passport */}
-      <section aria-labelledby={`${uid}-pp`}>
-        <h4 id={`${uid}-pp`} className="icplc-section-title">Passport</h4>
+      <section aria-labelledby={`${uid}-pp`} style={sectionPanel('#F0FDF4', '#2D8653')}>
+        <h4 id={`${uid}-pp`} className="icplc-section-title" style={{ color: '#1A5C38' }}>Passport</h4>
         <div className="icplc-field-grid">
           <Field id={`${uid}-country`} label="Passport Country">
             {canEdit ? (
@@ -211,8 +211,8 @@ export default function DocumentationTab({ participant, canWrite }) {
       </section>
 
       {/* 7-8. Visa */}
-      <section aria-labelledby={`${uid}-visa`}>
-        <h4 id={`${uid}-visa`} className="icplc-section-title">Destination visa</h4>
+      <section aria-labelledby={`${uid}-visa`} style={sectionPanel('#FFFBEB', '#C97820')}>
+        <h4 id={`${uid}-visa`} className="icplc-section-title" style={{ color: '#7C4A0A' }}>Destination visa</h4>
         <div className="icplc-field-grid">
           <Field id={`${uid}-vreq`} label="Visa Requirement">
             {canEdit ? (
@@ -299,4 +299,13 @@ function Value({ children, muted }) {
 
 function Why({ children }) {
   return <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>{children}</p>
+}
+
+function sectionPanel(bg, borderColor) {
+  return {
+    background: bg,
+    borderLeft: `3px solid ${borderColor}`,
+    borderRadius: 8,
+    padding: '14px 16px',
+  }
 }

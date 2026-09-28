@@ -103,6 +103,8 @@ DROP INDEX IF EXISTS public.event_payments_email_unique;
 
 -- Add composite unique
 ALTER TABLE public.event_payments
+  DROP CONSTRAINT IF EXISTS event_payments_email_event_config_id_key;
+ALTER TABLE public.event_payments
   ADD CONSTRAINT event_payments_email_event_config_id_key
   UNIQUE (email, event_config_id);
 
