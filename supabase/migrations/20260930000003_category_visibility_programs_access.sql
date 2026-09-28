@@ -19,12 +19,20 @@ LANGUAGE sql STABLE SECURITY DEFINER AS $$
 $$;
 
 -- Permissive policy: combined with the existing super_admin policy via OR.
-DROP POLICY IF EXISTS "visibility_programs_team_all" ON public.calendar_category_visibility;
-
-CREATE POLICY "visibility_programs_team_all"
-  ON public.calendar_category_visibility
-  USING (public.is_programs_team())
-  WITH CHECK (public.is_programs_team());
+-- GUARD: calendar_category_visibility created by 20260930000004 (ordering defect).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'calendar_category_visibility' AND relnamespace = 'public'::regnamespace) THEN
+    RAISE NOTICE 'Skipping: calendar_category_visibility not yet created';
+    RETURN;
+  END IF;
+  EXECUTE 'DROP POLICY IF EXISTS "visibility_programs_team_all" ON public.calendar_category_visibility';
+  EXECUTE $pol$CREATE POLICY "visibility_programs_team_all"
+    ON public.calendar_category_visibility
+    USING (public.is_programs_team())
+    WITH CHECK (public.is_programs_team())$pol$;
+END;
+$$;
 
 COMMENT ON FUNCTION public.is_programs_team() IS
   'True when the current user belongs to the Programs department. Used by category visibility RLS.';

@@ -13,7 +13,10 @@ begin
   select count(distinct user_id) into v_distinct_sm from public.sprint_members where sprint_id = v_sprint;
 
   -- Distinct users in sprint_team_members
-  select count(distinct user_id) into v_distinct_stm from public.sprint_team_members where sprint_id = v_sprint;
+  select count(distinct stm.user_id) into v_distinct_stm
+  from public.sprint_team_members stm
+  join public.sprint_teams st on st.id = stm.team_id
+  where st.sprint_id = v_sprint;
 
   raise notice 'TII2 Sprint Breakdown:';
   raise notice '  sprint_members total rows: %', v_total_sm;

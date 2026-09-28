@@ -3,6 +3,7 @@
 -- a raw EXISTS subquery to break the circular policy dependency between
 -- tasks and task_assignees.
 
+drop policy if exists "tasks_select_assignee" on public.tasks;
 create policy "tasks_select_assignee" on public.tasks
   for select to authenticated
   using (

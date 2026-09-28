@@ -10,9 +10,10 @@ create policy "sprint_meetings_insert" on public.sprint_meetings
   with check (
     public.current_user_role() = any(array['super_admin', 'dept_lead'])
     or exists (
-      select 1 from public.sprints s
-      where s.id = sprint_id
-        and (s.owner_id = public.auth.uid() or s.manager_id = public.auth.uid())
+      select 1 from public.sprint_members sm
+      where sm.sprint_id = sprint_meetings.sprint_id
+        and sm.user_id = auth.uid()
+        and sm.role in ('owner', 'manager')
     )
   );
 
@@ -21,8 +22,9 @@ create policy "sprint_meetings_delete" on public.sprint_meetings
   using (
     public.current_user_role() = any(array['super_admin', 'dept_lead'])
     or exists (
-      select 1 from public.sprints s
-      where s.id = sprint_id
-        and (s.owner_id = public.auth.uid() or s.manager_id = public.auth.uid())
+      select 1 from public.sprint_members sm
+      where sm.sprint_id = sprint_meetings.sprint_id
+        and sm.user_id = auth.uid()
+        and sm.role in ('owner', 'manager')
     )
   );

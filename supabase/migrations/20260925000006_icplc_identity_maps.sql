@@ -5,7 +5,7 @@
 
 create table public.icplc_identity_maps (
   id             uuid primary key default gen_random_uuid(),
-  event_id       uuid not null references public.event_configs(id) on delete restrict,
+  event_id       uuid not null, -- FK to event_configs deferred; added by forward convergence 20270807000012
   source_type    text not null
     check (source_type in ('csv', 'cmp_registrations', 'cmp_flights', 'registration')),
   source_key     text not null,   -- normalized: lowercase, trimmed, collapsed whitespace

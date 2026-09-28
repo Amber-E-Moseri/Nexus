@@ -4,7 +4,7 @@
 
 create table public.icplc_tags (
   id         uuid primary key default gen_random_uuid(),
-  event_id   uuid references public.event_configs(id) on delete cascade,
+  event_id   uuid, -- FK to event_configs deferred; added by forward convergence 20270807000012
   -- null event_id = org-wide default (visible across all ICPLC events)
   name       text not null,
   color      text,

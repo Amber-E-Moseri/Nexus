@@ -1,18 +1,32 @@
 drop function if exists public.get_space_statuses(uuid);
-create or replace function public.get_space_statuses(p_department_id uuid)
-returns setof public.task_status_definitions
-language sql
-stable
-set search_path = public
-as $$
-  select tsd.*
-  from public.task_status_definitions tsd
-  where tsd.is_org_status = true
-    or tsd.department_id = p_department_id
-  order by tsd.is_org_status desc, tsd.sort_order asc, tsd.name asc;
-$$;
-
-grant execute on function public.get_space_statuses(uuid) to authenticated;
+-- GUARD: is_org_status column added later by 20260702000000.
+-- Forward convergence at 20260703000003_fix_get_space_statuses_hierarchy.sql.
+DO $guard$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'task_status_definitions'
+      AND column_name = 'is_org_status'
+  ) THEN
+    EXECUTE $fn$
+      create or replace function public.get_space_statuses(p_department_id uuid)
+      returns setof public.task_status_definitions
+      language sql
+      stable
+      set search_path = public
+      as $$
+        select tsd.*
+        from public.task_status_definitions tsd
+        where tsd.is_org_status = true
+          or tsd.department_id = p_department_id
+        order by tsd.is_org_status desc, tsd.sort_order asc, tsd.name asc;
+      $$
+    $fn$;
+    EXECUTE 'grant execute on function public.get_space_statuses(uuid) to authenticated';
+  END IF;
+END;
+$guard$;
 
 drop function if exists public.clone_global_statuses_for_space(uuid);
 create or replace function public.clone_global_statuses_for_space(p_department_id uuid)

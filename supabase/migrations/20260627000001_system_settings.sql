@@ -21,26 +21,17 @@ ON CONFLICT (key) DO NOTHING;
 -- Enable RLS
 ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
 
--- Only admins can view settings
+-- FIX: org_members table never exists. Using users.role = 'super_admin' instead.
 CREATE POLICY "admins_view_settings" ON system_settings
   FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM org_members
-      WHERE org_members.user_id = auth.uid()
-        AND org_members.role = 'administrator'
-    )
+    (SELECT role FROM public.users WHERE id = auth.uid()) = 'super_admin'
   );
 
--- Only admins can update settings
 CREATE POLICY "admins_update_settings" ON system_settings
   FOR UPDATE
   USING (
-    EXISTS (
-      SELECT 1 FROM org_members
-      WHERE org_members.user_id = auth.uid()
-        AND org_members.role = 'administrator'
-    )
+    (SELECT role FROM public.users WHERE id = auth.uid()) = 'super_admin'
   );
 
 -- Create audit log table

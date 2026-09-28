@@ -6,9 +6,10 @@
 -- =============================================================================
 
 delete from public.sprint_team_members stm
-using public.users u
+using public.users u, public.sprint_teams st
 where stm.user_id = u.id
-  and stm.sprint_id = 'b7515367-2ccd-4e2c-8f31-933ab43e1135'
+  and stm.team_id = st.id
+  and st.sprint_id = 'b7515367-2ccd-4e2c-8f31-933ab43e1135'
   and u.department_id in (
     '740b2809-b821-4861-b323-c37612de7741', -- ORS
     '9798f8e3-50f2-4e5b-a456-c4ad9f94fe85', -- Media

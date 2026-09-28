@@ -72,32 +72,35 @@ declare
 
 begin
 
-  -- ── Existence guards: fail loudly if any UUID has been removed ────────────
-  if not exists (select 1 from public.users where id = v_admin    and status = 'active') then raise exception 'Guard: Amber_Moseri (v_admin) not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_jason_i  and status = 'active') then raise exception 'Guard: Jason Ikeokwu not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_chi      and status = 'active') then raise exception 'Guard: Pastor Chi Nwokem not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_natasha  and status = 'active') then raise exception 'Guard: Pastor Natasha Dara not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_laura_a  and status = 'active') then raise exception 'Guard: Laura A not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_sharon_m and status = 'active') then raise exception 'Guard: Sharon Mutambwi not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_waneta   and status = 'active') then raise exception 'Guard: Waneta not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_dorcas   and status = 'active') then raise exception 'Guard: Dorcas M not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_ella     and status = 'active') then raise exception 'Guard: Ella Ukpabia not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_david_a  and status = 'active') then raise exception 'Guard: David A. Akalue not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_chiamaka and status = 'active') then raise exception 'Guard: Chiamaka Okeke not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_chloe    and status = 'active') then raise exception 'Guard: Pastor Chloe Isesele not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_yifan    and status = 'active') then raise exception 'Guard: Yifan Wang not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_alex_d   and status = 'active') then raise exception 'Guard: Alex D not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_precious and status = 'active') then raise exception 'Guard: Precious Enoh not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_jason_c  and status = 'active') then raise exception 'Guard: Jason Chan not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_naomi    and status = 'active') then raise exception 'Guard: Pastor Naomi Ighodaro not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_ifedayomi and status = 'active') then raise exception 'Guard: Ifedayomi O not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_olamide  and status = 'active') then raise exception 'Guard: Pastor Olamide A. not found or inactive'; end if;
-  if not exists (select 1 from public.users where id = v_toby     and status = 'active') then raise exception 'Guard: Pastor Toby Yinka-Okunusi not found or inactive'; end if;
+  -- ── Existence guards: skip entire block on fresh installs ────────────
+  if not exists (select 1 from public.users where id = v_admin and status = 'active') then
+    raise notice 'Skipping TII 2.0 seed: Amber_Moseri (v_admin) not found — fresh install';
+    return;
+  end if;
+  if not exists (select 1 from public.users where id = v_jason_i  and status = 'active') then raise notice 'Skipping TII 2.0 seed: Jason Ikeokwu not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_chi      and status = 'active') then raise notice 'Skipping TII 2.0 seed: Pastor Chi Nwokem not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_natasha  and status = 'active') then raise notice 'Skipping TII 2.0 seed: Pastor Natasha Dara not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_laura_a  and status = 'active') then raise notice 'Skipping TII 2.0 seed: Laura A not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_sharon_m and status = 'active') then raise notice 'Skipping TII 2.0 seed: Sharon Mutambwi not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_waneta   and status = 'active') then raise notice 'Skipping TII 2.0 seed: Waneta not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_dorcas   and status = 'active') then raise notice 'Skipping TII 2.0 seed: Dorcas M not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_ella     and status = 'active') then raise notice 'Skipping TII 2.0 seed: Ella Ukpabia not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_david_a  and status = 'active') then raise notice 'Skipping TII 2.0 seed: David A. Akalue not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_chiamaka and status = 'active') then raise notice 'Skipping TII 2.0 seed: Chiamaka Okeke not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_chloe    and status = 'active') then raise notice 'Skipping TII 2.0 seed: Pastor Chloe Isesele not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_yifan    and status = 'active') then raise notice 'Skipping TII 2.0 seed: Yifan Wang not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_alex_d   and status = 'active') then raise notice 'Skipping TII 2.0 seed: Alex D not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_precious and status = 'active') then raise notice 'Skipping TII 2.0 seed: Precious Enoh not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_jason_c  and status = 'active') then raise notice 'Skipping TII 2.0 seed: Jason Chan not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_naomi    and status = 'active') then raise notice 'Skipping TII 2.0 seed: Pastor Naomi Ighodaro not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_ifedayomi and status = 'active') then raise notice 'Skipping TII 2.0 seed: Ifedayomi O not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_olamide  and status = 'active') then raise notice 'Skipping TII 2.0 seed: Pastor Olamide A. not found'; return; end if;
+  if not exists (select 1 from public.users where id = v_toby     and status = 'active') then raise notice 'Skipping TII 2.0 seed: Pastor Toby Yinka-Okunusi not found'; return; end if;
 
-  if not exists (select 1 from public.departments where id = v_dept_admin   and space_type = 'department') then raise exception 'Guard: Admins department (2aee687a) not found'; end if;
-  if not exists (select 1 from public.departments where id = v_dept_pfcc    and space_type = 'department') then raise exception 'Guard: PFCC department (a7f3d1d8) not found'; end if;
-  if not exists (select 1 from public.departments where id = v_dept_ors     and space_type = 'department') then raise exception 'Guard: ORS department (740b2809) not found'; end if;
-  if not exists (select 1 from public.departments where id = v_dept_pastors and space_type = 'department') then raise exception 'Guard: Pastors department (e06d95c4) not found'; end if;
+  if not exists (select 1 from public.departments where id = v_dept_admin   and space_type = 'department') then raise notice 'Skipping TII 2.0 seed: Admins department not found'; return; end if;
+  if not exists (select 1 from public.departments where id = v_dept_pfcc    and space_type = 'department') then raise notice 'Skipping TII 2.0 seed: PFCC department not found'; return; end if;
+  if not exists (select 1 from public.departments where id = v_dept_ors     and space_type = 'department') then raise notice 'Skipping TII 2.0 seed: ORS department not found'; return; end if;
+  if not exists (select 1 from public.departments where id = v_dept_pastors and space_type = 'department') then raise notice 'Skipping TII 2.0 seed: Pastors department not found'; return; end if;
 
 
   -- ══════════════════════════════════════════════════════════════════════════

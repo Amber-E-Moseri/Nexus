@@ -67,7 +67,7 @@ create policy "Read file attachments with access check"
       access_level = 'specific'
       and exists (
         select 1 from public.file_attachment_access faa
-        where faa.file_id = id
+        where faa.file_id = file_attachments.id
           and faa.user_id = auth.uid()
       )
     )
@@ -78,7 +78,7 @@ create policy "Read file attachments with access check"
       and exists (
         select 1 from public.file_attachment_access faa
         join public.sprint_team_members stm on stm.team_id = faa.sprint_team_id
-        where faa.file_id = id
+        where faa.file_id = file_attachments.id
           and stm.user_id = auth.uid()
       )
     )

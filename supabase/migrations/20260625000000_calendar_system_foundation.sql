@@ -5,42 +5,11 @@
 
 -- ─── Ensure Programs and Admin Spaces Exist ─────────────────────
 
--- Check if Programs space exists, create if not
-DO $$
-DECLARE
-  programs_space_id UUID;
-  admin_space_id UUID;
-  org_id UUID;
-BEGIN
-  -- Get the first organization
-  org_id := (SELECT id FROM public.organizations LIMIT 1);
-
-  -- Create Programs space if it doesn't exist
-  INSERT INTO public.departments (id, organization_id, name, slug, space_type, visibility, status)
-  VALUES (
-    gen_random_uuid(),
-    org_id,
-    'Programs',
-    'programs',
-    'department',
-    'org',
-    'active'
-  )
-  ON CONFLICT (slug) DO NOTHING;
-
-  -- Create Admin space if it doesn't exist
-  INSERT INTO public.departments (id, organization_id, name, slug, space_type, visibility, status)
-  VALUES (
-    gen_random_uuid(),
-    org_id,
-    'Admin',
-    'admin-space',
-    'department',
-    'org',
-    'active'
-  )
-  ON CONFLICT (slug) DO NOTHING;
-END $$;
+-- FIX: Original referenced organizations table (never exists), departments.organization_id
+-- (not yet added), and departments.slug (never added). Rewritten to use actual schema.
+INSERT INTO public.departments (id, name, space_type, visibility, status)
+VALUES (gen_random_uuid(), 'Programs', 'department', 'org', 'active')
+ON CONFLICT (name) DO NOTHING;
 
 -- ─── Add Google Sync Fields to calendar_events ──────────────────
 
@@ -68,7 +37,7 @@ CREATE INDEX IF NOT EXISTS calendar_events_google_event_id_idx
 
 CREATE TABLE IF NOT EXISTS public.google_calendar_sync (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID, -- FIX: removed FK to public.organizations (table never exists; single-tenant)
   space_id UUID NOT NULL REFERENCES public.departments(id) ON DELETE CASCADE,
 
   -- Google OAuth credentials (encrypted in application layer)
@@ -106,7 +75,7 @@ ALTER TABLE public.google_calendar_sync ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS public.calendar_permissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  org_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID, -- FIX: removed FK to public.organizations (table never exists; dropped by 20270101000007)
   space_id UUID REFERENCES public.departments(id) ON DELETE CASCADE,
   can_manage BOOLEAN DEFAULT FALSE,
   granted_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
@@ -127,46 +96,25 @@ CREATE INDEX IF NOT EXISTS calendar_permissions_can_manage_idx
 ALTER TABLE public.calendar_permissions ENABLE ROW LEVEL SECURITY;
 
 -- ─── Update calendar_subscriptions to match spec ─────────────────
-
--- Add missing columns to calendar_subscriptions if needed
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS name TEXT;
-
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS description TEXT;
-
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS filter_priority TEXT
-    CHECK (filter_priority IN ('high', 'medium', 'low', NULL));
-
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS filter_status TEXT DEFAULT 'confirmed'
-    CHECK (filter_status IN ('confirmed', 'cancelled', 'draft', NULL));
-
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;
-
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS allowed_roles TEXT[] DEFAULT ARRAY[]::TEXT[];
-
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE;
-
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS space_id UUID REFERENCES public.departments(id) ON DELETE CASCADE;
-
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ;
-
-ALTER TABLE public.calendar_subscriptions
-  ADD COLUMN IF NOT EXISTS access_count INTEGER DEFAULT 0;
-
--- Add indexes for calendar_subscriptions
-CREATE INDEX IF NOT EXISTS calendar_subscriptions_org_space_idx
-  ON public.calendar_subscriptions(org_id, space_id);
-
-CREATE INDEX IF NOT EXISTS calendar_subscriptions_access_count_idx
-  ON public.calendar_subscriptions(access_count DESC);
+-- GUARD: calendar_subscriptions created later by 20260730000000.
+-- These columns are dead (reverted outside migration history per 20261107000002 notes).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'calendar_subscriptions' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE 'ALTER TABLE public.calendar_subscriptions ADD COLUMN IF NOT EXISTS name TEXT';
+    EXECUTE 'ALTER TABLE public.calendar_subscriptions ADD COLUMN IF NOT EXISTS description TEXT';
+    EXECUTE 'ALTER TABLE public.calendar_subscriptions ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE';
+    EXECUTE 'ALTER TABLE public.calendar_subscriptions ADD COLUMN IF NOT EXISTS allowed_roles TEXT[] DEFAULT ARRAY[]::TEXT[]';
+    EXECUTE 'ALTER TABLE public.calendar_subscriptions ADD COLUMN IF NOT EXISTS org_id UUID';
+    EXECUTE 'ALTER TABLE public.calendar_subscriptions ADD COLUMN IF NOT EXISTS space_id UUID REFERENCES public.departments(id) ON DELETE CASCADE';
+    EXECUTE 'ALTER TABLE public.calendar_subscriptions ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ';
+    EXECUTE 'ALTER TABLE public.calendar_subscriptions ADD COLUMN IF NOT EXISTS access_count INTEGER DEFAULT 0';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS calendar_subscriptions_org_space_idx ON public.calendar_subscriptions(org_id, space_id)';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS calendar_subscriptions_access_count_idx ON public.calendar_subscriptions(access_count DESC)';
+  END IF;
+END;
+$$;
 
 -- ─── Add event_priority to calendar_events (for filtering) ─────
 
@@ -299,21 +247,39 @@ CREATE POLICY "regional_secretary_view"
   );
 
 -- Everyone can view approved events
-CREATE POLICY "everyone_approved_events"
-  ON public.calendar_events
-  FOR SELECT
-  USING (
-    auth.role() = 'authenticated'
-    AND (status = 'approved' OR is_org_wide = TRUE)
-  );
+-- GUARD: status added by 20260726000001, is_org_wide by 20260805000002.
+-- Policy superseded by 20261107000002_calendar_soft_delete.sql.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'calendar_events' AND column_name = 'status')
+  THEN
+    EXECUTE $pol$
+      CREATE POLICY "everyone_approved_events"
+        ON public.calendar_events
+        FOR SELECT
+        USING (
+          auth.role() = 'authenticated'
+          AND (status = 'approved' OR is_org_wide = TRUE)
+        )
+    $pol$;
+  END IF;
+END;
+$$;
 
 -- ─── Indexes for Performance ──────────────────────────────────────
 
 CREATE INDEX IF NOT EXISTS calendar_events_space_date_idx
   ON public.calendar_events(space_id, start_date DESC);
 
-CREATE INDEX IF NOT EXISTS calendar_events_status_space_idx
-  ON public.calendar_events(status, space_id);
+-- GUARD: status column added by 20260726000001.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'calendar_events' AND column_name = 'status')
+  THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS calendar_events_status_space_idx ON public.calendar_events(status, space_id)';
+  END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS calendar_events_sprint_idx
   ON public.calendar_events(sprint_id);
@@ -354,56 +320,67 @@ CREATE TRIGGER log_calendar_sync_action
   EXECUTE FUNCTION public.log_calendar_sync_action();
 
 -- ─── Function to Get Calendar Events for Subscription ────────────
+-- GUARD: calendar_subscriptions created later by 20260730000000.
+-- get_subscription_events is replaced by 20261107000002.
+-- increment_subscription_access has no callers (dead code).
+DO $guard$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'calendar_subscriptions' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE $fn$
+      CREATE OR REPLACE FUNCTION public.get_subscription_events(
+        p_token TEXT,
+        p_limit INT DEFAULT 100
+      )
+      RETURNS TABLE (
+        id UUID,
+        title TEXT,
+        description TEXT,
+        start_date TIMESTAMPTZ,
+        end_date TIMESTAMPTZ,
+        priority TEXT,
+        status TEXT,
+        sprint_id UUID
+      )
+      LANGUAGE SQL
+      SECURITY DEFINER
+      AS $$
+        SELECT
+          ce.id,
+          ce.title,
+          ce.description,
+          ce.start_date,
+          ce.end_date,
+          ce.priority,
+          ce.status,
+          ce.sprint_id
+        FROM public.calendar_events ce
+        INNER JOIN public.calendar_subscriptions cs ON cs.token = p_token
+        WHERE cs.token = p_token
+          AND ce.space_id = cs.space_id
+          AND ce.status IN ('approved', 'confirmed')
+          AND (cs.filter_priority IS NULL OR ce.priority = cs.filter_priority)
+        ORDER BY ce.start_date DESC
+        LIMIT p_limit;
+      $$
+    $fn$;
 
-CREATE OR REPLACE FUNCTION public.get_subscription_events(
-  p_token TEXT,
-  p_limit INT DEFAULT 100
-)
-RETURNS TABLE (
-  id UUID,
-  title TEXT,
-  description TEXT,
-  start_date TIMESTAMPTZ,
-  end_date TIMESTAMPTZ,
-  priority TEXT,
-  status TEXT,
-  sprint_id UUID
-)
-LANGUAGE SQL
-SECURITY DEFINER
-AS $$
-  SELECT
-    ce.id,
-    ce.title,
-    ce.description,
-    ce.start_date,
-    ce.end_date,
-    ce.priority,
-    ce.status,
-    ce.sprint_id
-  FROM public.calendar_events ce
-  INNER JOIN public.calendar_subscriptions cs ON cs.token = p_token
-  WHERE cs.token = p_token
-    AND ce.space_id = cs.space_id
-    AND ce.status IN ('approved', 'confirmed')
-    AND (cs.filter_priority IS NULL OR ce.priority = cs.filter_priority)
-  ORDER BY ce.start_date DESC
-  LIMIT p_limit;
-$$;
+    EXECUTE $fn2$
+      CREATE OR REPLACE FUNCTION public.increment_subscription_access(p_token TEXT)
+      RETURNS VOID
+      LANGUAGE SQL
+      SECURITY DEFINER
+      AS $$
+        UPDATE public.calendar_subscriptions
+        SET
+          access_count = COALESCE(access_count, 0) + 1,
+          last_accessed_at = NOW()
+        WHERE token = p_token;
+      $$
+    $fn2$;
 
--- ─── Track subscription access for analytics ────────────────────
-
-CREATE OR REPLACE FUNCTION public.increment_subscription_access(p_token TEXT)
-RETURNS VOID
-LANGUAGE SQL
-SECURITY DEFINER
-AS $$
-  UPDATE public.calendar_subscriptions
-  SET
-    access_count = COALESCE(access_count, 0) + 1,
-    last_accessed_at = NOW()
-  WHERE token = p_token;
-$$;
-
-GRANT EXECUTE ON FUNCTION public.increment_subscription_access TO anon;
-GRANT EXECUTE ON FUNCTION public.get_subscription_events TO anon;
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.increment_subscription_access TO anon';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_subscription_events TO anon';
+  END IF;
+END;
+$guard$;

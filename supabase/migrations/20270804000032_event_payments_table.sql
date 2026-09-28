@@ -18,6 +18,7 @@ create table if not exists public.event_payments (
 alter table public.event_payments enable row level security;
 
 -- Only regional_secretary and finance grant holders can read
+drop policy if exists "event_payments_select" on public.event_payments;
 create policy "event_payments_select"
 on public.event_payments for select to authenticated
 using (
@@ -28,6 +29,7 @@ using (
   )
 );
 
+drop policy if exists "event_payments_upsert" on public.event_payments;
 create policy "event_payments_upsert"
 on public.event_payments for insert to authenticated
 with check (
@@ -38,6 +40,7 @@ with check (
   )
 );
 
+drop policy if exists "event_payments_update" on public.event_payments;
 create policy "event_payments_update"
 on public.event_payments for update to authenticated
 using (

@@ -19,11 +19,12 @@ user_to_grant AS (
   SELECT id FROM public.users WHERE email ILIKE 'blwmun.coderabah@gmail.com'
 )
 -- Add user to Registration sprint team (if not already a member)
-INSERT INTO public.sprint_team_members (sprint_id, team_id, user_id)
+INSERT INTO public.sprint_team_members (team_id, user_id)
 SELECT
-  (SELECT id FROM tii2_sprint),
   (SELECT id FROM reg_team),
   (SELECT id FROM user_to_grant)
+WHERE (SELECT id FROM reg_team) IS NOT NULL
+  AND (SELECT id FROM user_to_grant) IS NOT NULL
 ON CONFLICT DO NOTHING;
 
 -- Assign user to Central East Subgroup B for registration data scope

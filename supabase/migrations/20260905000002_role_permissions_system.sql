@@ -1,7 +1,7 @@
 -- Create role_permissions table
 create table role_permissions (
   id uuid primary key default gen_random_uuid(),
-  role user_role not null,
+  role text not null,
   permission_key text not null,
   enabled boolean default true,
   description text,

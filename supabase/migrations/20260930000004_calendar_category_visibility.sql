@@ -40,3 +40,10 @@ $$;
 
 COMMENT ON TABLE public.calendar_category_visibility IS
   'Controls which event categories/tags are visible per role in iCal feeds. Missing rows default to visible.';
+
+-- Forward convergence: policy from 20260930000003 (ran before this table existed).
+DROP POLICY IF EXISTS "visibility_programs_team_all" ON public.calendar_category_visibility;
+CREATE POLICY "visibility_programs_team_all"
+  ON public.calendar_category_visibility
+  USING (public.is_programs_team())
+  WITH CHECK (public.is_programs_team());

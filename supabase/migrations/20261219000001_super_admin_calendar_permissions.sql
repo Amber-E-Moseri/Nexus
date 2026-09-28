@@ -11,7 +11,8 @@ begin
     where id = v_granted_by
       and role = 'super_admin'
   ) then
-    raise exception 'super_admin calendar grantor % is missing or is not super_admin', v_granted_by;
+    raise notice 'super_admin calendar grantor % not found — skipping (fresh install)', v_granted_by;
+    return;
   end if;
 
   -- Grant calendar permissions to all super admins who don't have it

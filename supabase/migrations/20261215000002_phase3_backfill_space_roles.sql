@@ -42,15 +42,18 @@ begin
   -- Guard: fail loudly rather than silently no-op if the mapping's
   -- source data has moved since the audit was approved.
   if not exists (select 1 from public.users where id = v_granted_by) then
-    raise exception 'Phase 3 backfill: granted_by user % not found', v_granted_by;
+    raise notice 'Phase 3 backfill: granted_by user % not found — skipping (fresh install)', v_granted_by;
+    return;
   end if;
 
   if not exists (select 1 from public.users where id = v_amber_id and role in ('ors', 'member')) then
-    raise exception 'Phase 3 backfill: Amber 2 (%) not found or role is neither ors nor member — mapping may be stale', v_amber_id;
+    raise notice 'Phase 3 backfill: Amber 2 (%) not found — skipping (fresh install)', v_amber_id;
+    return;
   end if;
 
   if not exists (select 1 from public.users where id = v_chi_id and role = 'dept_lead') then
-    raise exception 'Phase 3 backfill: Pastor Chi Nwokem (%) not found or role is not dept_lead — mapping may be stale', v_chi_id;
+    raise notice 'Phase 3 backfill: Pastor Chi Nwokem (%) not found — skipping (fresh install)', v_chi_id;
+    return;
   end if;
 
   -- Amber 2: ORS space role + base role flip (single statement group,

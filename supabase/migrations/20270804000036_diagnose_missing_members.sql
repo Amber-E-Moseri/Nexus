@@ -9,7 +9,8 @@ begin
 
   select count(distinct stm.user_id) into v_count
   from public.sprint_team_members stm
-  where stm.sprint_id = v_sprint
+  join public.sprint_teams st on st.id = stm.team_id
+  where st.sprint_id = v_sprint
     and not exists (
       select 1 from public.sprint_members sm
       where sm.sprint_id = v_sprint
@@ -22,8 +23,9 @@ begin
   for r in (
     select distinct stm.user_id, u.name, u.email
     from public.sprint_team_members stm
+    join public.sprint_teams st on st.id = stm.team_id
     join public.users u on u.id = stm.user_id
-    where stm.sprint_id = v_sprint
+    where st.sprint_id = v_sprint
       and not exists (
         select 1 from public.sprint_members sm
         where sm.sprint_id = v_sprint

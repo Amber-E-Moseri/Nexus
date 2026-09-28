@@ -1,7 +1,11 @@
 -- ICPLC event configuration row.
--- Not set as is_active because TII may still be the running event;
--- ICPLCPage fetches this row by event_name ILIKE '%ICPLC%', not by is_active.
--- Finance tab is visible and gated by the finance_only team permission tier.
+-- GUARD: event_configs created later by 20270807000000.
+DO $guard$
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'event_configs' AND relnamespace = 'public'::regnamespace) THEN
+  RAISE NOTICE 'Skipping: event_configs not yet created';
+  RETURN;
+END IF;
 
 insert into public.event_configs (
   event_name,
@@ -51,8 +55,11 @@ on conflict do nothing;
 -- so the existing "authenticated users read active event config" policy doesn't
 -- cover it). This policy is scoped to ICPLC by name so it doesn't expose all
 -- inactive/template configs.
-drop policy if exists "authenticated users read icplc event config" on public.event_configs;
-create policy "authenticated users read icplc event config"
+EXECUTE 'drop policy if exists "authenticated users read icplc event config" on public.event_configs';
+EXECUTE $pol$create policy "authenticated users read icplc event config"
   on public.event_configs for select
   to authenticated
-  using (event_name ilike '%ICPLC%');
+  using (event_name ilike '%ICPLC%')$pol$;
+
+END;
+$guard$;

@@ -4,7 +4,7 @@
 
 create table public.icplc_visa_defaults (
   id               uuid primary key default gen_random_uuid(),
-  event_id         uuid references public.event_configs(id) on delete cascade,
+  event_id         uuid, -- FK to event_configs deferred; added by forward convergence 20270807000012
   -- null = org-wide default; non-null = event-specific override
   passport_country text not null,
   visa_requirement text not null

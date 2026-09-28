@@ -1,4 +1,10 @@
--- Mark Ivana Moseri (BLW York University, Central Subgroup A) as absent
-UPDATE working_list
-SET absent = true
-WHERE LOWER(full_name) LIKE '%ivana moseri%';
+-- Mark Ivana Moseri as absent
+-- GUARD: working_list created later by 20270804000021.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'working_list' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE $stmt$UPDATE working_list SET absent = true WHERE LOWER(full_name) LIKE '%ivana moseri%'$stmt$;
+  END IF;
+END;
+$$;

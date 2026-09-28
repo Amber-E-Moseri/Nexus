@@ -9,6 +9,7 @@
 --    with a proper rooms_access grant row.
 
 -- Allow users to read their own grants (admins keep their existing full-table policy)
+drop policy if exists "user_grants_select_own" on public.user_grants;
 create policy "user_grants_select_own" on public.user_grants
   for select to authenticated
   using (user_id = auth.uid());

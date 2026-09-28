@@ -8,9 +8,9 @@
 ALTER TABLE sprint_teams
 ALTER COLUMN sprint_id DROP NOT NULL;
 
--- Add source_space_id to track teams created from spaces
+-- Add source_space_id to track teams created from spaces (departments)
 ALTER TABLE sprint_teams
-ADD COLUMN source_space_id uuid REFERENCES spaces(id) ON DELETE SET NULL;
+ADD COLUMN source_space_id uuid REFERENCES public.departments(id) ON DELETE SET NULL;
 
 -- Add is_archived for soft deletes (prefer over hard delete)
 ALTER TABLE sprint_teams

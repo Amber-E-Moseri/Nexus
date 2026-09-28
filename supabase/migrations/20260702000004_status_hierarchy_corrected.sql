@@ -18,27 +18,21 @@ BEGIN
   END;
 END $$;
 
--- 2. Mark the 6 CORRECT org-wide statuses as canonical
--- These are the IDs from your original plan
-UPDATE public.task_status_definitions SET is_org_status = true WHERE id::text IN (
-  '257d3384-6191-458e-b7e6-5e215ff50809',  -- To Do (open)
-  '381b8982-b35b-493e-a595-4e31bb620dc9',  -- Blocked (in_progress)
-  '38816cde-f45e-4647-ba52-deb418d246d5',  -- In Progress (in_progress)
-  '5beec435-9e50-4700-9156-2042bb6072e3',  -- Review (in_progress)
-  '8335f92a-9ccb-4e1b-8e8e-841b500181b4',  -- Completed (completed)
-  '0ab29013-96ad-4734-8935-20c512b5bdc0'   -- Cancelled (cancelled)
-);
+-- 2. Mark the 6 org-wide statuses as canonical (by legacy_key, not hardcoded UUID)
+UPDATE public.task_status_definitions SET is_org_status = true
+WHERE department_id IS NULL
+  AND legacy_key IN ('backlog', 'in_progress', 'review', 'blocked', 'done', 'cancelled');
 
--- 3. Apply the mappings based on category + name heuristics
+-- 3. Apply the mappings based on category + name heuristics (dynamic lookup by legacy_key)
 UPDATE public.task_status_definitions s
 SET org_status_id = (
   CASE
-    WHEN s.category = 'open' THEN '257d3384-6191-458e-b7e6-5e215ff50809'::uuid
-    WHEN s.category = 'completed' THEN '8335f92a-9ccb-4e1b-8e8e-841b500181b4'::uuid
-    WHEN s.category = 'cancelled' THEN '0ab29013-96ad-4734-8935-20c512b5bdc0'::uuid
-    WHEN s.category = 'in_progress' AND s.name ILIKE '%review%' THEN '5beec435-9e50-4700-9156-2042bb6072e3'::uuid
-    WHEN s.category = 'in_progress' AND s.name ILIKE '%blocked%' THEN '381b8982-b35b-493e-a595-4e31bb620dc9'::uuid
-    WHEN s.category = 'in_progress' THEN '38816cde-f45e-4647-ba52-deb418d246d5'::uuid
+    WHEN s.category = 'open' THEN (SELECT id FROM public.task_status_definitions WHERE department_id IS NULL AND legacy_key = 'backlog' LIMIT 1)
+    WHEN s.category = 'completed' THEN (SELECT id FROM public.task_status_definitions WHERE department_id IS NULL AND legacy_key = 'done' LIMIT 1)
+    WHEN s.category = 'cancelled' THEN (SELECT id FROM public.task_status_definitions WHERE department_id IS NULL AND legacy_key = 'cancelled' LIMIT 1)
+    WHEN s.category = 'in_progress' AND s.name ILIKE '%review%' THEN (SELECT id FROM public.task_status_definitions WHERE department_id IS NULL AND legacy_key = 'review' LIMIT 1)
+    WHEN s.category = 'in_progress' AND s.name ILIKE '%blocked%' THEN (SELECT id FROM public.task_status_definitions WHERE department_id IS NULL AND legacy_key = 'blocked' LIMIT 1)
+    WHEN s.category = 'in_progress' THEN (SELECT id FROM public.task_status_definitions WHERE department_id IS NULL AND legacy_key = 'in_progress' LIMIT 1)
     ELSE NULL
   END
 )

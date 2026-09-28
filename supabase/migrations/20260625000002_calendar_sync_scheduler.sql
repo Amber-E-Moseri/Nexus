@@ -227,9 +227,15 @@ CREATE INDEX IF NOT EXISTS google_calendar_sync_enabled_last_sync_idx
   ON public.google_calendar_sync(sync_enabled, last_sync_at DESC)
   WHERE sync_enabled = TRUE;
 
-CREATE INDEX IF NOT EXISTS calendar_events_status_approved_idx
-  ON public.calendar_events(status, created_at DESC)
-  WHERE status = 'approved';
+-- GUARD: status column added by 20260726000001.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'calendar_events' AND column_name = 'status')
+  THEN
+    EXECUTE $idx$CREATE INDEX IF NOT EXISTS calendar_events_status_approved_idx ON public.calendar_events(status, created_at DESC) WHERE status = 'approved'$idx$;
+  END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS calendar_events_synced_to_google_idx
   ON public.calendar_events(synced_to_google)

@@ -20,9 +20,28 @@
 ALTER TABLE IF EXISTS public.calendar_permissions
   ADD COLUMN IF NOT EXISTS can_manage boolean DEFAULT false,
   ADD COLUMN IF NOT EXISTS permission text,
-  ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES public.users(id),
-  DROP COLUMN IF EXISTS org_id,  -- might not exist, no-op if missing
-  DROP COLUMN IF EXISTS space_id;
+  ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES public.users(id);
+
+-- Drop org_id and space_id with CASCADE to remove dependent policies/views
+-- that reference these columns. Policies will be recreated by later migrations.
+ALTER TABLE IF EXISTS public.calendar_permissions DROP COLUMN IF EXISTS org_id;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'calendar_permissions' AND column_name = 'space_id'
+  ) THEN
+    -- Drop dependent objects first
+    EXECUTE 'DROP VIEW IF EXISTS public.calendar_permissions_summary CASCADE';
+    EXECUTE 'DROP POLICY IF EXISTS "programs_manager_google_sync" ON public.google_calendar_sync';
+    EXECUTE 'DROP POLICY IF EXISTS "admin_manager_google_sync" ON public.google_calendar_sync';
+    EXECUTE 'DROP POLICY IF EXISTS "programs_manager_events" ON public.calendar_events';
+    EXECUTE 'DROP POLICY IF EXISTS "admin_manager_events" ON public.calendar_events';
+    EXECUTE 'DROP POLICY IF EXISTS "programs_manager_regional_sync" ON public.regional_calendar_syncs';
+    ALTER TABLE public.calendar_permissions DROP COLUMN space_id;
+  END IF;
+END;
+$$;
 
 -- Step 2: Backfill permission from can_manage for any existing rows
 UPDATE public.calendar_permissions

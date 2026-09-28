@@ -3,27 +3,37 @@
 -- Sets up daily reminder notifications for tasks due tomorrow
 -- ============================================================
 
--- Ensure pg_cron extension is enabled
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- Ensure pg_cron extension is enabled (may not be available locally)
+DO $$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS pg_cron;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'pg_cron not available: %', SQLERRM;
+END;
+$$;
 
 -- ─── Schedule due date reminder notifications ───────────────
-
 -- Fires daily at 12:00 UTC (8:00 AM EST/EDT)
--- Sends reminder notifications to users with tasks due tomorrow
-SELECT cron.schedule(
-  'due-date-reminders',
-  '0 12 * * *',
-  $$
-  SELECT net.http_post(
-    url := (SELECT current_setting('app.supabase_url')) || '/functions/v1/due-date-reminders',
-    headers := jsonb_build_object(
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
-      'Content-Type', 'application/json'
-    ),
-    body := '{}'::jsonb
+DO $$
+BEGIN
+  PERFORM cron.schedule(
+    'due-date-reminders',
+    '0 12 * * *',
+    $cron$
+    SELECT net.http_post(
+      url := (SELECT current_setting('app.supabase_url')) || '/functions/v1/due-date-reminders',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
+        'Content-Type', 'application/json'
+      ),
+      body := '{}'::jsonb
+    );
+    $cron$
   );
-  $$
-) ON CONFLICT DO NOTHING;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'cron.schedule not available: %', SQLERRM;
+END;
+$$;
 
 -- ─── Create function to track cron job executions ──────────
 

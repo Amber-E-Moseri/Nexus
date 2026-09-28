@@ -23,14 +23,25 @@ create policy "Read active event types"
   using (active = true);
 
 -- Allow users with calendar management permission to manage event types
-create policy "Manage event types"
-  on public.calendar_event_types
-  for all
-  to authenticated
-  using (
-    exists(
-      select 1 from public.calendar_permissions
-      where calendar_permissions.user_id = auth.uid()
-      and calendar_permissions.can_manage = true
-    )
-  );
+-- GUARD: calendar_permissions created later by 20260625000000.
+-- Policy superseded by 20261224000000_fix_calendar_event_types_manage_policy.sql.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'calendar_permissions' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE $pol$
+      create policy "Manage event types"
+        on public.calendar_event_types
+        for all
+        to authenticated
+        using (
+          exists(
+            select 1 from public.calendar_permissions
+            where calendar_permissions.user_id = auth.uid()
+            and calendar_permissions.can_manage = true
+          )
+        )
+    $pol$;
+  END IF;
+END;
+$$;

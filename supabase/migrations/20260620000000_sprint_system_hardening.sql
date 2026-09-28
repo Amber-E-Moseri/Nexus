@@ -1,15 +1,28 @@
 alter table public.sprint_teams
   add column if not exists lead_user_id uuid references public.users(id) on delete set null;
 
-create table if not exists public.sprint_team_members (
-  sprint_id uuid not null references public.sprints(id) on delete cascade,
-  sprint_team_id uuid not null references public.sprint_teams(id) on delete cascade,
-  user_id uuid not null references public.users(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  primary key (sprint_team_id, user_id)
-);
+-- NOTE: sprint_team_members table is created by 20260619000002_sprint_teams_decoupling.sql
+-- with schema: (id, team_id, user_id, role, joined_at, UNIQUE(team_id, user_id))
+-- This CREATE TABLE IF NOT EXISTS is a no-op; the table already exists with the correct schema.
+-- Do NOT re-create with sprint_id or sprint_team_id columns — teams are decoupled from sprint membership.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'sprint_team_members'
+  ) then
+    create table public.sprint_team_members (
+      id uuid primary key default gen_random_uuid(),
+      team_id uuid not null references public.sprint_teams(id) on delete cascade,
+      user_id uuid not null references public.users(id) on delete cascade,
+      role varchar(20),
+      joined_at timestamptz default now(),
+      unique(team_id, user_id)
+    );
+  end if;
+end $$;
 
-create index if not exists sprint_team_members_sprint_idx on public.sprint_team_members(sprint_id);
+-- Index on user_id for efficient member lookups
 create index if not exists sprint_team_members_user_idx on public.sprint_team_members(user_id);
 
 update public.sprint_members
@@ -27,11 +40,14 @@ alter table public.sprint_members
   add constraint sprint_members_role_check
   check (role in ('owner', 'manager', 'contributor', 'viewer'));
 
-insert into public.sprint_team_members (sprint_id, sprint_team_id, user_id)
-select sprint_id, sprint_team_id, user_id
+-- Migrate existing sprint team memberships to sprint_team_members junction table.
+-- Note: sprint_members.sprint_team_id → sprint_team_members.team_id (same meaning, different name)
+-- Do NOT migrate sprint_id; teams are independent entities, sprint association is at the team level.
+insert into public.sprint_team_members (team_id, user_id)
+select distinct sprint_team_id, user_id
 from public.sprint_members
 where sprint_team_id is not null
-on conflict (sprint_team_id, user_id) do nothing;
+on conflict (team_id, user_id) do nothing;
 
 update public.sprint_teams st
 set lead_user_id = candidate.user_id
@@ -140,7 +156,11 @@ create policy "sprint_team_members_select" on public.sprint_team_members
   using (
     public.current_user_role() = 'super_admin'
     or user_id = auth.uid()
-    or public.is_sprint_member(sprint_id)
+    or exists (
+      select 1 from public.sprint_teams st
+      where st.id = team_id
+        and public.is_sprint_member(st.sprint_id)
+    )
   );
 
 drop policy if exists "sprint_team_members_write" on public.sprint_team_members;
@@ -148,9 +168,17 @@ create policy "sprint_team_members_write" on public.sprint_team_members
   for all to authenticated
   using (
     public.current_user_role() in ('super_admin', 'dept_lead')
-    or public.can_manage_sprint(sprint_id)
+    or exists (
+      select 1 from public.sprint_teams st
+      where st.id = team_id
+        and public.can_manage_sprint(st.sprint_id)
+    )
   )
   with check (
     public.current_user_role() in ('super_admin', 'dept_lead')
-    or public.can_manage_sprint(sprint_id)
+    or exists (
+      select 1 from public.sprint_teams st
+      where st.id = team_id
+        and public.can_manage_sprint(st.sprint_id)
+    )
   );
