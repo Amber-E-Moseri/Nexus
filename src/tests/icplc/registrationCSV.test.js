@@ -361,6 +361,8 @@ describe('ICPLC Registration CSV', () => {
     })
 
     afterAll(async () => {
+      // The participant audit trail references users; clear this user's entries before removing them.
+      await pgExec('DELETE FROM public.activity_log WHERE user_id = $1', [SA_USER_ID])
       await pgExec('DELETE FROM public.users WHERE id = $1', [SA_USER_ID])
       await pgExec('DELETE FROM auth.users WHERE id = $1', [SA_USER_ID])
     })

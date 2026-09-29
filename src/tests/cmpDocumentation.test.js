@@ -9,6 +9,8 @@ import { describe, it, expect } from 'vitest'
 import {
   mapPassportStatus,
   mapCanadianStatus,
+  mapCanadianDocValidity,
+  mapPassportRegion,
   normalizeEmail,
   buildSourceValues,
   mergeSourceValues,
@@ -306,25 +308,41 @@ describe('CMP Documentation Mapper', () => {
       expect(mutations.canonical.email).toBeUndefined()
     })
 
-    it('never includes passport_region in canonical mutations', () => {
-      const participant = { id: 'part-11', override_fields: {} }
-      const answers = {
-        [CMP_FIELD_IDS.passportRegion]: 'ECOWAS',
-      }
-
-      const mutations = computeMutations(participant, answers, {})
-      expect(mutations.canonical.passport_region).toBeUndefined()
+    it('maps reported passport region to passport_region and never touches passport_country', () => {
+      const mutations = computeMutations({ id: 'part-11', override_fields: {} }, { [CMP_FIELD_IDS.passportRegion]: 'ECOWAS' }, {})
+      expect(mutations.canonical.passport_region).toBe('ECOWAS')
       expect(mutations.canonical.passport_country).toBeUndefined()
     })
 
-    it('never includes canadian_doc_validity in canonical mutations', () => {
-      const participant = { id: 'part-12', override_fields: {} }
-      const answers = {
-        [CMP_FIELD_IDS.canadianDocValidity]: 'Yes',
-      }
+    it('respects a passport_region override', () => {
+      const participant = { id: 'part-11b', override_fields: { passport_region: { overridden: true } } }
+      const mutations = computeMutations(participant, { [CMP_FIELD_IDS.passportRegion]: 'ECOWAS' }, {})
+      expect(mutations.canonical.passport_region).toBeUndefined()
+    })
 
-      const mutations = computeMutations(participant, answers, {})
-      expect(mutations.canonical.canada_status_document_readiness).toBeUndefined()
+    it('flags an unrecognised passport region instead of guessing', () => {
+      const mutations = computeMutations({ id: 'part-11c', override_fields: {} }, { [CMP_FIELD_IDS.passportRegion]: 'Kenya' }, {})
+      expect(mutations.canonical.passport_region).toBeUndefined()
+      expect(mutations.unrecognized_passport_region_value).toBe('Kenya')
+    })
+
+    it('maps document validity to canada_status_document_readiness', () => {
+      const yes = computeMutations({ id: 'part-12', canada_residency_status: 'PERMANENT_RESIDENT', override_fields: {} }, { [CMP_FIELD_IDS.canadianDocValidity]: 'Yes' }, {})
+      expect(yes.canonical.canada_status_document_readiness).toBe('READY')
+      const no = computeMutations({ id: 'part-12b', canada_residency_status: 'PERMANENT_RESIDENT', override_fields: {} }, { [CMP_FIELD_IDS.canadianDocValidity]: 'No' }, {})
+      expect(no.canonical.canada_status_document_readiness).toBe('RENEWAL_NEEDED')
+    })
+
+    it('does not set document readiness for citizens, overridden fields, or unrecognised answers', () => {
+      const citizen = computeMutations({ id: 'p1', canada_residency_status: 'CANADIAN_CITIZEN', override_fields: {} }, { [CMP_FIELD_IDS.canadianDocValidity]: 'No' }, {})
+      expect(citizen.canonical.canada_status_document_readiness).toBeUndefined()
+      const becomingCitizen = computeMutations({ id: 'p2', canada_residency_status: 'PERMANENT_RESIDENT', override_fields: {} }, { [CMP_FIELD_IDS.canadianStatus]: 'Canadian Citizen', [CMP_FIELD_IDS.canadianDocValidity]: 'No' }, {})
+      expect(becomingCitizen.canonical.canada_status_document_readiness).toBeUndefined()
+      const overridden = computeMutations({ id: 'p3', canada_residency_status: 'PERMANENT_RESIDENT', override_fields: { canada_status_document_readiness: { overridden: true } } }, { [CMP_FIELD_IDS.canadianDocValidity]: 'Yes' }, {})
+      expect(overridden.canonical.canada_status_document_readiness).toBeUndefined()
+      const odd = computeMutations({ id: 'p4', canada_residency_status: 'PERMANENT_RESIDENT', override_fields: {} }, { [CMP_FIELD_IDS.canadianDocValidity]: 'Not sure' }, {})
+      expect(odd.canonical.canada_status_document_readiness).toBeUndefined()
+      expect(odd.unrecognized_doc_validity_value).toBe('Not sure')
     })
 
     it('never includes assistance_requested in canonical mutations', () => {
@@ -370,6 +388,30 @@ describe('CMP Documentation Mapper', () => {
       const mutations = computeMutations(participant, answers, {})
       expect(mutations.canonical.passport_readiness).toBeUndefined() // overridden
       expect(mutations.canonical.canada_residency_status).toBe('CANADIAN_CITIZEN') // not overridden
+    })
+  })
+
+  describe('mapCanadianDocValidity', () => {
+    it('maps Yes to READY and No to RENEWAL_NEEDED (case/whitespace tolerant)', () => {
+      expect(mapCanadianDocValidity('Yes')).toBe('READY')
+      expect(mapCanadianDocValidity(' no ')).toBe('RENEWAL_NEEDED')
+    })
+    it('returns null for anything else', () => {
+      expect(mapCanadianDocValidity('Maybe')).toBeNull()
+      expect(mapCanadianDocValidity('')).toBeNull()
+      expect(mapCanadianDocValidity(undefined)).toBeNull()
+    })
+  })
+
+  describe('mapPassportRegion', () => {
+    it('maps ECOWAS and Non-ECOWAS to the canonical region values', () => {
+      expect(mapPassportRegion('ECOWAS')).toBe('ECOWAS')
+      expect(mapPassportRegion('Non-ECOWAS')).toBe('NON_ECOWAS')
+      expect(mapPassportRegion('non ecowas')).toBe('NON_ECOWAS')
+    })
+    it('never guesses from a country name', () => {
+      expect(mapPassportRegion('Nigeria')).toBeNull()
+      expect(mapPassportRegion(null)).toBeNull()
     })
   })
 })

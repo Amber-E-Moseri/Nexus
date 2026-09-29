@@ -124,7 +124,6 @@ const CATEGORY_SEVERITY = {
   study_permit: 'warn',
   pgwp: 'warn',
   work_permit: 'warn',
-  passport_country_missing: 'warn',
   passport_incomplete: 'danger',
   non_ecowas_review: 'info',
   visa_unknown: 'warn',

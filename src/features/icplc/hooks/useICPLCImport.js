@@ -126,12 +126,31 @@ export function useICPLCImport(eventId) {
     setError(null)
     setLoading(true)
     try {
-      const { data, error: err } = await supabase.functions.invoke('icplc-import-apply', {
-        body: { batch_id: batchId },
+      const { data: userData } = await supabase.auth.getUser()
+      const { data, error: err } = await supabase.rpc('icplc_apply_registration_import', {
+        p_batch_id: batchId,
+        p_applied_by: userData?.user?.id ?? null,
       })
       if (err) throw err
-      setApplyResult(data)
+      const result = Array.isArray(data) ? data[0] : data
+      // Copy KingsChat handle, subgroup, campus, leadership and phone onto people whose
+      // fields are still empty (fill-only). Non-fatal: the import itself already succeeded.
+      const { error: fillErr } = await supabase.rpc('icplc_backfill_participants_from_import', { p_batch_id: batchId })
+      if (fillErr) console.warn('icplc backfill from import failed:', fillErr.message)
+      // Rows the user skipped or that stayed unmatched are left untouched ("protected").
+      const { count: leftOut } = await supabase
+        .from('icplc_import_rows')
+        .select('id', { count: 'exact', head: true })
+        .eq('batch_id', batchId)
+        .in('apply_status', ['skipped', 'protected'])
+      setApplyResult({
+        applied: result?.applied_rows ?? 0,
+        protected: leftOut ?? 0,
+        errors: result?.error_rows ?? 0,
+        status: result?.batch_status,
+      })
       qc.invalidateQueries({ queryKey: ['icplc_participants', eventId] })
+      await fetchRows(batchId)
       setStep('done')
     } catch (err) {
       setError(err.message)
@@ -140,16 +159,28 @@ export function useICPLCImport(eventId) {
     }
   }, [batchId, eventId, qc])
 
-  // Confirm a manual match for an unmatched row
-  const confirmMatch = useCallback(async (rowId, participantId) => {
+  // Resolve an unmatched row: 'link_existing' (needs participantId), 'create_new', or 'skip'.
+  const resolveRow = useCallback(async (rowId, action, participantId = null) => {
     setError(null)
-    const { error: err } = await supabase
-      .from('icplc_import_rows')
-      .update({ participant_id: participantId, match_status: 'manual' })
-      .eq('id', rowId)
-    if (err) setError(err.message)
-    await fetchRows(batchId)
-  }, [batchId])
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      const { data, error: err } = await supabase.rpc('icplc_resolve_unmatched_row', {
+        p_row_id: rowId,
+        p_action: action,
+        p_participant_id: participantId,
+        p_resolved_by: userData?.user?.id ?? null,
+      })
+      if (err) throw err
+      const result = Array.isArray(data) ? data[0] : data
+      if (result && result.success === false) throw new Error(result.error_message || 'Could not resolve row')
+      if (action === 'create_new') qc.invalidateQueries({ queryKey: ['icplc_participants', eventId] })
+      await fetchRows(batchId)
+    } catch (err) {
+      setError(err.message)
+    }
+  }, [batchId, eventId, qc])
+
+  const confirmMatch = useCallback((rowId, participantId) => resolveRow(rowId, 'link_existing', participantId), [resolveRow])
 
   const fetchRows = async (bid) => {
     const { data, error: err } = await supabase
@@ -173,6 +204,10 @@ export function useICPLCImport(eventId) {
 
   return {
     step, batchId, parseResult, rows, applyResult, error, loading,
-    uploadCSV, runMatch, runPreview, applyImport, confirmMatch, reset,
+    uploadCSV, runMatch, runPreview, applyImport, confirmMatch, resolveRow, reset,
   }
 }
+
+// match_status values that mean "linked to a participant" (matcher output + manual resolution).
+export const MATCHED_STATUSES = ['auto', 'manual', 'persistent', 'auto_kingschat', 'auto_fuzzy_email', 'auto_fuzzy_name']
+export const isMatchedRow = (row) => MATCHED_STATUSES.includes(row.match_status)

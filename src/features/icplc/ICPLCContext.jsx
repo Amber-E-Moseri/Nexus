@@ -13,6 +13,7 @@ const DEFAULT_FILTERS = {
   readiness: [],
   flight_status: [],
   tags: [],
+  tags_mode: 'any',
   subgroup: [],
 }
 

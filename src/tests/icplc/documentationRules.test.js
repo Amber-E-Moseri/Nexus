@@ -59,6 +59,48 @@ describe('Canadian status → required document (no visa influence)', () => {
   })
 })
 
+describe('Reported passport region (CMP) fallback', () => {
+  it('uses the reported region only when no passport country is set', () => {
+    expect(derivePassportDocumentation({ passport_country: null, passport_region: 'ECOWAS' }).region).toBe('ECOWAS')
+    expect(derivePassportDocumentation({ passport_country: '', passport_region: 'NON_ECOWAS' }).region).toBe('NON_ECOWAS')
+  })
+
+  it('falls back to the raw CMP answer in source_values when the dedicated field does not exist yet', () => {
+    const p = { passport_country: null, source_values: { cmp_documentation: { passport_region: 'ECOWAS' } } }
+    expect(derivePassportDocumentation(p).region).toBe('ECOWAS')
+    const q = { passport_country: null, source_values: { cmp_documentation: { passport_region: 'Non-ECOWAS' } } }
+    expect(derivePassportDocumentation(q).region).toBe('NON_ECOWAS')
+    expect(derivePassportDocumentation({ passport_country: null, source_values: { cmp_documentation: { passport_region: 'Nigeria' } } }).region).toBe('UNKNOWN')
+  })
+
+  it('never overrides a known country, and ignores unrecognised reported values', () => {
+    expect(derivePassportDocumentation({ passport_country: 'Kenya', passport_region: 'ECOWAS' }).region).toBe('NON_ECOWAS')
+    expect(derivePassportDocumentation({ passport_country: 'Ghana', passport_region: 'NON_ECOWAS' }).region).toBe('ECOWAS')
+    expect(derivePassportDocumentation({ passport_country: null, passport_region: 'MARS' }).region).toBe('UNKNOWN')
+    expect(derivePassportDocumentation({ passport_country: null }).region).toBe('UNKNOWN')
+  })
+})
+
+describe('A missing passport country is never a flag', () => {
+  const ready = { participation_status: 'confirmed', passport_readiness: 'ready', registration_status: 'registered', visa_requirement: 'not_required' }
+
+  it.each([
+    ['ECOWAS reported', { passport_country: null, passport_region: 'ECOWAS' }],
+    ['Non-ECOWAS reported, no country', { passport_country: null, passport_region: 'NON_ECOWAS' }],
+    ['no region and no country', { passport_country: null }],
+    ['country recorded', { passport_country: 'Kenya' }],
+  ])('%s: no country attention key and no readiness reason', (_name, extra) => {
+    const x = { ...ready, ...extra }
+    expect(attentionCategoryKeys(x).some((k) => /country/i.test(k))).toBe(false)
+    expect(deriveReadiness(x).reasons.join(' | ')).not.toMatch(/country/i)
+  })
+
+  it('the country field itself is still recorded and used for classification', () => {
+    expect(derivePassportDocumentation({ passport_country: 'Kenya' }).country).toBe('Kenya')
+    expect(derivePassportDocumentation({ passport_country: 'Kenya' }).region).toBe('NON_ECOWAS')
+  })
+})
+
 describe('ECOWAS classification (single helper)', () => {
   it('Nigeria and Ghana are ECOWAS because they are members, not special cases', () => {
     expect(classifyPassportRegion('Nigeria')).toBe('ECOWAS')
@@ -98,15 +140,23 @@ describe('Passport supporting document rule', () => {
 })
 
 describe('Independence invariants (T)', () => {
-  it('Canadian status / ECOWAS never set visa requirement', () => {
+  it('Canadian status never sets visa requirement; only an ECOWAS passport settles an unassessed one', () => {
     for (const status of Object.values(RESIDENCY_STATUS)) {
       for (const country of ['Ghana', 'Kenya', null]) {
         const d = deriveDocumentation({ canada_residency_status: status, passport_country: country, visa_requirement: 'review' })
-        expect(d.visa.requirement).toBe('review')
+        expect(d.visa.requirement).toBe(country === 'Ghana' ? 'not_required' : 'review')
+        // explicit staff values are never overridden, ECOWAS or not
         const d2 = deriveDocumentation({ canada_residency_status: status, passport_country: country, visa_requirement: 'required' })
         expect(d2.visa.requirement).toBe('required')
       }
     }
+  })
+  it('ECOWAS via the CMP-reported region (no country) also settles an unassessed visa', () => {
+    const sv = { cmp_documentation: { passport_region: 'ECOWAS' } }
+    const x = p({ passport_country: null, source_values: sv, visa_requirement: 'review' })
+    expect(deriveDocumentation(x).visa.requirement).toBe('not_required')
+    expect(reasonsOf(x)).not.toMatch(/Visa requirement unknown/)
+    expect(attentionCategoryKeys(x)).not.toContain('visa_unknown')
   })
   it('changing Canadian status leaves passport + visa derivations untouched', () => {
     const a = deriveDocumentation(p({ canada_residency_status: 'PERMANENT_RESIDENT' }))
@@ -182,14 +232,10 @@ describe('Data-state matrix', () => {
     expect(derivePassportDocumentation(x).supportingDoc).toBe(SUPPORTING_DOC.STAFF_REVIEW)
     expect(attentionCategoryKeys(x)).toContain('non_ecowas_review')
   })
-  it('K. Missing passport country (registered + confirmed) → attention', () => {
+  it('K. Missing passport country is not an attention item', () => {
     const x = p({ passport_country: null, passport_readiness: 'unknown' })
-    expect(deriveReadiness(x).readiness).toBe('action_required')
-    expect(reasonsOf(x)).toMatch(/Passport country missing/)
-    expect(attentionCategoryKeys(x)).toContain('passport_country_missing')
-  })
-  it('K2. Passport marked ready without a country cannot be READY', () => {
-    expect(deriveReadiness(p({ passport_country: '' })).readiness).toBe('action_required')
+    expect(reasonsOf(x)).not.toMatch(/country/i)
+    expect(attentionCategoryKeys(x).some((k) => /country/i.test(k))).toBe(false)
   })
   it('L. Manual, not registered, likely → Not Registered attention', () => {
     const x = p({ participation_status: 'likely', registration_status: 'not_registered', registration_link_status: 'not_registered' })
@@ -213,9 +259,10 @@ describe('Data-state matrix', () => {
     expect(attentionCategoryKeys(x)).toContain('travel_incomplete')
   })
   it('Visa requirement unknown → attention for committed participants only', () => {
-    expect(reasonsOf(p({ visa_requirement: 'review' }))).toMatch(/Visa requirement unknown/)
-    expect(attentionCategoryKeys(p({ visa_requirement: 'review' }))).toContain('visa_unknown')
-    expect(attentionCategoryKeys(p({ visa_requirement: 'review', participation_status: 'tracking' }))).not.toContain('visa_unknown')
+    const nonEcowas = { passport_country: 'Kenya', visa_requirement: 'review' }
+    expect(reasonsOf(p(nonEcowas))).toMatch(/Visa requirement unknown/)
+    expect(attentionCategoryKeys(p(nonEcowas))).toContain('visa_unknown')
+    expect(attentionCategoryKeys(p({ ...nonEcowas, participation_status: 'tracking' }))).not.toContain('visa_unknown')
   })
   it('not_attending participants raise no attention', () => {
     expect(attentionCategoryKeys(p({ participation_status: 'not_attending', passport_country: null }))).toEqual([])

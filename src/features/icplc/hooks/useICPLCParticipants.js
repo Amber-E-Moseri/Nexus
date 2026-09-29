@@ -7,12 +7,22 @@ const PARTICIPANTS_KEY = (eventId, filters) => ['icplc_participants', eventId, f
  * Fetch ICPLC participants for the given event, with tags joined.
  * Filters are applied server-side where possible.
  */
+/** Drop empty filter values so "no filters" always has the same cache key ({}), whichever page asks. */
+function normalizeFilters(filters = {}) {
+  return Object.fromEntries(
+    Object.entries(filters).filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== '')),
+  )
+}
+
 export function useICPLCParticipants(eventId, filters = {}) {
+  const normalized = normalizeFilters(filters)
   return useQuery({
-    queryKey: PARTICIPANTS_KEY(eventId, filters),
+    queryKey: PARTICIPANTS_KEY(eventId, normalized),
     queryFn: () => fetchParticipants(eventId, filters),
     enabled: !!eventId,
     staleTime: 30_000,
+    // Data is edited from imports/migrations outside this tab; refresh when the user comes back.
+    refetchOnWindowFocus: true,
   })
 }
 

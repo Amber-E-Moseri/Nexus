@@ -7,9 +7,10 @@
  *   3. Passport readiness
  *   4. Destination visa requirement + process
  *
- * Forbidden inferences (see tests): Canadian status, ECOWAS membership and
- * passport region NEVER decide visa requirement. Visa requirement is only what
- * staff (or a configured country visa default) set on the participant.
+ * Forbidden inferences (see tests): Canadian status NEVER decides visa requirement.
+ * The one allowed inference: an ECOWAS passport settles an UNASSESSED visa
+ * requirement as "not required" (see effectiveVisaRequirement). Anything staff
+ * (or a configured country visa default) set explicitly always wins.
  *
  * This is operational document tracking — not a legal eligibility determination.
  */
@@ -20,7 +21,8 @@ import {
   deriveDocumentType,
   docNeedsAttention,
 } from '../../registration/icplcDocReadiness.js'
-import { PASSPORT_REGION, classifyPassportRegion } from './passportRegion.js'
+import { PASSPORT_REGION, effectivePassportRegion } from './passportRegion.js'
+import { effectiveCanadaDocReadiness } from './cmpDocumentation.js'
 
 export const SUPPORTING_DOC = {
   NOT_REQUIRED: 'NOT_REQUIRED', // ECOWAS passport
@@ -41,7 +43,7 @@ export function deriveCanadianDocumentation(p) {
   const docType = deriveDocumentType(status)
   const attention = docNeedsAttention({
     canadaResidencyStatus: status,
-    canadaStatusDocumentReadiness: p.canada_status_document_readiness,
+    canadaStatusDocumentReadiness: effectiveCanadaDocReadiness(p),
   })
   let why
   if (!status) why = 'Canadian status has not been set.'
@@ -52,7 +54,7 @@ export function deriveCanadianDocumentation(p) {
     status,
     docType,
     required: docType !== DOCUMENT_TYPE.NONE && docType !== DOCUMENT_TYPE.REVIEW && !!status,
-    readiness: p.canada_status_document_readiness || null,
+    readiness: effectiveCanadaDocReadiness(p),
     attention,          // string | null
     why,
   }
@@ -60,7 +62,8 @@ export function deriveCanadianDocumentation(p) {
 
 /** Passport dimension: country, region and the passport-specific supporting document rule. */
 export function derivePassportDocumentation(p) {
-  const region = classifyPassportRegion(p.passport_country)
+  // A known country always wins; the region the participant reported (CMP) only fills the gap.
+  const region = effectivePassportRegion(p)
   let supportingDoc
   let why
   if (region === PASSPORT_REGION.ECOWAS) {
@@ -82,12 +85,24 @@ export function derivePassportDocumentation(p) {
   }
 }
 
-/** Visa dimension — reads ONLY visa fields. */
+/**
+ * Visa requirement to act on. The stored value is 'review' until someone assesses it; for an
+ * ECOWAS passport holder that default means "not required". An explicit 'required' /
+ * 'not_required' is never overridden. Derived on read, never persisted.
+ */
+export function effectiveVisaRequirement(p) {
+  const stored = p?.visa_requirement || 'review'
+  if (stored === 'review' && effectivePassportRegion(p) === PASSPORT_REGION.ECOWAS) return 'not_required'
+  return stored
+}
+
+/** Visa dimension — reads visa fields (plus ECOWAS region, via effectiveVisaRequirement). */
 export function deriveVisaDocumentation(p) {
-  const requirement = p.visa_requirement || 'review'
+  const requirement = effectiveVisaRequirement(p)
   const process = p.visa_process_status || 'not_started'
   let why
-  if (requirement === 'review') why = 'Visa requirement has not been determined — needs review.'
+  if (requirement === 'not_required' && p.visa_requirement !== 'not_required') why = 'Not required for an ECOWAS passport.'
+  else if (requirement === 'review') why = 'Visa requirement has not been determined — needs review.'
   else if (requirement === 'not_required') why = 'Staff marked the destination visa as not required.'
   else if (process === 'approved') why = 'Visa required and approved.'
   else if (process === 'issue') why = 'Visa required — process has a problem.'
@@ -114,7 +129,6 @@ export const ATTENTION_CATEGORIES = [
   { key: 'study_permit', label: 'Study Permit Missing / Incomplete', section: 'documentation', description: 'International Student — Study Permit not ready' },
   { key: 'pgwp', label: 'PGWP Missing / Incomplete', section: 'documentation', description: 'Post-Graduation Worker — PGWP not ready' },
   { key: 'work_permit', label: 'Work Permit Missing / Incomplete', section: 'documentation', description: 'Work Permit Holder — Work Permit not ready' },
-  { key: 'passport_country_missing', label: 'Passport Country Missing', section: 'documentation', description: 'Passport cannot be classified until a country is set' },
   { key: 'passport_incomplete', label: 'Passport Incomplete', section: 'documentation', description: 'Passport readiness needs action' },
   { key: 'non_ecowas_review', label: 'Non-ECOWAS Documentation Review', section: 'documentation', description: 'Non-ECOWAS passport: supporting-document workflow is staff-reviewed', informational: true },
   { key: 'visa_unknown', label: 'Visa Requirement Unknown', section: 'documentation', description: 'Visa requirement has not been determined' },
@@ -150,14 +164,11 @@ export function attentionCategoryKeys(p) {
 
   const passport = derivePassportDocumentation(p)
   const committed = isCommitted(p)
-  if (passport.region === PASSPORT_REGION.UNKNOWN && (committed || passport.readiness === 'ready')) {
-    keys.push('passport_country_missing')
-  }
   if (!['unknown', 'ready'].includes(passport.readiness)) keys.push('passport_incomplete')
   if (passport.region === PASSPORT_REGION.NON_ECOWAS) keys.push('non_ecowas_review')
 
   const visa = deriveVisaDocumentation(p)
-  if (visa.requirement === 'review' && committed) keys.push('visa_unknown')
+  if (visa.requirement === 'review' && committed) keys.push('visa_unknown')  // effective value: ECOWAS never lands here
   if (visa.requirement === 'required' && visa.process === 'not_started') keys.push('visa_not_started')
   if (visa.process === 'issue') keys.push('visa_blocked')
 

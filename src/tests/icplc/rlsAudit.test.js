@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 
 describe('RLS Audit (release gate)', () => {
@@ -172,14 +172,13 @@ describe('RLS Static Contract Checks (migration 000010)', () => {
   const MIGRATIONS_DIR = resolve(__dirname, '../../../supabase/migrations')
   const FUNCTIONS_DIR = resolve(__dirname, '../../../supabase/functions')
   const MIG_010 = resolve(MIGRATIONS_DIR, '20260925000010_icplc_import_tier_fix.sql')
-  const EDGE_FN = resolve(FUNCTIONS_DIR, 'icplc-import-apply/index.ts')
+  // Retired: an unauthenticated service-role function that set any batch to 'applied'.
+  const RETIRED_EDGE_FN_DIR = resolve(FUNCTIONS_DIR, 'icplc-import-apply')
 
   let migration010
-  let edgeFn
 
   beforeAll(() => {
     migration010 = readFileSync(MIG_010, 'utf8')
-    edgeFn = readFileSync(EDGE_FN, 'utf8')
   })
 
   it('18. Migration 000010 exists on disk', () => {
@@ -260,9 +259,11 @@ describe('RLS Static Contract Checks (migration 000010)', () => {
     expect(applyBlock).not.toContain('icplc_can_write_participants')
   })
 
-  it('27. Edge function icplc-import-apply calls icplc_can_import, not icplc_can_write_participants', () => {
-    expect(edgeFn).toContain("supabase.rpc('icplc_can_import')")
-    expect(edgeFn).not.toContain('icplc_can_write_participants')
+  it('27. Retired icplc-import-apply Edge Function cannot be reintroduced', () => {
+    // It ran with the service-role key and no caller authorization. Import apply now goes through
+    // the icplc_apply_registration_import RPC, which checks icplc_can_write_participants().
+    // If this fails, someone re-added the deployable function: do not deploy it.
+    expect(existsSync(RETIRED_EDGE_FN_DIR)).toBe(false)
   })
 })
 

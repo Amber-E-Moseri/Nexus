@@ -1,6 +1,33 @@
 import React, { useRef, useState } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
-import { useICPLCImport, IMPORT_STEPS } from '../hooks/useICPLCImport.js'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '../../../lib/supabase'
+import { useICPLCImport, IMPORT_STEPS, isMatchedRow } from '../hooks/useICPLCImport.js'
+import { RESIDENCY_STATUS_LABELS } from '../../registration/icplcDocReadiness.js'
+
+// Minimal RFC4180-style CSV parser (quoted fields, CRLF).
+function parseCsv(text) {
+  const rows = []
+  let row = [], field = '', inQ = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inQ) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++ }
+      else if (c === '"') inQ = false
+      else field += c
+    } else if (c === '"') inQ = true
+    else if (c === ',') { row.push(field); field = '' }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++
+      row.push(field); field = ''
+      if (row.some(f => f.trim())) rows.push(row)
+      row = []
+    } else field += c
+  }
+  row.push(field)
+  if (row.some(f => f.trim())) rows.push(row)
+  return rows
+}
 
 // Working List import handler
 function WorkingListPanel({ fileRef, config, onReset }) {
@@ -13,65 +40,72 @@ function WorkingListPanel({ fileRef, config, onReset }) {
     setLoading(true)
     try {
       const text = await file.text()
-      const lines = text.trim().split('\n')
-      if (lines.length < 2) throw new Error('CSV must have at least a header row')
+      const table = parseCsv(text)
+      if (table.length < 2) throw new Error('CSV must have at least a header row')
 
-      const headers = lines[0].split(',').map(h => h.trim())
+      const headers = table[0].map(h => h.trim())
       const headerMap = Object.fromEntries(headers.map((h, i) => [h, i]))
-
-      const requiredCols = ['email', 'fullName']
-      for (const col of requiredCols) {
-        if (!(col in headerMap)) throw new Error(`Missing required column: ${col}`)
-      }
+      if (!('fullName' in headerMap)) throw new Error('Missing required column: fullName')
 
       const { supabase } = await import('../../../lib/supabase')
+      const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const cell = (fields, col) => (col in headerMap ? fields[headerMap[col]]?.trim() : '') || ''
+
+      // Email is optional: rows without one are matched/deduped by name.
       const rows = []
       let skipped = 0
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim()
-        if (!line) continue
-        const fields = line.split(',').map(f => f.trim())
-        const email = fields[headerMap['email']]?.trim()
-
-        // Skip rows without email (required field)
-        if (!email) {
-          skipped++
-          continue
-        }
-
+      for (const fields of table.slice(1)) {
+        const fullName = cell(fields, 'fullName')
+        if (!fullName) { skipped++; continue }
         rows.push({
-          email,
-          full_name: fields[headerMap['fullName']]?.trim() || '',
-          phone_number: fields[headerMap['phone']]?.trim() || '',
+          full_name: fullName,
+          email: cell(fields, 'email').toLowerCase() || null,
+          kingschat_username: cell(fields, 'kingsChatHandle').replace(/^@/, '') || null,
+        })
+      }
+      if (rows.length === 0) throw new Error('CSV has no valid rows (fullName is required)')
+
+      // Re-uploads: update people who already exist (by email, else name), insert the rest.
+      const { data: existing, error: exErr } = await supabase
+        .from('icplc_participants')
+        .select('id, email, full_name')
+        .eq('event_id', config?.id)
+      if (exErr) throw exErr
+      const byEmail = new Map(existing.filter(p => p.email).map(p => [p.email.toLowerCase().trim(), p.id]))
+      const byName = new Map(existing.map(p => [norm(p.full_name), p.id]))
+
+      const toInsert = []
+      const toUpdate = []
+      const seen = new Set()
+      for (const r of rows) {
+        const key = r.email || norm(r.full_name)
+        if (seen.has(key)) { skipped++; continue }
+        seen.add(key)
+        const id = (r.email && byEmail.get(r.email)) || byName.get(norm(r.full_name))
+        if (id) toUpdate.push({ id, r })
+        else toInsert.push({
+          event_id: config?.id,
+          ...r,
+          registration_status: 'unknown',
+          participation_status: 'tracking',
         })
       }
 
-      if (rows.length === 0) {
-        throw new Error(skipped > 0 ? `No valid rows found (${skipped} skipped due to missing email)` : 'CSV has no data rows')
+      if (toInsert.length) {
+        const { error: insErr } = await supabase.from('icplc_participants').insert(toInsert)
+        if (insErr) throw insErr
+      }
+      for (const { id, r } of toUpdate) {
+        const patch = {}
+        if (r.kingschat_username) patch.kingschat_username = r.kingschat_username
+        if (r.email) patch.email = r.email
+        if (!Object.keys(patch).length) continue
+        const { error: upErr } = await supabase.from('icplc_participants').update(patch).eq('id', id)
+        if (upErr) throw upErr
       }
 
-      // Insert into icplc_participants
-      const rowsWithEventId = rows.map(r => ({
-        event_id: config?.id,
-        full_name: r.full_name,
-        email: r.email,
-        registration_status: 'unknown',
-        participation_status: 'tracking',
-      }))
-
-      // Use insert (not upsert) to avoid duplicates by email
-      const { data, error: err } = await supabase
-        .from('icplc_participants')
-        .insert(rowsWithEventId)
-        .select()
-      if (err) {
-        if (err.message.includes('duplicate')) {
-          throw new Error('Some emails already exist as participants. Use the Registration CSV importer to update existing participants.')
-        }
-        throw err
-      }
-
-      setResult({ imported: data?.length || 0 })
+      const data = { length: toInsert.length + toUpdate.length }
+      setResult({ imported: data.length, added: toInsert.length, updated: toUpdate.length, skipped })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -84,7 +118,7 @@ function WorkingListPanel({ fileRef, config, onReset }) {
       <div style={{ maxWidth: 720 }}>
         <h3 style={{ margin: '0 0 12px', color: '#166534' }}>Import complete</h3>
         <div style={{ fontSize: 13, marginBottom: 16 }}>
-          Successfully imported <strong>{result.imported}</strong> participants to ICPLC.
+          Processed <strong>{result.imported}</strong> participants: {result.added} added, {result.updated} updated{result.skipped ? `, ${result.skipped} skipped (blank or duplicate)` : ''}.
         </div>
         <button onClick={() => { setResult(null); onReset?.() }} style={{ ...primaryBtn, display: 'inline-block' }}>
           Import another file
@@ -165,6 +199,218 @@ const CMP_PROTECTED_FIELDS = [
   'passport_country (unless explicitly canonical)', 'all unrelated documentation fields',
 ]
 
+const CMP_STATUS_LABELS = {
+  matched_applied: 'Will update fields',
+  matched_source_only: 'Source data only',
+  unmatched: 'No matching participant',
+  unknown_value: 'Unrecognised answer',
+  identity_conflict: 'Identity conflict',
+  error: 'Error',
+}
+
+const humanizeValue = (v) => {
+  const t = String(v ?? '').replace(/_/g, ' ').trim()
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Not set'
+}
+
+// "Ready → Ready" is shown as unchanged; an override-protected field is never changed by CMP.
+function cmpChange(current, next, overridden, label) {
+  if (overridden) return <span style={{ color: 'var(--text-secondary)' }}>{label(current)} · staff override kept</span>
+  if (next === undefined) return <span style={{ color: 'var(--text-secondary)' }}>{label(current)} · no change</span>
+  if (next === current) return <span style={{ color: 'var(--text-secondary)' }}>{label(current)} · already up to date</span>
+  return (
+    <span>
+      <span style={{ color: 'var(--text-secondary)' }}>{label(current)}</span>
+      {' → '}
+      <strong style={{ color: 'var(--icplc-green)' }}>{label(next)}</strong>
+    </span>
+  )
+}
+
+function CMPSyncAction() {
+  const { config } = useICPLC()
+  const [phase, setPhase] = useState('idle') // idle | previewing | previewed | applying | applied
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
+  const eventId = config?.id
+  const qc = useQueryClient()
+
+  async function run(action) {
+    setError(null)
+    setPhase(action === 'preview' ? 'previewing' : 'applying')
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('cmp-documentation-sync', {
+        body: { action, event_id: eventId },
+      })
+      if (invokeError) {
+        // FunctionsHttpError carries the response; surface the function's own message.
+        let message = invokeError.message
+        if (invokeError.name === 'FunctionsFetchError') {
+          // No HTTP response at all: the function isn't deployed to this project, or the request was blocked.
+          message = 'Could not reach the cmp-documentation-sync function. It may not be deployed to this project yet.'
+        }
+        try { message = (await invokeError.context?.json?.())?.error || message } catch { /* keep default */ }
+        throw new Error(message)
+      }
+      setResult({ ...data, action })
+      setPhase(action === 'preview' ? 'previewed' : 'applied')
+      if (action === 'apply') {
+        // Refresh everything that shows participant data so the change is visible right away.
+        qc.invalidateQueries({ queryKey: ['icplc_cmp_preview_participants'] })
+        qc.invalidateQueries({ queryKey: ['icplc_participants'] })
+        qc.invalidateQueries({ queryKey: ['icplc_profile'] })
+        qc.invalidateQueries({ queryKey: ['icplc_wl_registrations'] })
+      }
+    } catch (err) {
+      setError(err.message || 'CMP sync failed.')
+      setPhase(action === 'apply' ? 'previewed' : 'idle')
+    }
+  }
+
+  // Inline confirmation: native window.confirm is suppressed in some embedded browsers,
+  // which made Apply silently do nothing.
+  const [confirming, setConfirming] = useState(false)
+
+  function apply() {
+    setConfirming(false)
+    run('apply')
+  }
+
+  const previewRows = (result?.results || []).filter((r) => r.participant_id)
+  const participantIds = previewRows.map((r) => r.participant_id)
+  const { data: currentParticipants = [] } = useQuery({
+    queryKey: ['icplc_cmp_preview_participants', eventId, participantIds.join(',')],
+    enabled: !!eventId && participantIds.length > 0,
+    queryFn: async () => {
+      const { data, error: qError } = await supabase
+        .from('icplc_participants')
+        .select('id, full_name, email, passport_readiness, canada_residency_status, override_fields')
+        .in('id', participantIds)
+      if (qError) throw qError
+      return data || []
+    },
+  })
+  const participantById = new Map(currentParticipants.map((p) => [p.id, p]))
+
+  const busy = phase === 'previewing' || phase === 'applying'
+  const counts = result?.counts || {}
+  const matched = (counts.matched_applied || 0) + (counts.matched_source_only || 0)
+  const notable = (result?.results || []).filter((r) => r.status !== 'matched_applied' && r.status !== 'matched_source_only')
+
+  return (
+    <section>
+      <h3 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600 }}>Sync Action</h3>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '14px 18px', background: 'var(--surface-1)' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" className="icplc-btn" disabled={busy || !eventId} onClick={() => run('preview')}>
+            {phase === 'previewing' ? 'Fetching preview…' : result ? 'Refresh preview' : 'Preview CMP sync'}
+          </button>
+          <button
+            type="button"
+            className="icplc-btn icplc-btn-primary"
+            disabled={busy || phase !== 'previewed' || matched === 0}
+            onClick={() => setConfirming(true)}
+          >
+            {phase === 'applying' ? 'Applying…' : 'Apply to participants'}
+          </button>
+        </div>
+
+        {confirming && (
+          <div role="alertdialog" aria-label="Confirm apply" style={{ marginTop: 12, border: '1px solid #FDE68A', background: '#FFFBEB', borderRadius: 8, padding: '12px 14px' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+              Apply CMP documentation to {matched} matched participant{matched === 1 ? '' : 's'}?
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+              This updates their records. Fields with a staff override are left alone.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="icplc-btn icplc-btn-primary" onClick={apply}>Yes, apply</button>
+              <button type="button" className="icplc-btn" onClick={() => setConfirming(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div role="alert" style={{ marginTop: 12, fontSize: 12, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, padding: '8px 12px' }}>
+            {error}
+          </div>
+        )}
+
+        {phase === 'applied' && (
+          <div role="status" style={{ marginTop: 12, fontSize: 13, color: '#166534', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '8px 12px' }}>
+            Applied. {counts.matched_applied || 0} participant{(counts.matched_applied || 0) === 1 ? '' : 's'} updated
+            {counts.matched_source_only ? `, ${counts.matched_source_only} source-data only` : ''}.
+            {(counts.error || 0) > 0 ? ` ${counts.error} failed — see the list below.` : ''}
+          </div>
+        )}
+
+        {result && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              {result.action === 'apply' ? 'Applied' : 'Preview'} · {result.submission_count} submission{result.submission_count === 1 ? '' : 's'} fetched
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
+              {Object.entries(CMP_STATUS_LABELS).filter(([k]) => counts[k] != null || k === 'identity_conflict').map(([k, label]) => (
+                <div key={k} style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{counts[k] ?? (result.results || []).filter((r) => r.status === k).length}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{label}</div>
+                </div>
+              ))}
+            </div>
+            {previewRows.length > 0 && (
+              <div style={{ marginTop: 14, overflowX: 'auto' }}>
+                <table className="icplc-subgroup-table" style={{ fontSize: 12, width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th>Participant</th>
+                      <th>Passport</th>
+                      <th>Canadian status</th>
+                      <th>Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewRows.map((r) => {
+                      const p = participantById.get(r.participant_id)
+                      const m = r.canonical_mutations || {}
+                      return (
+                        <tr key={r.submission_id}>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{p?.full_name || '…'}</div>
+                            {p?.email && <div style={{ color: 'var(--text-secondary)' }}>{p.email}</div>}
+                          </td>
+                          <td>{cmpChange(p?.passport_readiness, m.passport_readiness, p?.override_fields?.passport_readiness?.overridden, humanizeValue)}</td>
+                          <td>{cmpChange(p?.canada_residency_status, m.canada_residency_status, p?.override_fields?.canada_residency_status?.overridden, (v) => RESIDENCY_STATUS_LABELS[v] || humanizeValue(v))}</td>
+                          <td>{CMP_STATUS_LABELS[r.status] || r.status}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {notable.length > 0 && (
+              <details style={{ marginTop: 12 }}>
+                <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>{notable.length} submission{notable.length === 1 ? '' : 's'} need attention</summary>
+                <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  {notable.slice(0, 50).map((r) => (
+                    <li key={r.submission_id}>
+                      {CMP_STATUS_LABELS[r.status] || r.status}{r.issues?.length ? ` — ${r.issues.join('; ')}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+          Matching is by durable submission ID or exact email. Unmatched submissions never create participants.
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function CMPSyncPanel() {
   return (
     <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -179,8 +425,8 @@ function CMPSyncPanel() {
             CMP Documentation Sync — Beta
           </div>
           <div style={{ fontSize: 12, color: '#2563EB', lineHeight: 1.55 }}>
-            Discovery and field mapping engine are ready. The Sync/Apply action is disabled pending database certification.
-            Upload and preview are read-only and safe. No external API calls occur during local certification.
+            Preview reads the Leaders Platform form and shows what would change — nothing is written.
+            Apply updates participants only after you have reviewed a preview and confirmed.
           </div>
         </div>
       </div>
@@ -227,28 +473,7 @@ function CMPSyncPanel() {
         </ul>
       </section>
 
-      {/* Disabled apply */}
-      <section>
-        <h3 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600 }}>Sync Action</h3>
-        <div style={{
-          border: '1px solid var(--border)', borderRadius: 8, padding: '14px 18px',
-          background: 'var(--surface-2)',
-        }}>
-          <button
-            type="button"
-            disabled
-            style={{
-              padding: '8px 18px', background: 'var(--surface-2)', color: 'var(--text-secondary)',
-              border: '1px solid var(--border)', borderRadius: 6, cursor: 'not-allowed', fontSize: 13, opacity: 0.6,
-            }}
-          >
-            Run CMP Sync
-          </button>
-          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
-            Final database certification required before CMP sync can apply data.
-          </div>
-        </div>
-      </section>
+      <CMPSyncAction />
     </div>
   )
 }
@@ -259,7 +484,7 @@ export default function ImportsPage() {
   const [source, setSource] = useState('csv')
   const {
     step, parseResult, rows, applyResult, error, loading,
-    uploadCSV, runMatch, runPreview, applyImport, confirmMatch, reset,
+    uploadCSV, runMatch, runPreview, applyImport, resolveRow, reset,
   } = useICPLCImport(config?.id)
 
   const stepIndex = IMPORT_STEPS.indexOf(step)
@@ -410,24 +635,18 @@ export default function ImportsPage() {
             Showing server-computed import decisions. Protected fields (staff overrides) will not be updated.
           </p>
 
-          {/* Unmatched rows */}
-          {rows.filter((r) => r.match_status === 'unmatched').length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <h4 style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-secondary)' }}>
-                Unmatched rows ({rows.filter((r) => r.match_status === 'unmatched').length})
-              </h4>
-              <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                These rows could not be matched to existing participants. You can skip them or resolve manually.
-              </p>
-            </div>
-          )}
-
           {/* Match summary */}
           <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
             <Stat label="Total" value={rows.length} />
-            <Stat label="Matched" value={rows.filter((r) => ['auto','manual','persistent'].includes(r.match_status)).length} tone="success" />
-            <Stat label="Unmatched" value={rows.filter((r) => r.match_status === 'unmatched').length} tone="warn" />
+            <Stat label="Matched" value={rows.filter(isMatchedRow).length} tone="success" />
+            <Stat label="Unmatched" value={rows.filter((r) => r.match_status === 'unmatched' && r.apply_status !== 'skipped').length} tone="warn" />
+            <Stat label="Skipped" value={rows.filter((r) => r.apply_status === 'skipped').length} />
           </div>
+
+          <UnmatchedResolver rows={rows} eventId={config?.id} onResolve={resolveRow} disabled={loading} />
+
+          {/* Rows already linked, so it is clear what will be updated */}
+          <MatchedRows rows={rows} eventId={config?.id} />
 
           <button onClick={runPreview} disabled={loading} style={primaryBtn}>
             {loading ? 'Computing preview…' : 'Compute field-level preview'}
@@ -463,6 +682,11 @@ export default function ImportsPage() {
             <Stat label="Protected" value={applyResult.protected} />
             <Stat label="Errors" value={applyResult.errors} tone={applyResult.errors ? 'danger' : null} />
           </div>
+          {rows.filter((r) => r.apply_status === 'error').map((r) => (
+            <div key={r.id} style={{ fontSize: 12, color: '#991B1B', background: '#FEF2F2', borderRadius: 6, padding: '6px 10px', marginBottom: 6 }}>
+              {rowInfo(r).name}: {r.error_detail || 'failed'}
+            </div>
+          ))}
           <button onClick={reset} style={ghostBtn}>Start another import</button>
         </div>
       )}
@@ -471,8 +695,160 @@ export default function ImportsPage() {
   )
 }
 
+const MATCH_LABELS = {
+  auto: 'email / name',
+  manual: 'manual',
+  persistent: 'previous import',
+  auto_kingschat: 'KingsChat handle',
+  auto_fuzzy_email: 'similar email',
+  auto_fuzzy_name: 'similar name',
+}
+
+function useEventParticipants(eventId) {
+  return useQuery({
+    queryKey: ['icplc_import_participant_options', eventId],
+    enabled: !!eventId,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('icplc_participants')
+        .select('id, full_name, email, subgroup, kingschat_username')
+        .eq('event_id', eventId)
+        .order('full_name')
+      if (error) throw error
+      return data || []
+    },
+  })
+}
+
+function rowInfo(row) {
+  const m = row.mapped_payload || {}
+  const raw = row.raw_payload || {}
+  const first = m.first_name || raw['First Name'] || ''
+  const last = m.last_name || raw['Last Name'] || ''
+  return {
+    name: (m.full_name || raw['Full Name'] || `${first} ${last}`).trim() || '(no name)',
+    email: m.email || raw.Email || '',
+    handle: m.kingschat_username || raw['KingsChat Username'] || '',
+  }
+}
+
+const nameTokens = (s) => (s || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+
+/** Best guesses first: shared name words, then shared handle/email. */
+function rankCandidates(info, participants) {
+  const want = new Set(nameTokens(info.name))
+  return participants
+    .map((p) => {
+      let score = nameTokens(p.full_name).filter((t) => want.has(t)).length
+      if (info.handle && p.kingschat_username && p.kingschat_username.toLowerCase() === info.handle.toLowerCase()) score += 5
+      if (info.email && p.email && p.email.toLowerCase() === info.email.toLowerCase()) score += 5
+      return { p, score }
+    })
+    .sort((a, b) => b.score - a.score || (a.p.full_name || '').localeCompare(b.p.full_name || ''))
+}
+
+/**
+ * Unmatched rows: pick an existing participant to link, create a new Working List entry
+ * from the row, or skip it.
+ */
+function UnmatchedResolver({ rows, eventId, onResolve, disabled }) {
+  const { data: participants = [] } = useEventParticipants(eventId)
+  const [choice, setChoice] = useState({})
+  const unresolved = rows.filter((r) => r.match_status === 'unmatched' && r.apply_status !== 'skipped')
+  const skipped = rows.filter((r) => r.match_status === 'unmatched' && r.apply_status === 'skipped')
+
+  if (unresolved.length === 0 && skipped.length === 0) return null
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--text-secondary)' }}>
+        {unresolved.length > 0 ? `Needs your decision (${unresolved.length})` : 'All unmatched rows resolved'}
+      </h4>
+      {unresolved.length > 0 && (
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 10px' }}>
+          Link each to an existing participant, or add them to the Working List as a new entry. Rows you skip are left out of this import.
+        </p>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {unresolved.map((row) => {
+          const info = rowInfo(row)
+          const ranked = rankCandidates(info, participants)
+          const selected = choice[row.id] || ''
+          return (
+            <div key={row.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: '#fff' }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{info.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                {[info.email, info.handle && `@${info.handle}`].filter(Boolean).join(' · ') || 'No email or handle'}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <select
+                  aria-label={`Match ${info.name} to an existing participant`}
+                  className="icplc-input"
+                  style={{ flex: '1 1 220px', minWidth: 0 }}
+                  value={selected}
+                  onChange={(e) => setChoice((c) => ({ ...c, [row.id]: e.target.value }))}
+                >
+                  <option value="">Match to existing participant…</option>
+                  {ranked.map(({ p, score }) => (
+                    <option key={p.id} value={p.id}>
+                      {score > 0 ? '★ ' : ''}{p.full_name}{p.subgroup ? ` — ${p.subgroup}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="icplc-btn" disabled={!selected || disabled}
+                  onClick={() => onResolve(row.id, 'link_existing', selected)}>
+                  Link
+                </button>
+                <button type="button" className="icplc-btn icplc-btn-primary" disabled={disabled}
+                  onClick={() => onResolve(row.id, 'create_new')}>
+                  Create new entry
+                </button>
+                <button type="button" className="icplc-btn" disabled={disabled}
+                  onClick={() => onResolve(row.id, 'skip')}>
+                  Skip
+                </button>
+              </div>
+            </div>
+          )
+        })}
+        {skipped.length > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Skipped: {skipped.map((r) => rowInfo(r).name).join(', ')}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Compact list of rows already linked to a participant, with how they were matched. */
+function MatchedRows({ rows, eventId }) {
+  const { data: participants = [] } = useEventParticipants(eventId)
+  const matched = rows.filter(isMatchedRow)
+  if (matched.length === 0) return null
+  const byId = new Map(participants.map((p) => [p.id, p]))
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <h4 style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-secondary)' }}>Matched ({matched.length})</h4>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: '#fff' }}>
+        {matched.map((row, i) => {
+          const info = rowInfo(row)
+          const target = byId.get(row.participant_id)
+          return (
+            <div key={row.id} style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', justifyContent: 'space-between', padding: '8px 12px', fontSize: 13, borderTop: i ? '1px solid var(--border)' : 'none' }}>
+              <span>{info.name} <span style={{ color: 'var(--text-secondary)' }}>→ {target?.full_name || 'participant'}</span></span>
+              <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>by {MATCH_LABELS[row.match_status] || row.match_status}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function ChangesSummary({ rows }) {
-  const matched = rows.filter((r) => ['auto','manual','persistent'].includes(r.match_status))
+  const matched = rows.filter(isMatchedRow)
   const updates = matched.reduce((acc, r) => {
     const preview = r.changes_preview || {}
     for (const [field, decision] of Object.entries(preview)) {

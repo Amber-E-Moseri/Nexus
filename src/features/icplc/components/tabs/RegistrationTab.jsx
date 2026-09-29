@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../../../lib/supabase'
-import { REGISTRATION_SOURCE_TYPE } from '../../lib/reconciliation.js'
+import { REGISTRATION_LINK_SOURCE_TYPES } from '../../lib/reconciliation.js'
+import { ClipboardCheck, Link2 } from 'lucide-react'
+import { Card, EditButton } from './tabUi.jsx'
 import Badge from '../../../../components/ui/Badge.jsx'
 import { useAuth } from '../../../../hooks/useAuth'
 import { useUpdateProfile, useClearFieldOverride } from '../../hooks/useICPLCProfile.js'
@@ -26,7 +28,7 @@ export default function RegistrationTab({ participant, canWrite }) {
         .from('icplc_identity_maps')
         .select('source_key')
         .eq('participant_id', participant.id)
-        .eq('source_type', REGISTRATION_SOURCE_TYPE)
+        .in('source_type', REGISTRATION_LINK_SOURCE_TYPES)
       if (error) throw error
       return data || []
     },
@@ -64,8 +66,10 @@ export default function RegistrationTab({ participant, canWrite }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Participation — staff-managed, never from import */}
+      <Card icon={ClipboardCheck} title="Participation & Status" action={canWrite && !editing ? <EditButton onClick={() => setEditing(true)} /> : null}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Field label="Participation Status" staffManaged>
         {editing && canWrite ? (
           <select
@@ -85,10 +89,12 @@ export default function RegistrationTab({ participant, canWrite }) {
           Staff-managed — never modified by imports
         </div>
       </Field>
+      </div>
+      </Card>
 
       {/* Registration link — derived from the identity map, never from participation */}
+      <Card icon={Link2} title="Registration">
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Registration</div>
         <Badge tone={isLinked ? 'done' : 'at_risk'} label={isLinked ? 'Registered' : 'Not registered'} />
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
           {isLinked
@@ -96,14 +102,13 @@ export default function RegistrationTab({ participant, canWrite }) {
             : 'No registration is linked to this participant.'}
         </div>
       </div>
-
-      {/* Registration status — source-backed with override */}
-      <div className="icplc-field-grid">
+      <div className="icplc-field-grid" style={{ marginTop: 14 }}>
         <Info label="Registration Source" value={registrationStatusSource?.source || registrationSource?.source || 'None linked'} />
         <Info label="Received" value={formatDate(registrationSource?.submitted_at || registrationStatusSource?.observed_at)} />
         <Info label="Source Identifier" value={registrationSource?.registration_id || registrationStatusSource?.registration_id || '-'} />
         <Info label="Source Email" value={registrationSource?.email || '-'} />
       </div>
+      <div style={{ marginTop: 14 }}>
 
       <Field
         label="Registration Status"
@@ -126,19 +131,15 @@ export default function RegistrationTab({ participant, canWrite }) {
           <span style={{ fontSize: 13 }}>{participant.registration_status}</span>
         )}
       </Field>
+      </div>
+      </Card>
 
-      {canWrite && (
+      {canWrite && editing && (
         <div className="icplc-actions">
-          {editing ? (
-            <>
-              <button type="button" onClick={handleSave} disabled={updateProfile.isPending} className="icplc-btn icplc-btn-primary">
-                {updateProfile.isPending ? 'Saving…' : 'Save'}
-              </button>
-              <button type="button" onClick={() => setEditing(false)} className="icplc-btn">Cancel</button>
-            </>
-          ) : (
-            <button type="button" onClick={() => setEditing(true)} className="icplc-btn icplc-btn-primary">Edit</button>
-          )}
+          <button type="button" onClick={handleSave} disabled={updateProfile.isPending} className="icplc-btn icplc-btn-primary">
+            {updateProfile.isPending ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" onClick={() => setEditing(false)} className="icplc-btn">Cancel</button>
         </div>
       )}
     </div>
@@ -189,7 +190,7 @@ function Field({ label, staffManaged, sourceValue, override, onResumeSync, child
 
 function Info({ label, value }) {
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10 }}>
+    <div style={{ background: '#F7F8FA', borderRadius: 8, padding: 10 }}>
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 13 }}>{value || '-'}</div>
     </div>

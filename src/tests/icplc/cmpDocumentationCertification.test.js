@@ -100,7 +100,8 @@ async function applyCmpDocumentation(sub, eventId = TEST_EVENT_ID) {
 
   const sourceValues = buildSourceValues(sub, answers)
   const mutations = computeMutations(participant, answers, sourceValues)
-  if (mutations.unrecognized_passport_value || mutations.unrecognized_canadian_value) {
+  if (mutations.unrecognized_passport_value || mutations.unrecognized_canadian_value
+    || mutations.unrecognized_passport_region_value || mutations.unrecognized_doc_validity_value) {
     return { status: 'unknown_value', participant_id: participantId, mutations }
   }
 
@@ -110,13 +111,17 @@ async function applyCmpDocumentation(sub, eventId = TEST_EVENT_ID) {
     `UPDATE public.icplc_participants
      SET passport_readiness = COALESCE($2, passport_readiness),
          canada_residency_status = COALESCE($3, canada_residency_status),
-         source_values = $4
+         source_values = $4,
+         passport_region = COALESCE($5, passport_region),
+         canada_status_document_readiness = COALESCE($6, canada_status_document_readiness)
      WHERE id = $1`,
     [
       participantId,
       updates.passport_readiness || null,
       updates.canada_residency_status || null,
       JSON.stringify(nextSourceValues),
+      updates.passport_region || null,
+      updates.canada_status_document_readiness || null,
     ],
   )
   await pgExec(
@@ -189,7 +194,7 @@ describe('CMP documentation sync database certification', () => {
       [CMP_FIELD_IDS.firstName]: 'Changed',
       [CMP_FIELD_IDS.lastName]: 'Name',
       [CMP_FIELD_IDS.phone]: '555-9999',
-      [CMP_FIELD_IDS.passportRegion]: 'Kenya',
+      [CMP_FIELD_IDS.passportRegion]: 'Non-ECOWAS',
       [CMP_FIELD_IDS.assistanceRequested]: 'Yes',
     }))
 
@@ -207,8 +212,54 @@ describe('CMP documentation sync database certification', () => {
     expect(row.source_values.unrelated.value).toBe('keep')
     expect(row.source_values.cmp_documentation.email).toBe('OWNER@LOCAL.TEST')
     expect(row.source_values.cmp_documentation.phone).toBe('555-9999')
-    expect(row.source_values.cmp_documentation.passport_region).toBe('Kenya')
+    expect(row.source_values.cmp_documentation.passport_region).toBe('Non-ECOWAS')
+    // reported region and document validity are approved CMP fields; the country is not touched
+    expect(row.passport_region).toBe('NON_ECOWAS')
+    expect(row.canada_status_document_readiness).toBe('READY')
     expect(row.override_fields.passport_readiness.overridden).toBe(true)
+  })
+
+  it('maps document validity to readiness and passport region to its own field', async () => {
+    const yes = await pgInsertReturning('icplc_participants', { event_id: TEST_EVENT_ID, full_name: 'Valid Doc', email: 'valid@local.test', canada_residency_status: 'PERMANENT_RESIDENT' })
+    const no = await pgInsertReturning('icplc_participants', { event_id: TEST_EVENT_ID, full_name: 'Expiring Doc', email: 'expiring@local.test', canada_residency_status: 'PERMANENT_RESIDENT' })
+    await applyCmpDocumentation(submission('cmp-validity-yes', { [CMP_FIELD_IDS.email]: 'valid@local.test', [CMP_FIELD_IDS.canadianDocValidity]: 'Yes', [CMP_FIELD_IDS.passportRegion]: 'ECOWAS' }))
+    await applyCmpDocumentation(submission('cmp-validity-no', { [CMP_FIELD_IDS.email]: 'expiring@local.test', [CMP_FIELD_IDS.canadianDocValidity]: 'No', [CMP_FIELD_IDS.passportRegion]: 'Non-ECOWAS' }))
+    const rows = (await pgExec('SELECT id, canada_status_document_readiness, passport_region, passport_country FROM public.icplc_participants WHERE id = ANY($1::uuid[])', [[yes.id, no.id]])).rows
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]))
+    expect(byId[yes.id].canada_status_document_readiness).toBe('READY')
+    expect(byId[yes.id].passport_region).toBe('ECOWAS')
+    expect(byId[no.id].canada_status_document_readiness).toBe('RENEWAL_NEEDED')
+    expect(byId[no.id].passport_region).toBe('NON_ECOWAS')
+    expect(byId[yes.id].passport_country).toBeNull()
+  })
+
+  it('does not set a status-document readiness for Canadian citizens', async () => {
+    const p = await pgInsertReturning('icplc_participants', { event_id: TEST_EVENT_ID, full_name: 'Citizen', email: 'citizen@local.test', canada_status_document_readiness: 'NOT_APPLICABLE' })
+    await applyCmpDocumentation(submission('cmp-citizen', { [CMP_FIELD_IDS.email]: 'citizen@local.test', [CMP_FIELD_IDS.canadianStatus]: 'Canadian Citizen', [CMP_FIELD_IDS.canadianDocValidity]: 'No' }))
+    const row = (await pgExec('SELECT canada_residency_status, canada_status_document_readiness FROM public.icplc_participants WHERE id = $1', [p.id])).rows[0]
+    expect(row.canada_residency_status).toBe('CANADIAN_CITIZEN')
+    expect(row.canada_status_document_readiness).toBe('NOT_APPLICABLE')
+  })
+
+  it('protects overridden readiness and region, and rejects unrecognised answers without mutating', async () => {
+    const p = await pgInsertReturning('icplc_participants', {
+      event_id: TEST_EVENT_ID, full_name: 'Protected', email: 'protected@local.test',
+      canada_residency_status: 'PERMANENT_RESIDENT', canada_status_document_readiness: 'RENEWAL_IN_PROGRESS', passport_region: 'NON_ECOWAS',
+      override_fields: JSON.stringify({ canada_status_document_readiness: { overridden: true }, passport_region: { overridden: true } }),
+    })
+    const applied = await applyCmpDocumentation(submission('cmp-protected', { [CMP_FIELD_IDS.email]: 'protected@local.test', [CMP_FIELD_IDS.canadianDocValidity]: 'Yes', [CMP_FIELD_IDS.passportRegion]: 'ECOWAS' }))
+    expect(applied.status).toBe('matched_applied') // passport readiness still updates
+    let row = (await pgExec('SELECT canada_status_document_readiness, passport_region FROM public.icplc_participants WHERE id = $1', [p.id])).rows[0]
+    expect(row.canada_status_document_readiness).toBe('RENEWAL_IN_PROGRESS')
+    expect(row.passport_region).toBe('NON_ECOWAS')
+
+    const q = await pgInsertReturning('icplc_participants', { event_id: TEST_EVENT_ID, full_name: 'Odd Answers', email: 'odd@local.test', canada_residency_status: 'PERMANENT_RESIDENT' })
+    const odd = await applyCmpDocumentation(submission('cmp-odd', { [CMP_FIELD_IDS.email]: 'odd@local.test', [CMP_FIELD_IDS.canadianDocValidity]: 'Not sure', [CMP_FIELD_IDS.passportRegion]: 'Kenya' }))
+    expect(odd.status).toBe('unknown_value')
+    row = (await pgExec('SELECT canada_status_document_readiness, passport_region, passport_readiness FROM public.icplc_participants WHERE id = $1', [q.id])).rows[0]
+    expect(row.canada_status_document_readiness).toBeNull()
+    expect(row.passport_region).toBeNull()
+    expect(row.passport_readiness).toBe('unknown')
   })
 
   it('protects each overridden canonical field independently while refreshing CMP source evidence', async () => {

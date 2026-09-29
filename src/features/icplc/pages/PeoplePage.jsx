@@ -1,69 +1,43 @@
 import React, { useMemo, useState } from 'react'
 import { UserPlus } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../../../lib/supabase'
 import { useICPLC } from '../ICPLCContext.jsx'
-import { useCreateParticipant, useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
-import ParticipantTable from '../components/ParticipantTable.jsx'
+import { useCreateParticipant } from '../hooks/useICPLCParticipants.js'
+import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
+import { useUpdateProfile } from '../hooks/useICPLCProfile.js'
+import WorkingListTable from '../components/WorkingListTable.jsx'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
+import StatusKey from '../components/StatusKey.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import { deriveReadiness } from '../lib/readinessEngine.js'
-import {
-  REGISTRATION_SOURCE_TYPE,
-  filterParticipantsByWorkingListView,
-  registrationLinkedParticipantIds,
-} from '../lib/reconciliation.js'
+import { applyClientFilters, countAttentionCategories } from '../lib/participantFilters.js'
+import { filterParticipantsByWorkingListView } from '../lib/reconciliation.js'
 
 export default function PeoplePage({ canWrite }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
-  const [viewMode, setViewMode] = useState('table') // 'table' or 'cards'
+  const updateProfile = useUpdateProfile()
 
-  const { data: participants, isLoading, error } = useICPLCParticipants(eventId, {
+  // Same hook (and cache keys) as the Overview, so opening the Working List after the Overview
+  // reuses the already-fetched participants, registrations and identity maps instead of refetching.
+  const {
+    participants: participantsWithRegistrationCoverage,
+    registrations,
+    registrationMaps,
+    isLoading: loading,
+    error,
+  } = useICPLCWorkingList(eventId, {
     search: filters.search,
     participation_status: filters.participation_status,
     passport_readiness: filters.passport_readiness,
-    visa_requirement: filters.visa_requirement,
     visa_process_status: filters.visa_process_status,
     subgroup: filters.subgroup,
   })
-  const { data: registrations = [], isLoading: registrationsLoading } = useQuery({
-    queryKey: ['icplc_working_list_registrations', eventId],
-    enabled: !!eventId,
-    queryFn: async () => {
-      const { data, error: registrationsError } = await supabase
-        .from('registrations')
-        .select('id, event_config_id, submitted_at, status, registration_status')
-        .eq('event_config_id', eventId)
-      if (registrationsError) throw registrationsError
-      return data || []
-    },
-  })
-  const { data: registrationMaps = [], isLoading: mapsLoading } = useQuery({
-    queryKey: ['icplc_working_list_registration_maps', eventId],
-    enabled: !!eventId,
-    queryFn: async () => {
-      const { data, error: mapsError } = await supabase
-        .from('icplc_identity_maps')
-        .select('source_type, source_key, participant_id')
-        .eq('event_id', eventId)
-        .eq('source_type', REGISTRATION_SOURCE_TYPE)
-      if (mapsError) throw mapsError
-      return data || []
-    },
-  })
 
-  const participantsWithRegistrationCoverage = useMemo(() => {
-    const linkedParticipantIds = registrationLinkedParticipantIds(registrations, registrationMaps, eventId)
-    return (participants || []).map((participant) => ({
-      ...participant,
-      registration_link_status: linkedParticipantIds.has(participant.id) ? 'registered' : 'not_registered',
-    }))
-  }, [eventId, participants, registrationMaps, registrations])
+  const attentionCounts = useMemo(() => countAttentionCategories(participantsWithRegistrationCoverage), [participantsWithRegistrationCoverage])
 
-  const displayedParticipants = useMemo(() => (
+  const displayedParticipants = useMemo(() => applyClientFilters(
     filterParticipantsByWorkingListView(
       participantsWithRegistrationCoverage,
       registrations,
@@ -71,22 +45,16 @@ export default function PeoplePage({ canWrite }) {
       eventId,
       filters.working_list_view || 'all',
       (participant) => deriveReadiness(participant).readiness,
-    )
-  ), [eventId, filters.working_list_view, participantsWithRegistrationCoverage, registrationMaps, registrations])
-  const loading = isLoading || registrationsLoading || mapsLoading
+    ),
+    filters,
+  ), [eventId, filters, participantsWithRegistrationCoverage, registrationMaps, registrations])
 
   return (
     <div>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--icplc-text-soft, var(--text-secondary))', marginBottom: 3 }}>
-            Canonical participant pool
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--icplc-text, var(--text-primary))' }}>Working List</div>
-          <div style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))', marginTop: 3 }}>
-            One row per participant — registration, confirmation, readiness and attention in one place.
-          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--icplc-text, var(--text-primary))' }}>Registrations</div>
         </div>
         {canWrite && (
           <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary" style={{ flexShrink: 0 }}>
@@ -101,39 +69,15 @@ export default function PeoplePage({ canWrite }) {
       </div>
 
       {/* Filters */}
-      <ParticipantFilters />
+      <ParticipantFilters resultCount={displayedParticipants.length} attentionCounts={attentionCounts} />
+
+      <StatusKey />
 
       {/* View toggle + Count */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div role="status" style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>
           {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
         </div>
-        {!loading && (
-          <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', borderRadius: 6, padding: 2 }}>
-            <button
-              onClick={() => setViewMode('table')}
-              title="Table view"
-              style={{
-                padding: '6px 12px', fontSize: 12, fontWeight: viewMode === 'table' ? 600 : 400,
-                background: viewMode === 'table' ? 'white' : 'transparent',
-                border: 'none', borderRadius: 4, cursor: 'pointer', color: 'var(--text-primary)',
-              }}
-            >
-              Table
-            </button>
-            <button
-              onClick={() => setViewMode('cards')}
-              title="Card view"
-              style={{
-                padding: '6px 12px', fontSize: 12, fontWeight: viewMode === 'cards' ? 600 : 400,
-                background: viewMode === 'cards' ? 'white' : 'transparent',
-                border: 'none', borderRadius: 4, cursor: 'pointer', color: 'var(--text-primary)',
-              }}
-            >
-              Cards
-            </button>
-          </div>
-        )}
       </div>
 
       {error && (
@@ -148,41 +92,12 @@ export default function PeoplePage({ canWrite }) {
         </div>
       )}
 
-      {/* Conditional rendering based on view mode */}
-      {viewMode === 'table' ? (
-        <ParticipantTable participants={displayedParticipants} loading={loading} />
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
-          {displayedParticipants.map((p) => (
-            <div
-              key={p.id}
-              onClick={() => openProfile(p.id)}
-              style={{
-                border: '1px solid var(--border)', borderRadius: 8, padding: 14,
-                cursor: 'pointer', background: 'white',
-                transition: 'border-color 0.2s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)' }}
-            >
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{p.full_name}</div>
-              {p.email && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{p.email}</div>}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {p.registration_status && (
-                  <span style={{ fontSize: 11, padding: '2px 8px', background: '#E8F5E9', borderRadius: 3, color: '#2E7D32' }}>
-                    {p.registration_status}
-                  </span>
-                )}
-                {p.participation_status && (
-                  <span style={{ fontSize: 11, padding: '2px 8px', background: '#E3F2FD', borderRadius: 3, color: '#1565C0' }}>
-                    {p.participation_status}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <WorkingListTable
+        participants={displayedParticipants}
+        loading={loading}
+        onOpen={openProfile}
+        onToggleAbsent={canWrite ? (p) => updateProfile.mutate({ id: p.id, fields: { participation_status: p.participation_status === 'not_attending' ? 'tracking' : 'not_attending' } }) : undefined}
+      />
 
       {activeProfileId && (
         <ParticipantProfileDrawer

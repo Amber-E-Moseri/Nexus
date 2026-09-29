@@ -58,6 +58,18 @@ const canadianStatusMap: Record<string, string> = {
   'Visitor': 'VISITOR_OTHER',
 }
 
+const docValidityMap: Record<string, string> = {
+  yes: 'READY',
+  no: 'RENEWAL_NEEDED',
+}
+
+const passportRegionMap: Record<string, string> = {
+  'ecowas': 'ECOWAS',
+  'non-ecowas': 'NON_ECOWAS',
+  'non ecowas': 'NON_ECOWAS',
+  'non_ecowas': 'NON_ECOWAS',
+}
+
 function normalizeEmail(email: string): string | null {
   if (!email) return null
   const normalized = email.trim().toLowerCase()
@@ -98,11 +110,47 @@ interface ProcessResult {
   issues?: string[]
 }
 
+interface Lookups {
+  identityMaps: Map<string, string> // cmp submission id -> participant id
+  emailClaims: Map<string, string> // normalized email -> participant id
+  participants: Map<string, any> // participant id -> row
+}
+
+// PostgREST caps a response at 1000 rows by default, so page through the event's rows.
+async function fetchAll(build: (from: number, to: number) => any): Promise<any[]> {
+  const rows: any[] = []
+  const size = 1000
+  for (let from = 0; ; from += size) {
+    const { data, error } = await build(from, from + size - 1)
+    if (error) throw new Error(error.message)
+    rows.push(...(data || []))
+    if (!data || data.length < size) break
+  }
+  return rows
+}
+
+async function loadLookups(supabase: any, eventId: string): Promise<Lookups> {
+  const [maps, claims, parts] = await Promise.all([
+    fetchAll((a, b) => supabase.from('icplc_identity_maps').select('source_key, participant_id')
+      .eq('event_id', eventId).eq('source_type', 'cmp_documentation').order('source_key').range(a, b)),
+    fetchAll((a, b) => supabase.from('icplc_email_claims').select('normalized_email, participant_id')
+      .eq('event_id', eventId).order('normalized_email').range(a, b)),
+    fetchAll((a, b) => supabase.from('icplc_participants').select('*')
+      .eq('event_id', eventId).order('id').range(a, b)),
+  ])
+  return {
+    identityMaps: new Map(maps.map((m: any) => [m.source_key, m.participant_id])),
+    emailClaims: new Map(claims.map((c: any) => [c.normalized_email, c.participant_id])),
+    participants: new Map(parts.map((p: any) => [p.id, p])),
+  }
+}
+
 async function processSubmission(
   sub: CMPSubmission,
   supabase: any,
   eventId: string,
   action: string,
+  lookups: Lookups,
 ): Promise<ProcessResult> {
   const answers = (sub.answers || {}) as Record<string, unknown>
   const result: ProcessResult = {
@@ -116,13 +164,8 @@ async function processSubmission(
   let identityMethod: string | null = null
 
   // 1a. Durable CMP identity map
-  const existingMap = await supabase
-    .from('icplc_identity_maps')
-    .select('participant_id')
-    .eq('event_id', eventId)
-    .eq('source_type', 'cmp_documentation')
-    .eq('source_key', sub.id)
-    .maybeSingle()
+  const durableParticipantId = lookups.identityMaps.get(sub.id) ?? null
+  const existingMap = durableParticipantId ? { data: { participant_id: durableParticipantId } } : null
 
   if (existingMap?.data) {
     participantId = existingMap.data.participant_id
@@ -136,15 +179,9 @@ async function processSubmission(
   const emailNorm = normalizeEmail(emailRaw)
 
   if (emailNorm) {
-    const emailClaim = await supabase
-      .from('icplc_email_claims')
-      .select('participant_id')
-      .eq('event_id', eventId)
-      .eq('normalized_email', emailNorm)
-      .maybeSingle()
-
-    if (emailClaim?.data) {
-      emailClaimParticipantId = emailClaim.data.participant_id
+    const claimed = lookups.emailClaims.get(emailNorm)
+    if (claimed) {
+      emailClaimParticipantId = claimed
       if (!participantId) {
         participantId = emailClaimParticipantId
         identityMethod = 'email_claim'
@@ -168,15 +205,10 @@ async function processSubmission(
     return result
   }
 
-  // Step 3: Fetch participant
-  const participant = await supabase
-    .from('icplc_participants')
-    .select('*')
-    .eq('id', participantId)
-    .eq('event_id', eventId)
-    .maybeSingle()
+  // Step 3: Look up participant (event-scoped: lookups only contain this event's rows)
+  const participant = { data: lookups.participants.get(participantId) ?? null }
 
-  if (!participant?.data) {
+  if (!participant.data) {
     result.status = 'error'
     result.issues?.push('participant_not_found')
     return result
@@ -238,6 +270,36 @@ async function processSubmission(
     result.issues?.push(`unrecognized_canadian_status: ${canadianRaw}`)
   }
 
+  // Passport region — reported ECOWAS / Non-ECOWAS, kept separate from passport_country
+  const regionRaw = answers[FIELD_IDS.passportRegion] as string | null
+  const regionCanonical = typeof regionRaw === 'string' ? passportRegionMap[regionRaw.trim().toLowerCase()] : null
+
+  if (regionCanonical) {
+    if (!(part.override_fields?.passport_region?.overridden)) {
+      updates.passport_region = regionCanonical
+      hasCanonicalMutation = true
+    }
+  } else if (regionRaw) {
+    result.status = 'unknown_value'
+    result.issues?.push(`unrecognized_passport_region: ${regionRaw}`)
+  }
+
+  // Canadian document validity → readiness. Citizens need no status document, so leave them alone.
+  const validityRaw = answers[FIELD_IDS.canadianDocValidity] as string | null
+  const validityCanonical = typeof validityRaw === 'string' ? docValidityMap[validityRaw.trim().toLowerCase()] : null
+  const finalResidency = (updates.canada_residency_status as string | undefined) ?? part.canada_residency_status
+
+  if (validityCanonical) {
+    if (finalResidency !== 'CANADIAN_CITIZEN'
+      && !(part.override_fields?.canada_status_document_readiness?.overridden)) {
+      updates.canada_status_document_readiness = validityCanonical
+      hasCanonicalMutation = true
+    }
+  } else if (validityRaw) {
+    result.status = 'unknown_value'
+    result.issues?.push(`unrecognized_doc_validity: ${validityRaw}`)
+  }
+
   // Step 6: Determine result status
   if (result.issues && result.issues.length > 0) {
     return result // unknown_value
@@ -265,6 +327,7 @@ async function processSubmission(
       result.issues?.push(updateResp.error.message)
       return result
     }
+    lookups.participants.set(participantId, { ...part, ...updates })
 
     // Insert durable identity map (immutable: no UPDATE on conflict)
     // If already exists, ON CONFLICT DO NOTHING (identity is immutable)
@@ -370,12 +433,16 @@ Deno.serve(async (req) => {
   let page = 1
   const pageSize = 1000
 
+  const seenIds = new Set<string>()
+  const MAX_PAGES = 50
   try {
-    while (true) {
+    while (page <= MAX_PAGES) {
       const res = await fetch(
         `${DOCUMENTATION_FORM_URL}?pageSize=${pageSize}&page=${page}`,
         {
           headers: { Authorization: `Bearer ${platformToken}` },
+          // Never let a slow/blocked upstream hang the whole sync.
+          signal: AbortSignal.timeout(20_000),
         },
       )
 
@@ -392,10 +459,16 @@ Deno.serve(async (req) => {
       }
 
       if (!payload.data || payload.data.length === 0) break
-      allSubmissions.push(...payload.data)
+
+      // If the API ignores `page` it returns the same rows again: stop instead of looping forever.
+      const fresh = payload.data.filter((s) => !seenIds.has(s.id))
+      if (fresh.length === 0) break
+      for (const s of fresh) seenIds.add(s.id)
+      allSubmissions.push(...fresh)
 
       const total = payload.pagination?.total
       if (total && allSubmissions.length >= total) break
+      if (payload.data.length < pageSize) break // short page = last page
       page++
     }
   } catch (err) {
@@ -405,10 +478,16 @@ Deno.serve(async (req) => {
     })
   }
 
-  // Process submissions
+  // Process submissions against lookups loaded once (a handful of queries, not several per submission)
+  let lookups: Lookups
+  try {
+    lookups = await loadLookups(supabase, event_id)
+  } catch (err) {
+    return json(500, { error: 'Failed to load participants', detail: String(err).slice(0, 200) })
+  }
   const results: ProcessResult[] = []
   for (const sub of allSubmissions) {
-    const result = await processSubmission(sub, supabase, event_id, action)
+    const result = await processSubmission(sub, supabase, event_id, action, lookups)
     results.push(result)
   }
 

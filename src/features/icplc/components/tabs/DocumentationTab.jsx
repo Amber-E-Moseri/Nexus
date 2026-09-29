@@ -1,6 +1,9 @@
+import { effectiveCanadaDocReadiness } from '../../lib/cmpDocumentation.js'
 import React, { useId, useState } from 'react'
 import { useAuth } from '../../../../hooks/useAuth'
 import { useUpdateProfile } from '../../hooks/useICPLCProfile.js'
+import { Home, BookOpen, Globe } from 'lucide-react'
+import { Card, EditButton } from './tabUi.jsx'
 import Badge from '../../../../components/ui/Badge.jsx'
 import {
   DOCUMENT_READINESS,
@@ -83,14 +86,13 @@ export default function DocumentationTab({ participant, canWrite }) {
   const overridden = (f) => participant.override_fields?.[f]?.overridden
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>
         Canadian status, passport and visa are tracked independently. Changing one never changes another.
       </p>
 
       {/* 1 + 2. Canadian status and its document */}
-      <section aria-labelledby={`${uid}-ca`} style={sectionPanel('#EEF2FF', '#4C2A92')}>
-        <h4 id={`${uid}-ca`} className="icplc-section-title" style={{ color: '#2D1B69' }}>Canadian status &amp; document</h4>
+      <Card icon={Home} title="Canadian status & document" action={canWrite && !editing ? <EditButton onClick={startEdit} /> : null}>
         <div className="icplc-field-grid">
           <Field id={`${uid}-status`} label="Canadian Status">
             {canEdit ? (
@@ -136,8 +138,8 @@ export default function DocumentationTab({ participant, canWrite }) {
               </select>
             ) : doc.canadian.required ? (
               <Badge
-                tone={DOC_READINESS_TONES[participant.canada_status_document_readiness] || 'mute'}
-                label={DOCUMENT_READINESS_LABELS[participant.canada_status_document_readiness] || 'Not set'}
+                tone={DOC_READINESS_TONES[effectiveCanadaDocReadiness(participant)] || 'mute'}
+                label={DOCUMENT_READINESS_LABELS[effectiveCanadaDocReadiness(participant)] || 'Not set'}
               />
             ) : (
               <Value>Not applicable</Value>
@@ -152,11 +154,10 @@ export default function DocumentationTab({ participant, canWrite }) {
           </Field>
         </div>
         <Why>{doc.canadian.why}</Why>
-      </section>
+      </Card>
 
       {/* 3-6. Passport */}
-      <section aria-labelledby={`${uid}-pp`} style={sectionPanel('#F0FDF4', '#2D8653')}>
-        <h4 id={`${uid}-pp`} className="icplc-section-title" style={{ color: '#1A5C38' }}>Passport</h4>
+      <Card icon={BookOpen} title="Passport">
         <div className="icplc-field-grid">
           <Field id={`${uid}-country`} label="Passport Country">
             {canEdit ? (
@@ -206,13 +207,12 @@ export default function DocumentationTab({ participant, canWrite }) {
         </div>
         <Why>{doc.passport.why}</Why>
         {doc.passport.region === PASSPORT_REGION.ECOWAS && (
-          <Why>ECOWAS classification does not decide the destination visa — see Visa below.</Why>
+          <Why>An ECOWAS passport also means no destination visa unless staff set one — see Visa below.</Why>
         )}
-      </section>
+      </Card>
 
       {/* 7-8. Visa */}
-      <section aria-labelledby={`${uid}-visa`} style={sectionPanel('#FFFBEB', '#C97820')}>
-        <h4 id={`${uid}-visa`} className="icplc-section-title" style={{ color: '#7C4A0A' }}>Destination visa</h4>
+      <Card icon={Globe} title="Destination visa">
         <div className="icplc-field-grid">
           <Field id={`${uid}-vreq`} label="Visa Requirement">
             {canEdit ? (
@@ -225,7 +225,7 @@ export default function DocumentationTab({ participant, canWrite }) {
                 {Object.entries(VISA_REQUIREMENT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             ) : (
-              <Value>{VISA_REQUIREMENT_LABELS[participant.visa_requirement] || participant.visa_requirement}</Value>
+              <Value>{VISA_REQUIREMENT_LABELS[doc.visa.requirement] || doc.visa.requirement}</Value>
             )}
           </Field>
           <Field id={`${uid}-vproc`} label="Visa Process">
@@ -238,6 +238,8 @@ export default function DocumentationTab({ participant, canWrite }) {
               >
                 {Object.entries(VISA_PROCESS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
+            ) : doc.visa.requirement === 'not_required' ? (
+              <Value>Not applicable — no visa needed</Value>
             ) : (
               <Badge
                 tone={VISA_PROCESS_TONES[participant.visa_process_status] || 'mute'}
@@ -246,8 +248,8 @@ export default function DocumentationTab({ participant, canWrite }) {
             )}
           </Field>
         </div>
-        <Why>{doc.visa.why} Visa is set independently of Canadian status and passport region.</Why>
-      </section>
+        <Why>{doc.visa.why} Visa is set independently of Canadian status.</Why>
+      </Card>
 
       {updateProfile.isError && (
         <div role="alert" style={{ fontSize: 12, color: '#991B1B' }}>
@@ -255,18 +257,12 @@ export default function DocumentationTab({ participant, canWrite }) {
         </div>
       )}
 
-      {canWrite && (
+      {canWrite && editing && (
         <div className="icplc-actions">
-          {editing ? (
-            <>
-              <button type="button" onClick={handleSave} disabled={updateProfile.isPending} className="icplc-btn icplc-btn-primary">
-                {updateProfile.isPending ? 'Saving…' : 'Save'}
-              </button>
-              <button type="button" onClick={() => setEditing(false)} className="icplc-btn">Cancel</button>
-            </>
-          ) : (
-            <button type="button" onClick={startEdit} className="icplc-btn icplc-btn-primary">Edit</button>
-          )}
+          <button type="button" onClick={handleSave} disabled={updateProfile.isPending} className="icplc-btn icplc-btn-primary">
+            {updateProfile.isPending ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" onClick={() => setEditing(false)} className="icplc-btn">Cancel</button>
         </div>
       )}
     </div>
@@ -301,11 +297,3 @@ function Why({ children }) {
   return <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>{children}</p>
 }
 
-function sectionPanel(bg, borderColor) {
-  return {
-    background: bg,
-    borderLeft: `3px solid ${borderColor}`,
-    borderRadius: 8,
-    padding: '14px 16px',
-  }
-}

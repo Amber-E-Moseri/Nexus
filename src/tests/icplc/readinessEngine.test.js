@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { deriveReadiness } from '../../features/icplc/lib/readinessEngine.js'
+import { readinessLabel, deriveReadiness } from '../../features/icplc/lib/readinessEngine.js'
 
 describe('Readiness Engine (release gate)', () => {
   // ── Test 10: BLOCKED — passport issue + visa required ──
@@ -99,5 +99,34 @@ describe('Readiness Engine (release gate)', () => {
     expect(readiness).not.toBe('critical')
     // Should be blocked (passport + visa required)
     expect(readiness).toBe('blocked')
+  })
+
+  describe('Waiting on itinerary', () => {
+    const docsSettled = {
+      passport_readiness: 'ready', visa_requirement: 'not_required', visa_process_status: 'not_applicable',
+      registration_status: 'registered', participation_status: 'tracking', canada_residency_status: 'CANADIAN_CITIZEN',
+      arrival_flight: null, arrival_date: null,
+    }
+
+    it('documents settled but no itinerary → waiting_itinerary, not unknown', () => {
+      expect(deriveReadiness(docsSettled)).toEqual({ readiness: 'waiting_itinerary', reasons: [] })
+      expect(readinessLabel('waiting_itinerary')).toBe('Waiting on itinerary')
+    })
+
+    it('adding an arrival date moves them to ready', () => {
+      expect(deriveReadiness({ ...docsSettled, arrival_date: '2026-11-25' }).readiness).toBe('ready')
+    })
+
+    it('stays unknown when documents are not actually known (passport status not recorded)', () => {
+      expect(deriveReadiness({ ...docsSettled, passport_readiness: 'unknown' }).readiness).toBe('unknown')
+    })
+
+    it('an unassessed visa (needs review) is not settled', () => {
+      expect(deriveReadiness({ ...docsSettled, visa_requirement: 'review', passport_region: null }).readiness).not.toBe('waiting_itinerary')
+    })
+
+    it('a confirmed participant with no itinerary is action required, not waiting', () => {
+      expect(deriveReadiness({ ...docsSettled, participation_status: 'confirmed' }).readiness).toBe('action_required')
+    })
   })
 })

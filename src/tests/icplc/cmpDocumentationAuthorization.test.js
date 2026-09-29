@@ -144,6 +144,7 @@ describe('CMP documentation sync edge authorization', () => {
     await pgExec('DELETE FROM public.icplc_identity_maps WHERE event_id = $1', [EVENT_ID])
     await pgExec('DELETE FROM public.icplc_participants WHERE event_id = $1', [EVENT_ID])
     await pgExec('DELETE FROM public.sprint_team_members WHERE user_id IN (SELECT id FROM public.users WHERE email LIKE $1)', ['cmp-%@local.test'])
+    await pgExec('DELETE FROM public.activity_log WHERE user_id IN (SELECT id FROM public.users WHERE email LIKE $1)', ['cmp-%@local.test'])
     await pgExec('DELETE FROM public.users WHERE email LIKE $1', ['cmp-%@local.test'])
 
     for (const user of Object.values(USERS)) {
@@ -229,6 +230,7 @@ describe('CMP documentation sync edge authorization', () => {
     await pgExec('DELETE FROM public.icplc_identity_maps WHERE event_id = $1', [EVENT_ID])
     await pgExec('DELETE FROM public.icplc_participants WHERE event_id = $1', [EVENT_ID])
     await pgExec('DELETE FROM public.sprint_team_members WHERE user_id = ANY($1::uuid[])', [Object.values(USERS).map((u) => u.id)])
+    await pgExec('DELETE FROM public.activity_log WHERE user_id = ANY($1::uuid[])', [Object.values(USERS).map((u) => u.id)])
     await pgExec('DELETE FROM public.users WHERE id = ANY($1::uuid[])', [Object.values(USERS).map((u) => u.id)])
     await Promise.all(Object.values(USERS).map((user) => admin.auth.admin.deleteUser(user.id).catch(() => {})))
   }, 30_000)

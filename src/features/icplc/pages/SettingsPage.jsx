@@ -2,16 +2,18 @@ import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase.js'
 import { useICPLC } from '../ICPLCContext.jsx'
+import EventSettings from '../../registration/SettingsTab.jsx'
 
-export default function SettingsPage() {
+export default function SettingsPage({ onConfigReload }) {
   const { config } = useICPLC()
 
   return (
-    <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div style={{ maxWidth: 1040, display: 'flex', flexDirection: 'column', gap: 32 }}>
       <DeadlinesSection eventId={config?.id} />
       <TagsSection eventId={config?.id} />
       <VisaDefaultsSection eventId={config?.id} />
       <IntegrationsSection eventId={config?.id} />
+      {config?.id && <EventSettings config={config} onSaved={async () => { await onConfigReload?.() }} />}
     </div>
   )
 }
@@ -53,6 +55,28 @@ function TagsSection({ eventId }) {
     },
   })
 
+  const [editingId, setEditingId] = useState(null)
+  const [draft, setDraft] = useState({ name: '', color: '#6366F1' })
+  const startEdit = (t) => {
+    setDraft({ name: t.name, color: t.color || '#6366F1' })
+    setEditingId(t.id)
+  }
+
+  // Rename / recolour. Names are unique per event, so a clash surfaces as an error on the row.
+  const updateTag = useMutation({
+    mutationFn: async ({ id, name, color }) => {
+      const { error } = await supabase.from('icplc_tags').update({ name: name.trim(), color }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setEditingId(null)
+      qc.invalidateQueries({ queryKey: ['icplc_tags'] })
+      // Participants carry their tags inline; refresh so renames/colours show everywhere.
+      qc.invalidateQueries({ queryKey: ['icplc_participants'] })
+      qc.invalidateQueries({ queryKey: ['icplc_profile'] })
+    },
+  })
+
   const deleteTag = useMutation({
     mutationFn: async (id) => {
       const { error } = await supabase.from('icplc_tags').delete().eq('id', id)
@@ -73,27 +97,79 @@ function TagsSection({ eventId }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {(tags || []).map((t) => (
-            <div key={t.id} style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-              background: 'var(--surface-2)', borderRadius: 6, fontSize: 13,
-            }}>
-              <span style={{
-                width: 12, height: 12, borderRadius: 3, flexShrink: 0,
-                background: t.color || 'var(--accent)',
-              }} />
-              <span style={{ flex: 1 }}>{t.name}</span>
-              {t.event_id === null && (
-                <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>org</span>
-              )}
-              {t.event_id !== null && (
+            editingId === t.id ? (
+              <div key={t.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+                background: 'var(--surface-2)', borderRadius: 6, fontSize: 13, flexWrap: 'wrap',
+              }}>
+                <input
+                  type="color"
+                  aria-label={`Colour for ${t.name}`}
+                  value={draft.color}
+                  onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))}
+                  style={{ width: 32, height: 28, border: '1px solid var(--border)', borderRadius: 4, padding: 2, cursor: 'pointer' }}
+                />
+                <input
+                  autoFocus
+                  aria-label={`Name for ${t.name}`}
+                  value={draft.name}
+                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && draft.name.trim()) updateTag.mutate({ id: t.id, ...draft })
+                    if (e.key === 'Escape') setEditingId(null)
+                  }}
+                  style={{ ...inputStyle, flex: 1, minWidth: 140 }}
+                />
                 <button
-                  onClick={() => deleteTag.mutate(t.id)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12 }}
+                  onClick={() => updateTag.mutate({ id: t.id, ...draft })}
+                  disabled={!draft.name.trim() || updateTag.isPending}
+                  style={primaryBtn}
                 >
-                  ×
+                  {updateTag.isPending ? 'Saving…' : 'Save'}
                 </button>
-              )}
-            </div>
+                <button
+                  onClick={() => setEditingId(null)}
+                  style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}
+                >
+                  Cancel
+                </button>
+                {updateTag.isError && (
+                  <div role="alert" style={{ flexBasis: '100%', fontSize: 12, color: '#991B1B' }}>
+                    Could not save: {updateTag.error?.message}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div key={t.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+                background: 'var(--surface-2)', borderRadius: 6, fontSize: 13,
+              }}>
+                <span style={{
+                  width: 12, height: 12, borderRadius: 3, flexShrink: 0,
+                  background: t.color || 'var(--accent)',
+                }} />
+                <span style={{ flex: 1 }}>{t.name}</span>
+                {t.event_id === null && (
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>org</span>
+                )}
+                <button
+                  onClick={() => startEdit(t)}
+                  aria-label={`Edit ${t.name}`}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 12, fontWeight: 600 }}
+                >
+                  Edit
+                </button>
+                {t.event_id !== null && (
+                  <button
+                    onClick={() => deleteTag.mutate(t.id)}
+                    aria-label={`Delete ${t.name}`}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12 }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )
           ))}
         </div>
       )}

@@ -40,6 +40,34 @@ export function mapCanadianStatus(rawValue) {
   return map[rawValue] || null; // null = unknown/unrecognized
 }
 
+// Canadian document validity ("remain valid through the end of November?")
+export function mapCanadianDocValidity(rawValue) {
+  const v = typeof rawValue === 'string' ? rawValue.trim().toLowerCase() : '';
+  if (v === 'yes') return 'READY';
+  if (v === 'no') return 'RENEWAL_NEEDED';
+  return null; // null = unknown/unrecognized
+}
+
+/**
+ * Status-document readiness to use for a participant: the stored value when staff/sync set one,
+ * otherwise what the participant reported on the CMP form ("valid through November?" Yes/No),
+ * so records synced before the mapping existed are still understood. Citizens need no document.
+ */
+export function effectiveCanadaDocReadiness(p) {
+  const stored = p?.canada_status_document_readiness;
+  if (stored && stored !== 'UNKNOWN') return stored;
+  if (p?.canada_residency_status === 'CANADIAN_CITIZEN') return stored || null;
+  return mapCanadianDocValidity(p?.source_values?.cmp_documentation?.canadian_doc_valid_through_nov) || stored || null;
+}
+
+// Passport region as reported by the participant (not the country)
+export function mapPassportRegion(rawValue) {
+  const v = typeof rawValue === 'string' ? rawValue.trim().toLowerCase() : '';
+  if (v === 'ecowas') return 'ECOWAS';
+  if (v === 'non-ecowas' || v === 'non ecowas' || v === 'non_ecowas') return 'NON_ECOWAS';
+  return null; // null = unknown/unrecognized
+}
+
 // Normalize email for claim lookups
 export function normalizeEmail(email) {
   if (!email) return null;
@@ -122,6 +150,32 @@ export function computeMutations(participant, answers, sourceValues) {
   } else if (canadianRaw) {
     // Unknown/unrecognized value
     mutations.unrecognized_canadian_value = canadianRaw;
+  }
+
+  // Passport region (kept separate from passport_country)
+  const regionRaw = answers[CMP_FIELD_IDS.passportRegion];
+  const regionCanonical = mapPassportRegion(regionRaw);
+
+  if (regionCanonical) {
+    if (!(participant.override_fields?.passport_region?.overridden)) {
+      mutations.canonical.passport_region = regionCanonical;
+    }
+  } else if (regionRaw) {
+    mutations.unrecognized_passport_region_value = regionRaw;
+  }
+
+  // Canadian document validity → readiness. Citizens need no status document, so leave them alone.
+  const validityRaw = answers[CMP_FIELD_IDS.canadianDocValidity];
+  const validityCanonical = mapCanadianDocValidity(validityRaw);
+  const finalResidency = mutations.canonical.canada_residency_status ?? participant.canada_residency_status;
+
+  if (validityCanonical) {
+    if (finalResidency !== 'CANADIAN_CITIZEN'
+      && !(participant.override_fields?.canada_status_document_readiness?.overridden)) {
+      mutations.canonical.canada_status_document_readiness = validityCanonical;
+    }
+  } else if (validityRaw) {
+    mutations.unrecognized_doc_validity_value = validityRaw;
   }
 
   return mutations;

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { applyClientFilters } from '../lib/participantFilters.js'
 import { useICPLC } from '../ICPLCContext.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
 import { deriveReadiness, readinessTone, readinessLabel, deriveFlightStatus, flightStatusTone, flightStatusLabel } from '../lib/readinessEngine.js'
@@ -46,20 +47,8 @@ export default function ParticipantTable({ participants, loading, profileTab }) 
     else { setSortField(field); setSortDir('asc') }
   }
 
-  // Client-side filters on derived values (readiness, flight_status are never DB columns)
-  const filtered = useMemo(() => {
-    let rows = participants || []
-    if (filters.readiness?.length > 0) {
-      rows = rows.filter((p) => filters.readiness.includes(deriveReadiness(p).readiness))
-    }
-    if (filters.flight_status?.length > 0) {
-      rows = rows.filter((p) => filters.flight_status.includes(deriveFlightStatus(p)))
-    }
-    if (filters.tags?.length > 0) {
-      rows = rows.filter((p) => p.tags?.some((t) => filters.tags.includes(t.name)))
-    }
-    return rows
-  }, [participants, filters.readiness, filters.flight_status, filters.tags])
+  // Client-side filters on derived values (readiness, flight_status, effective visa) and joined tags
+  const filtered = useMemo(() => applyClientFilters(participants, { ...filters, visa_requirement: [] }), [participants, filters])
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     let va = a[sortField] ?? ''
@@ -185,7 +174,9 @@ function Row({ p, onOpen }) {
       <td data-label="Visa">
         <div className="icplc-cell-stack">
           <span style={{ fontSize: 13 }}>{humanize(documentation.visa.requirement)}</span>
-          <span className="icplc-cell-sub">{humanize(documentation.visa.process)}</span>
+          {documentation.visa.requirement !== 'not_required' && (
+            <span className="icplc-cell-sub">{humanize(documentation.visa.process)}</span>
+          )}
         </div>
       </td>
 

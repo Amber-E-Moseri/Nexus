@@ -21,33 +21,6 @@ const VISA_PROCESS_TONES = {
   processing: 'in_progress', approved: 'done', issue: 'blocked', not_applicable: 'mute',
 }
 
-const INFO_CARDS = [
-  {
-    title: 'Canadian Status',
-    borderColor: '#93C5FD',
-    bg: '#EFF6FF',
-    labelColor: '#2563EB',
-    textColor: '#374151',
-    body: 'Citizen, PR, and work permit holders follow different documentation paths. The document required for entry into the destination country depends on this status.',
-  },
-  {
-    title: 'Passport',
-    borderColor: '#86EFAC',
-    bg: '#EBF7F1',
-    labelColor: '#2D8653',
-    textColor: '#374151',
-    body: 'Passport readiness tracks whether each participant\'s travel document is valid, in renewal, or missing. Passports must be valid for ≥6 months beyond the event date.',
-  },
-  {
-    title: 'Destination Entry',
-    borderColor: '#FCD34D',
-    bg: '#FEF6E8',
-    labelColor: '#B45309',
-    textColor: '#374151',
-    body: 'Visa requirements depend on passport country and destination. "Review" means staff must confirm the requirement. Approved or not-required participants are cleared.',
-  },
-]
-
 export default function DocumentationPage({ canWrite }) {
   const { config, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const { data: participants, isLoading, error, refetch } = useICPLCParticipants(config?.id, {})
@@ -80,11 +53,6 @@ export default function DocumentationPage({ canWrite }) {
 
   if (isLoading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', gap: 12 }}>
-        {INFO_CARDS.map((c) => (
-          <div key={c.title} style={{ flex: 1, height: 80, background: c.bg, borderRadius: 8, border: `1px solid ${c.borderColor}`, opacity: 0.4 }} />
-        ))}
-      </div>
       <div style={{ height: 36, background: 'var(--surface-2)', borderRadius: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
       <div style={{ height: 300, background: 'var(--surface-2)', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
     </div>
@@ -117,27 +85,6 @@ export default function DocumentationPage({ canWrite }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Info cards */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        {INFO_CARDS.map((c) => (
-          <div
-            key={c.title}
-            style={{
-              flex: '1 1 200px', minWidth: 180,
-              background: c.bg,
-              border: `1px solid ${c.borderColor}`,
-              borderRadius: 8, padding: '14px 16px',
-            }}
-          >
-            <div style={{
-              fontSize: 10, fontWeight: 700, color: c.labelColor,
-              letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6,
-            }}>{c.title}</div>
-            <div style={{ fontSize: 12.5, color: c.textColor, lineHeight: 1.5 }}>{c.body}</div>
-          </div>
-        ))}
-      </div>
-
       {/* Filter toolbar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <input
@@ -251,7 +198,7 @@ export default function DocumentationPage({ canWrite }) {
                       <div className="icplc-cell-stack">
                         <Badge tone={PASSPORT_TONES[p.passport_readiness] || 'mute'} label={humanize(p.passport_readiness)} />
                         <span className="icplc-cell-sub">
-                          {p.passport_country ? `${p.passport_country} · ${PASSPORT_REGION_LABELS[d.passport.region]}` : 'Country not set'}
+                          {p.passport_country ? `${p.passport_country} · ${PASSPORT_REGION_LABELS[d.passport.region]}` : d.passport.region !== 'UNKNOWN' ? `${PASSPORT_REGION_LABELS[d.passport.region]} (reported) · country not set` : 'Country not set'}
                         </span>
                       </div>
                     </td>
@@ -263,7 +210,9 @@ export default function DocumentationPage({ canWrite }) {
                     <td data-label="Visa">
                       <div className="icplc-cell-stack">
                         <span>{humanize(d.visa.requirement === 'review' ? 'unknown' : d.visa.requirement)}</span>
-                        <Badge tone={VISA_PROCESS_TONES[d.visa.process] || 'mute'} label={humanize(d.visa.process)} />
+                        {d.visa.requirement !== 'not_required' && (
+                          <Badge tone={VISA_PROCESS_TONES[d.visa.process] || 'mute'} label={humanize(d.visa.process)} />
+                        )}
                       </div>
                     </td>
                   </tr>

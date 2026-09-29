@@ -64,6 +64,31 @@ for (const [canonical, aliases] of Object.entries(ECOWAS_MEMBERS)) {
 
 export const ECOWAS_MEMBER_COUNTRIES = Object.freeze(Object.keys(ECOWAS_MEMBERS))
 
+/** Map a reported answer ("ECOWAS", "Non-ECOWAS", ...) to a canonical region, or null. Never guesses from a country. */
+export function normalizeReportedRegion(value) {
+  const v = String(value ?? '').trim().toLowerCase().replace(/[-_]/g, ' ')
+  if (v === 'ecowas') return PASSPORT_REGION.ECOWAS
+  if (v === 'non ecowas') return PASSPORT_REGION.NON_ECOWAS
+  return null
+}
+
+/**
+ * Region the participant reported (CMP documentation form), used only when no passport country is known.
+ * Prefers the dedicated passport_region field; falls back to the raw CMP answer kept in source_values so
+ * records synced before that field existed are still classified.
+ */
+export function reportedPassportRegion(p) {
+  return normalizeReportedRegion(p?.passport_region)
+    ?? normalizeReportedRegion(p?.source_values?.cmp_documentation?.passport_region)
+}
+
+/** Region to use for a participant: classified from the country when known, else what they reported. */
+export function effectivePassportRegion(p) {
+  const byCountry = classifyPassportRegion(p?.passport_country)
+  if (byCountry !== PASSPORT_REGION.UNKNOWN) return byCountry
+  return reportedPassportRegion(p) ?? PASSPORT_REGION.UNKNOWN
+}
+
 /** Canonical ECOWAS member name for a free-text country, or null. */
 export function canonicalEcowasCountry(country) {
   return LOOKUP.get(normalizeCountry(country)) ?? null

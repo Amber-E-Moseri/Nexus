@@ -1,4 +1,7 @@
 export const REGISTRATION_SOURCE_TYPE = 'registration'
+// Identity maps written by the Registration CSV import: the registration ID in the export is the link.
+export const REGISTRATION_CSV_SOURCE_TYPE = 'registration_csv'
+export const REGISTRATION_LINK_SOURCE_TYPES = [REGISTRATION_SOURCE_TYPE, REGISTRATION_CSV_SOURCE_TYPE]
 export const POOL_SOURCE_TYPE = 'mi_member'
 export const OWNERSHIP_CONFLICT_CODE = '23505'
 export const EMAIL_CLAIMS_CONSTRAINT = 'icplc_email_claims_event_id_normalized_email_key'
@@ -110,6 +113,12 @@ export function registrationLinkedParticipantIds(registrations = [], maps = [], 
       .map((map) => map.participant_id)
       .filter(Boolean),
   )
+  // Anyone with a Registration CSV link is registered (the export is the source of truth).
+  for (const map of maps) {
+    if (map.source_type === REGISTRATION_CSV_SOURCE_TYPE && map.participant_id) {
+      linkedParticipantIds.add(map.participant_id)
+    }
+  }
   return linkedParticipantIds
 }
 
@@ -127,7 +136,11 @@ export function filterParticipantsByWorkingListView(
   return participants.filter((participant) => {
     if (view === 'registered') return linkedParticipantIds.has(participant.id)
     if (view === 'not_registered') return !linkedParticipantIds.has(participant.id)
-    if (view === 'confirmed') return participant.participation_status === 'confirmed'
+    if (view === 'confirmed') {
+      // A Ready person counts as Confirmed (derived, never persisted).
+      return participant.participation_status === 'confirmed'
+        || (isActiveParticipant(participant) && !!getReadiness && getReadiness(participant) === 'ready')
+    }
     if (view === 'needs_attention') {
       const readiness = getReadiness ? getReadiness(participant) : null
       return readiness === 'action_required' || readiness === 'blocked'

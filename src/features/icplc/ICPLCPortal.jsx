@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { UserPlus } from 'lucide-react'
 import './icplc.css'
 import { ICPLCProvider } from './ICPLCContext.jsx'
 import OverviewPage from './pages/OverviewPage.jsx'
@@ -17,7 +16,7 @@ const NEW_TABS = [
   { key: 'board',         label: 'Board',           short: 'Board' },
   { key: 'documentation', label: 'Documentation',   short: 'Docs' },
   { key: 'travel',        label: 'Travel',          short: 'Travel',   maturity: 'beta' },
-  { key: 'imports',       label: 'Imports',         short: 'Imports',  maturity: 'beta' },
+  { key: 'imports',       label: 'Imports',         short: 'Imports' },
   { key: 'settings',      label: 'Settings',        short: 'Settings' },
 ]
 
@@ -30,6 +29,7 @@ export default function ICPLCPortal({
   accessTier,
   legacyContent,
   financeAccess,
+  onConfigReload,
 }) {
   const [activeTab, setActiveTab] = useState('overview')
   const switchTab = setActiveTab
@@ -54,14 +54,6 @@ export default function ICPLCPortal({
     : allTabs[0]?.key || 'legacy'
 
   const isLegacyTab = LEGACY_TABS.some((t) => t.key === resolvedTab)
-  const accessLabel = accessTier === 'admin'
-    ? 'Admin'
-    : accessTier === 'write'
-      ? 'Edit access'
-      : accessTier === 'finance_only'
-        ? 'Finance'
-        : 'Read only'
-
   return (
     <ICPLCProvider config={config} accessTier={accessTier}>
       <div className="icplc-root">
@@ -72,19 +64,6 @@ export default function ICPLCPortal({
               <div className="icplc-title">{config?.event_name || 'ICPLC'}</div>
               <div className="icplc-subtitle">International Campus Pastors and Leaders Conference</div>
             </div>
-          </div>
-          <div className="icplc-header-right">
-            <span className="icplc-header-badge">{accessLabel}</span>
-            {canWrite && (
-              <button
-                type="button"
-                className="icplc-btn icplc-btn-primary"
-                onClick={() => switchTab('people')}
-                style={{ gap: 6 }}
-              >
-                <UserPlus size={14} aria-hidden /> Add Participant
-              </button>
-            )}
           </div>
         </header>
 
@@ -125,7 +104,7 @@ export default function ICPLCPortal({
               {resolvedTab === 'documentation' && <DocumentationPage canWrite={canWrite} />}
               {resolvedTab === 'travel' && <TravelPage canWrite={canWrite} />}
               {resolvedTab === 'imports' && canWrite && <ImportsPage />}
-              {resolvedTab === 'settings' && canAdmin && <SettingsPage />}
+              {resolvedTab === 'settings' && canAdmin && <SettingsPage onConfigReload={onConfigReload} />}
             </div>
           )}
         </div>

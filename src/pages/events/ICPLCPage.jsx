@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { isProgramsMember } from '../../lib/permissions.js'
 import { supabase } from '../../lib/supabase'
 import PageSpinner from '../../components/ui/PageSpinner'
 import RegistrationEcosystem from '../../features/registration/RegistrationEcosystem'
 import { EventConfigContext } from '../../features/registration/EventConfigContext'
 import ICPLCPortal from '../../features/icplc/ICPLCPortal.jsx'
+import { useICPLCParticipants } from '../../features/icplc/hooks/useICPLCParticipants.js'
+import { roomPeopleFromParticipants } from '../../features/icplc/lib/roomPeople.js'
 
 // Tabs shown for ICPLC — everything else is hidden via tab_config overrides.
 // central = Registration Data (includes per-person flight info)
@@ -13,6 +16,9 @@ import ICPLCPortal from '../../features/icplc/ICPLCPortal.jsx'
 // finance tab is intentionally NOT hidden — Finance team members on the ICPLC
 // sprint get access via the finance_only team permission tier.
 const ICPLC_HIDDEN_TABS = ['overview', 'summary', 'tii-report', 'checkin', 'confirm', 'discipleship', 'compliance', 'import', 'documentation']
+// Shown natively in the ICPLC portal (Working List, Documentation), so the legacy copies stay hidden even if
+// the event_configs row's tab_config says otherwise.
+const ICPLC_ALWAYS_HIDDEN_LEGACY_TABS = [...ICPLC_HIDDEN_TABS, 'central']
 
 const ICPLC_DEFAULT_CONFIG = {
   event_name: 'ICPLC',
@@ -56,6 +62,11 @@ export default function ICPLCPage() {
   const [financeAccess, setFinanceAccess] = useState(false)
   const [userTeamNames, setUserTeamNames] = useState([])
   const [needsSubgroupAssignment, setNeedsSubgroupAssignment] = useState(false)
+  const [configReloadKey, setConfigReloadKey] = useState(0)
+  const reloadConfig = React.useCallback(async () => { setConfigReloadKey((k) => k + 1) }, [])
+  // Room Assignments places people from the Working List (same cache as the Working List page).
+  const { data: workingListParticipants } = useICPLCParticipants(eventConfig?.id, {})
+  const roomPeople = React.useMemo(() => roomPeopleFromParticipants(workingListParticipants || []), [workingListParticipants])
 
   // Load ICPLC event_config row (not the active singleton — look up by name).
   useEffect(() => {
@@ -73,17 +84,22 @@ export default function ICPLCPage() {
         const merged = data
           ? { ...ICPLC_DEFAULT_CONFIG, ...data, tab_config: data.tab_config?.length ? data.tab_config : ICPLC_DEFAULT_CONFIG.tab_config }
           : ICPLC_DEFAULT_CONFIG
+        merged.tab_config = [
+          ...(merged.tab_config || []).filter((item) => !ICPLC_ALWAYS_HIDDEN_LEGACY_TABS.includes(item.key)),
+          ...ICPLC_ALWAYS_HIDDEN_LEGACY_TABS.map((key) => ({ key, hidden: true })),
+        ]
         setEventConfig(merged)
         setConfigLoading(false)
       }
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [configReloadKey])
 
   useEffect(() => {
     if (configLoading || !eventConfig) return
     checkAccess()
-  }, [profile?.id, role, configLoading, eventConfig])
+  // is_programs_member arrives with the supplementary profile fetch, so re-check when it lands.
+  }, [profile?.id, role, profile?.is_programs_member, configLoading, eventConfig])
 
   async function checkAccess() {
     setLoading(true)
@@ -96,6 +112,12 @@ export default function ICPLCPage() {
         setSprintEditAccess(true); setFinanceAccess(true); setCanAccess(true); setLoading(false); return
       }
       if (role === 'super_admin') {
+        setSprintEditAccess(true); setCanAccess(true); setLoading(false); return
+      }
+
+      // Everyone in the Programs department has full ICPLC access (no sprint-team membership needed).
+      // Mirrors icplc_can_*_participants() in 20270930000031_icplc_programs_department_access.sql.
+      if (isProgramsMember(profile)) {
         setSprintEditAccess(true); setCanAccess(true); setLoading(false); return
       }
 
@@ -224,6 +246,8 @@ export default function ICPLCPage() {
       limitedToRegistrationDataOnly={false}
       userTeamNames={userTeamNames}
       initialTab={legacyInitialTab}
+      embedded
+      roomPeople={roomPeople}
     />
   )
 
@@ -233,6 +257,7 @@ export default function ICPLCPage() {
         config={eventConfig}
         accessTier={accessTier}
         financeAccess={financeAccess}
+        onConfigReload={reloadConfig}
         legacyContent={legacyContent}
       />
     </ICPLCConfigProvider>

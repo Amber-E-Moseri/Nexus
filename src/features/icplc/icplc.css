@@ -394,7 +394,7 @@
 /* ── Profile drawer ───────────────────────────────────────────────────────── */
 .icplc-drawer {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 50;
-  width: 560px; max-width: 95vw; display: flex; flex-direction: column;
+  width: 720px; max-width: 95vw; display: flex; flex-direction: column;
   background: #FFFFFF; box-shadow: -4px 0 24px rgba(0,0,0,0.12); overflow: hidden;
 }
 .icplc-drawer-tabs { display: flex; margin-bottom: -1px; overflow-x: auto; scrollbar-width: none; }
@@ -480,4 +480,88 @@
   .icplc-header { padding: 10px 12px; }
   .icplc-content { padding: 10px; }
   .icplc-tab { padding: 7px 9px; font-size: 11px; }
+}
+
+/* ── Working List: compact status-tinted table (never collapses to cards) ── */
+.icplc-wl-wrap { overflow-x: auto; border: 1px solid var(--icplc-border); border-radius: 8px; background: var(--icplc-surface); }
+.icplc-wl-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.icplc-wl-table th {
+  padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; white-space: nowrap;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--icplc-text-soft);
+  border-bottom: 1px solid var(--icplc-border);
+}
+.icplc-wl-table td { padding: 14px 12px; font-size: 13px; vertical-align: middle; border-bottom: 1px solid var(--icplc-border); }
+.icplc-wl-row { border-left: 4px solid transparent; }
+.icplc-wl-row.is-registered { background: #E9F6EE; border-left-color: #1F8A4C; }
+.icplc-wl-row.is-unregistered { background: #F7F7FA; border-left-color: #9A93AE; }
+.icplc-wl-row.is-registered:hover { background: #DDF0E5; }
+.icplc-wl-row.is-unregistered:hover { background: #EEEEF4; }
+.icplc-wl-num { width: 36px; color: var(--icplc-text-soft); }
+.icplc-wl-name { font-weight: 600; min-width: 130px; }
+.icplc-wl-muted { color: var(--icplc-text-soft); }
+.icplc-wl-phone { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: nowrap; }
+.is-unregistered .icplc-wl-name { color: var(--icplc-text-soft); font-weight: 600; }
+/* Strikethrough is reserved for people staff explicitly marked absent. */
+.is-absent .icplc-wl-name { text-decoration: line-through; color: var(--icplc-text-soft); }
+.is-unregistered td:not(.icplc-wl-num) { opacity: 0.85; }
+
+/* The profile drawer and dialogs render in a Radix portal (outside .icplc-root),
+   so they need the ICPLC tokens themselves or buttons/inputs lose colour and borders. */
+.icplc-drawer, .icplc-dialog {
+  --icplc-purple: #4C2A92;
+  --icplc-purple-light: #7B5CC8;
+  --icplc-purple-bg: #F5F2FB;
+  --icplc-green: #2D8653;
+  --icplc-green-bg: #EBF7F1;
+  --icplc-red: #C94830;
+  --icplc-red-bg: #FEF0ED;
+  --icplc-orange: #C97820;
+  --icplc-orange-bg: #FEF6E8;
+  --icplc-amber: #B45309;
+  --icplc-blue: #2563EB;
+  --icplc-blue-bg: #EFF6FF;
+  --icplc-grey: #6B7280;
+  --icplc-grey-bg: #F3F4F6;
+  --icplc-text: #111827;
+  --icplc-text-soft: #6B7280;
+  --icplc-text-muted: #9CA3AF;
+  --icplc-border: #E5E7EB;
+  --icplc-surface: #FFFFFF;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Drawer form density: override the 16px/44px touch sizing on phone widths. */
+.icplc-drawer .icplc-input { font-size: 13px; min-height: 36px; padding: 6px 10px; }
+.icplc-drawer textarea.icplc-input { min-height: 0; }
+.icplc-drawer .icplc-btn { min-height: 32px; font-size: 13px; }
+.icplc-drawer h4 { text-transform: none; letter-spacing: 0; }
+
+/* Overview: By Subgroup summary table */
+.icplc-subgroup-table th { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
+.icplc-subgroup-table td { padding: 16px 12px; font-size: 14px; }
+.icplc-subgroup-table tbody tr:hover { background: var(--icplc-purple-bg); }
+.icplc-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; }
+@media (max-width: 768px) {
+  /* Keep the subgroup summary a real table (the generic .icplc-table collapses to cards on phones). */
+  .icplc-subgroup-table { display: table; width: 100%; }
+  .icplc-subgroup-table thead { position: static; width: auto; height: auto; overflow: visible; clip: auto; display: table-header-group; }
+  .icplc-subgroup-table tbody { display: table-row-group; }
+  .icplc-subgroup-table tr { display: table-row; border: none; border-radius: 0; margin: 0; padding: 0; background: transparent; }
+  .icplc-subgroup-table th, .icplc-subgroup-table td { display: table-cell; width: auto; padding: 12px 8px; }
+  .icplc-subgroup-table td { border-bottom: 1px solid var(--icplc-border); }
+}
+
+/* Working List: sortable headers + click-to-filter cells */
+.icplc-wl-sort { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+.icplc-wl-sort:hover { color: var(--icplc-purple, #4C2A92); }
+.icplc-wl-filter { background: none; border: none; padding: 2px 6px; margin: -2px -6px; font: inherit; color: inherit; cursor: pointer; border-radius: 6px; }
+.icplc-wl-filter:hover { background: #F1EDFA; color: var(--icplc-purple, #4C2A92); }
+.icplc-wl-filter.is-active { background: #E4DBF7; color: var(--icplc-purple, #4C2A92); font-weight: 600; }
+
+/* Compact toolbar controls (search, filters, chips) — override the 44px/16px touch sizing on narrow screens. */
+@media (max-width: 768px) {
+  .icplc-content .icplc-input { min-height: 34px; font-size: 13px; padding: 5px 10px; }
+  .icplc-content .icplc-search { min-height: 34px; }
+  .icplc-content .icplc-chip { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+  .icplc-content .icplc-btn { min-height: 32px; padding: 5px 10px; font-size: 12px; }
 }

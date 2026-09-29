@@ -3,7 +3,8 @@ import { useAuth } from '../../../../hooks/useAuth'
 import { useUpdateProfile } from '../../hooks/useICPLCProfile.js'
 import { overrideFieldsForEdit } from '../../lib/fieldAuthority.js'
 import { deriveItineraryStatus, deriveTravelStatus } from '../../lib/readinessEngine.js'
-import Badge from '../../../../components/ui/Badge.jsx'
+import { Plane, PlaneTakeoff, PlaneLanding } from 'lucide-react'
+import { Card, EditButton, Chip, Row } from './tabUi.jsx'
 
 export default function TravelTab({ participant, canWrite }) {
   const { profile: authProfile } = useAuth()
@@ -42,30 +43,14 @@ export default function TravelTab({ participant, canWrite }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Derived status chips */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Itinerary</div>
-          <Badge
-            tone={itineraryStatus === 'received' ? 'done' : 'warn'}
-            label={itineraryStatus === 'received' ? 'Received' : 'Missing'}
-          />
-        </div>
-        <div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Travel Status</div>
-          <Badge
-            tone={travelStatus === 'ready' ? 'done' : 'at_risk'}
-            label={travelStatus === 'ready' ? 'Ready' : 'Outstanding'}
-          />
-        </div>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <Card icon={Plane} title="Travel Status" action={canWrite && !editing ? <EditButton onClick={() => setEditing(true)} /> : null}>
+        <Row label="Itinerary"><Chip tone={itineraryStatus === 'received' ? 'done' : 'blocked'} label={itineraryStatus === 'received' ? 'Received' : 'Missing'} /></Row>
+        <Row label="Status"><Chip tone={travelStatus === 'ready' ? 'done' : 'at_risk'} label={travelStatus === 'ready' ? 'Ready' : 'Outstanding'} /></Row>
+      </Card>
 
       {/* Arrival */}
-      <section>
-        <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-          Arrival
-        </h4>
+      <Card icon={PlaneLanding} title="Arrival">
         <div className="icplc-field-grid">
           <FlightField
             label="Date" type="date" field="arrival_date"
@@ -83,13 +68,10 @@ export default function TravelTab({ participant, canWrite }) {
             onChange={(v) => setForm((f) => ({ ...f, arrival_flight: v }))}
           />
         </div>
-      </section>
+      </Card>
 
       {/* Departure */}
-      <section>
-        <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-          Departure
-        </h4>
+      <Card icon={PlaneTakeoff} title="Departure">
         <div className="icplc-field-grid">
           <FlightField
             label="Date" type="date" field="departure_date"
@@ -107,7 +89,7 @@ export default function TravelTab({ participant, canWrite }) {
             onChange={(v) => setForm((f) => ({ ...f, departure_flight: v }))}
           />
         </div>
-      </section>
+      </Card>
 
       {/* Source provenance note */}
       {participant.source_values?.arrival_flight && (
@@ -117,18 +99,12 @@ export default function TravelTab({ participant, canWrite }) {
         </div>
       )}
 
-      {canWrite && (
+      {canWrite && editing && (
         <div className="icplc-actions">
-          {editing ? (
-            <>
-              <button type="button" onClick={handleSave} disabled={updateProfile.isPending} className="icplc-btn icplc-btn-primary">
-                {updateProfile.isPending ? 'Saving…' : 'Save'}
-              </button>
-              <button type="button" onClick={() => setEditing(false)} className="icplc-btn">Cancel</button>
-            </>
-          ) : (
-            <button type="button" onClick={() => setEditing(true)} className="icplc-btn icplc-btn-primary">Edit</button>
-          )}
+          <button type="button" onClick={handleSave} disabled={updateProfile.isPending} className="icplc-btn icplc-btn-primary">
+            {updateProfile.isPending ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" onClick={() => setEditing(false)} className="icplc-btn">Cancel</button>
         </div>
       )}
     </div>

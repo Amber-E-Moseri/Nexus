@@ -1,13 +1,68 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
-import { deriveReadiness } from '../lib/readinessEngine.js'
+import { deriveReadiness, isConfirmedOrReady } from '../lib/readinessEngine.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import { ATTENTION_CATEGORIES, attentionCategoryKeys } from '../lib/documentationRules.js'
 import { isActiveParticipant } from '../lib/reconciliation.js'
 
+/** Subgroup label; hover / focus / tap shows who is in it (click a name to open their profile). */
+function SubgroupMembers({ row, onOpen }) {
+  const [open, setOpen] = useState(false)
+  // Registered first, then not registered; alphabetical within each.
+  const members = [...row.members].sort((a, b) => (b.registered - a.registered) || (a.name || '').localeCompare(b.name || ''))
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={`${row.subgroup || 'Unassigned'}: show ${row.total} member${row.total === 1 ? '' : 's'}`}
+        onClick={() => setOpen(true)}
+        onFocus={() => setOpen(true)}
+        onBlur={(e) => { if (!e.currentTarget.parentElement.contains(e.relatedTarget)) setOpen(false) }}
+        style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 600, color: 'inherit', cursor: 'pointer', textAlign: 'left', textDecoration: 'underline dotted', textUnderlineOffset: 3 }}
+      >
+        {row.subgroup || <em style={{ color: 'var(--icplc-text-muted)', fontWeight: 400 }}>Unassigned</em>}
+      </button>
+      {open && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute', top: '100%', left: 0, zIndex: 20, marginTop: 4, minWidth: 220, maxWidth: 300,
+            maxHeight: 280, overflowY: 'auto', background: '#fff', border: '1px solid var(--icplc-border, #E5E7EB)',
+            borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.14)', padding: 8, fontWeight: 400,
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--icplc-text-soft)', padding: '2px 6px 6px' }}>
+            {row.subgroup || 'Unassigned'} · {row.total}
+          </div>
+          {members.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onOpen(m.id)}
+              style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'none', border: 'none', padding: '5px 6px', borderRadius: 6, font: 'inherit', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#F1EDFA' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+            >
+              <span>{m.name}</span>
+              <span aria-label={m.registered ? 'Registered' : 'Not registered'} style={{ color: m.registered ? '#16A34A' : '#DC2626', fontSize: 12 }}>
+                {m.registered ? '✓' : '✕'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  )
+}
+
 export default function OverviewPage({ canWrite, onShowPeople }) {
-  const { config, activeProfileId, activeProfileTab, closeProfile, setFilters } = useICPLC()
+  const { config, activeProfileId, activeProfileTab, closeProfile, openProfile, setFilters } = useICPLC()
   const eventId = config?.id
   const { participants, ambiguousRegistrations, isLoading } = useICPLCWorkingList(eventId)
 
@@ -15,27 +70,42 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
     const active = participants.filter(isActiveParticipant)
     const total = active.length
     const registered = active.filter((p) => p.registration_link_status === 'registered').length
-    const confirmed = active.filter((p) => p.participation_status === 'confirmed').length
     const pct = (n) => (total ? Math.round((n / total) * 100) : 0)
     const attention = new Map()
-    const readinessCounts = { ready: 0, in_progress: 0, action_required: 0, blocked: 0, unknown: 0 }
+    const readinessCounts = { ready: 0, waiting_itinerary: 0, in_progress: 0, action_required: 0, blocked: 0, unknown: 0 }
     for (const p of active) {
       for (const key of attentionCategoryKeys(p)) attention.set(key, (attention.get(key) || 0) + 1)
       const r = deriveReadiness(p).readiness
       readinessCounts[r] = (readinessCounts[r] || 0) + 1
     }
     const ready = readinessCounts.ready
+    // A Ready person counts as Confirmed (derived, never persisted).
+    const confirmed = active.filter((p) => isConfirmedOrReady(p)).length
     const needsAttention = readinessCounts.action_required + readinessCounts.blocked
     return {
       total, registered, confirmed, ready, needsAttention,
       registeredPct: pct(registered), confirmedPct: pct(confirmed), readyPct: pct(ready),
       needsAttentionPct: pct(needsAttention),
       attention,
-      bySubgroup: countBy(active, 'subgroup'),
       readinessCounts,
       active,
     }
   }, [participants])
+
+  const subgroupRows = useMemo(() => {
+    const groups = new Map()
+    for (const p of stats.active) {
+      const key = p.subgroup || ''
+      if (!groups.has(key)) groups.set(key, { subgroup: key, total: 0, registered: 0, confirmed: 0, confirming: 0, members: [] })
+      const g = groups.get(key)
+      g.total += 1
+      g.members.push({ id: p.id, name: p.full_name, registered: p.registration_link_status === 'registered' })
+      if (p.registration_link_status === 'registered') g.registered += 1
+      if (isConfirmedOrReady(p)) g.confirmed += 1
+      else if (p.participation_status === 'likely') g.confirming += 1
+    }
+    return [...groups.values()].sort((x, y) => (!x.subgroup) - (!y.subgroup) || x.subgroup.localeCompare(y.subgroup))
+  }, [stats.active])
 
   if (isLoading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -54,9 +124,15 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
       {/* Stat cards */}
       <div className="icplc-stat-grid">
         <StatCard
-          label="Working List"
-          value={stats.total}
-          sub="total participants"
+          label="Registrations"
+          value={stats.registered}
+          sub={`out of ${stats.total} on working list`}
+          pct={stats.registeredPct}
+          barColor="var(--icplc-green)"
+          onClick={() => {
+            setFilters((prev) => ({ ...prev, working_list_view: 'registered' }))
+            onShowPeople?.()
+          }}
         />
         <StatCard
           label="Confirmed"
@@ -66,17 +142,6 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
           barColor="var(--icplc-green)"
           onClick={() => {
             setFilters((prev) => ({ ...prev, working_list_view: 'confirmed' }))
-            onShowPeople?.()
-          }}
-        />
-        <StatCard
-          label="Ready"
-          value={stats.ready}
-          sub={`${stats.readyPct}% of ${stats.total}`}
-          pct={stats.readyPct}
-          barColor="var(--icplc-green)"
-          onClick={() => {
-            setFilters((prev) => ({ ...prev, working_list_view: 'all', readiness: ['ready'] }))
             onShowPeople?.()
           }}
         />
@@ -145,60 +210,29 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
       <div className="icplc-overview-section">
         <h3 className="icplc-overview-section-title">By Subgroup</h3>
         <div style={{ overflowX: 'auto' }}>
-          <table className="icplc-table">
+          <table className="icplc-table icplc-subgroup-table">
             <thead>
               <tr>
                 <th>Subgroup</th>
-                <th>Total</th>
-                <th>Confirmed</th>
-                <th>Registered</th>
-                <th>Ready</th>
-                <th>Confirmed %</th>
-                <th>Issues</th>
+                <th>Registrations</th>
+                <th>Confirmed / Confirming</th>
               </tr>
             </thead>
             <tbody>
-              {Object.entries(stats.bySubgroup)
-                .sort((a, b) => b[1] - a[1])
-                .map(([subgroup, count]) => {
-                  const inSubgroup = stats.active.filter((p) => p.subgroup === subgroup)
-                  const confirmed = inSubgroup.filter((p) => p.participation_status === 'confirmed').length
-                  const registeredInSubgroup = inSubgroup.filter((p) => p.registration_link_status === 'registered').length
-                  const ready = inSubgroup.filter((p) => deriveReadiness(p).readiness === 'ready').length
-                  const confirmedPct = count ? Math.round((confirmed / count) * 100) : 0
-                  const issues = inSubgroup.filter((p) => {
-                    const r = deriveReadiness(p).readiness
-                    return r === 'action_required' || r === 'blocked'
-                  }).length
-                  return (
-                    <tr key={subgroup || 'unassigned'}>
-                      <td style={{ fontWeight: 500 }}>{subgroup || <em style={{ color: 'var(--icplc-text-muted)' }}>Unassigned</em>}</td>
-                      <td>{count}</td>
-                      <td>{confirmed}</td>
-                      <td>{registeredInSubgroup}</td>
-                      <td>{ready}</td>
-                      <td>
-                        <span>{confirmedPct}%</span>
-                        <span className="icplc-mini-bar-track">
-                          <span className="icplc-mini-bar-fill" style={{ width: `${confirmedPct}%` }} />
-                        </span>
-                      </td>
-                      <td>
-                        {issues > 0 ? (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '2px 8px', borderRadius: 10, fontSize: 12, fontWeight: 600,
-                            background: 'var(--icplc-red-bg)', color: 'var(--icplc-red)',
-                          }}>
-                            {issues}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--icplc-text-muted)' }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
+              {subgroupRows.map((row) => (
+                <tr key={row.subgroup || 'unassigned'}>
+                  <td style={{ fontWeight: 600 }}>
+                    <SubgroupMembers row={row} onOpen={openProfile} />
+                  </td>
+                  <td className="icplc-mono">
+                    {row.registered} <span style={{ color: 'var(--icplc-text-soft)' }}>/ {row.total}</span>
+                  </td>
+                  <td className="icplc-mono">
+                    <span style={{ color: 'var(--icplc-green)' }}>{row.confirmed}</span>
+                    <span style={{ color: 'var(--icplc-text-soft)' }}> / {row.confirmed + row.confirming}</span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -218,6 +252,7 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
 
 const READINESS_SEGMENTS = [
   { key: 'ready',           label: 'Ready',           color: '#2D8653' },
+  { key: 'waiting_itinerary', label: 'Waiting on itinerary', color: '#0EA5E9' },
   { key: 'in_progress',     label: 'In Progress',     color: '#2563EB' },
   { key: 'action_required', label: 'Action Required', color: '#C97820' },
   { key: 'blocked',         label: 'Blocked',         color: '#C94830' },
@@ -277,12 +312,4 @@ function StatCard({ label, value, sub, pct, barColor, onClick }) {
       )}
     </Component>
   )
-}
-
-function countBy(arr, field) {
-  return arr.reduce((acc, item) => {
-    const key = item[field] || 'unknown'
-    acc[key] = (acc[key] || 0) + 1
-    return acc
-  }, {})
 }
