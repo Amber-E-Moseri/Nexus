@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { UserPlus } from 'lucide-react'
+import { UserPlus, Grid3X3, List } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
 import { useICPLC } from '../ICPLCContext.jsx'
@@ -18,6 +18,7 @@ export default function PeoplePage({ canWrite }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
+  const [viewMode, setViewMode] = useState('table')
 
   const { data: participants, isLoading, error } = useICPLCParticipants(eventId, {
     search: filters.search,
@@ -89,12 +90,38 @@ export default function PeoplePage({ canWrite }) {
       {/* Filters */}
       <ParticipantFilters />
 
-      {/* Count */}
-      {!loading && (
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
-          {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
+      {/* View toggle + Count */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        {!loading && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 4, borderRadius: 6, background: 'var(--surface-1)', padding: 4 }}>
+          <button
+            onClick={() => setViewMode('table')}
+            title="Table view"
+            style={{
+              ...viewToggleBtn,
+              background: viewMode === 'table' ? 'var(--surface-2)' : 'transparent',
+              borderRadius: 4,
+            }}
+          >
+            <List size={16} />
+          </button>
+          <button
+            onClick={() => setViewMode('cards')}
+            title="Cards view"
+            style={{
+              ...viewToggleBtn,
+              background: viewMode === 'cards' ? 'var(--surface-2)' : 'transparent',
+              borderRadius: 4,
+            }}
+          >
+            <Grid3X3 size={16} />
+          </button>
         </div>
-      )}
+      </div>
 
       {error && (
         <div style={{ padding: 20, color: 'var(--text-secondary)' }}>
@@ -102,7 +129,8 @@ export default function PeoplePage({ canWrite }) {
         </div>
       )}
 
-      <ParticipantTable participants={displayedParticipants} loading={loading} />
+      {viewMode === 'table' && <ParticipantTable participants={displayedParticipants} loading={loading} />}
+      {viewMode === 'cards' && <ParticipantCardsView participants={displayedParticipants} loading={loading} />}
 
       {/* Canonical profile drawer */}
       {activeProfileId && (
@@ -197,6 +225,53 @@ function Field({ label, value, onChange, autoFocus }) {
   )
 }
 
+function ParticipantCardsView({ participants, loading }) {
+  const { openProfile } = useICPLC()
+
+  if (loading) {
+    return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading participants…</div>
+  }
+
+  if (!participants.length) {
+    return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>No participants match current filters.</div>
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+      {participants.map((p) => (
+        <div
+          key={p.id}
+          onClick={() => openProfile(p.id)}
+          style={{
+            padding: 12,
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            background: 'var(--surface-1)',
+            cursor: 'pointer',
+            transition: 'box-shadow 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.boxShadow = 'none'
+          }}
+        >
+          <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>{p.full_name}</div>
+          {p.email && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>{p.email}</div>}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+            {p.subgroup && <span className="fchip" style={{ fontSize: 11, background: 'var(--surface-2)' }}>{p.subgroup}</span>}
+            {p.region && <span className="fchip" style={{ fontSize: 11, background: 'var(--surface-2)' }}>{p.region}</span>}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+            Status: <span style={{ fontWeight: 500 }}>{p.participation_status || 'N/A'}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const primaryBtn = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -210,6 +285,17 @@ const primaryBtn = {
   fontSize: 13,
 }
 const ghostBtn = { ...primaryBtn, background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border)' }
+const viewToggleBtn = {
+  padding: '6px 8px',
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--text-secondary)',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'all 0.2s',
+}
 const modalOverlay = { position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.35)', display: 'grid', placeItems: 'center', padding: 20 }
 const modalCard = { width: 'min(520px, 96vw)', background: 'var(--surface-1)', borderRadius: 8, padding: 20, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxHeight: '90vh', overflow: 'auto' }
 const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }
