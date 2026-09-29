@@ -7,6 +7,8 @@ import { useCreateParticipant, useICPLCParticipants } from '../hooks/useICPLCPar
 import ParticipantTable from '../components/ParticipantTable.jsx'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
+import ReadinessChip from '../components/ReadinessChip.jsx'
+import Badge from '../../../components/ui/Badge.jsx'
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import {
   REGISTRATION_SOURCE_TYPE,
@@ -225,6 +227,10 @@ function Field({ label, value, onChange, autoFocus }) {
   )
 }
 
+const REGISTRATION_TONES = {
+  registered: 'done', not_registered: 'at_risk', issue: 'blocked', unknown: 'mute',
+}
+
 function ParticipantCardsView({ participants, loading }) {
   const { openProfile } = useICPLC()
 
@@ -237,37 +243,52 @@ function ParticipantCardsView({ participants, loading }) {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-      {participants.map((p) => (
-        <div
-          key={p.id}
-          onClick={() => openProfile(p.id)}
-          style={{
-            padding: 12,
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            background: 'var(--surface-1)',
-            cursor: 'pointer',
-            transition: 'box-shadow 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = 'none'
-          }}
-        >
-          <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>{p.full_name}</div>
-          {p.email && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>{p.email}</div>}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-            {p.subgroup && <span className="fchip" style={{ fontSize: 11, background: 'var(--surface-2)' }}>{p.subgroup}</span>}
-            {p.region && <span className="fchip" style={{ fontSize: 11, background: 'var(--surface-2)' }}>{p.region}</span>}
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+      {participants.map((p) => {
+        const { readiness } = deriveReadiness(p)
+        const registrationStatus = p.registration_link_status || p.registration_status
+        return (
+          <div
+            key={p.id}
+            onClick={() => openProfile(p.id)}
+            style={{
+              padding: 14,
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              background: 'var(--surface-1)',
+              cursor: 'pointer',
+              transition: 'box-shadow 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = 'none'
+            }}
+          >
+            <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 2 }}>{p.full_name}</div>
+            {p.email && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>{p.email}</div>}
+
+            <CardRow label="GROUP" value={p.subgroup || '—'} />
+            <CardRow label="REGISTRATION" value={<Badge tone={REGISTRATION_TONES[registrationStatus] || 'mute'} label={registrationStatus} />} />
+            <CardRow label="CONFIRMATION" value={p.participation_status || 'N/A'} />
+            {p.passport_readiness && <CardRow label="PASSPORT" value={p.passport_readiness} />}
+            {p.visa_requirement && <CardRow label="VISA" value={p.visa_requirement} />}
+            {readiness && <CardRow label="READINESS" value={<ReadinessChip participant={p} />} />}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-            Status: <span style={{ fontWeight: 500 }}>{p.participation_status || 'N/A'}</span>
-          </div>
-        </div>
-      ))}
+        )
+      })}
+    </div>
+  )
+}
+
+function CardRow({ label, value }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>
+        {typeof value === 'string' ? value : value}
+      </div>
     </div>
   )
 }
