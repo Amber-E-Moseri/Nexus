@@ -6,7 +6,11 @@
  * comprehensive failure classification.
  *
  * Auth: Service role bearer token required
- * Method: POST { action: 'preview' | 'apply', event_id: uuid }
+ * Method: POST { action: 'preview' | 'apply' | 'add_unmatched', event_id: uuid, submission_ids?: string[] }
+ *
+ * add_unmatched: staff-chosen unmatched submissions are added to the Working List as
+ * NOT-registered participants (registration_status 'not_registered', participation 'tracking'),
+ * then their documentation is applied through the normal override-protected path.
  *
  * Response includes classification counts and individual submission results.
  */
@@ -94,6 +98,13 @@ function mergeSourceValues(existing: Record<string, unknown> | null, incoming: R
   }
 }
 
+function submitterDisplayName(sub: CMPSubmission, answers: Record<string, unknown>): string | null {
+  const first = String(answers[FIELD_IDS.firstName] ?? '').trim()
+  const last = String(answers[FIELD_IDS.lastName] ?? '').trim()
+  const full = `${first} ${last}`.trim()
+  return full || String(sub.submitterName ?? sub.member?.fullName ?? '').trim() || null
+}
+
 interface CMPSubmission {
   id: string
   createdAt: string
@@ -108,6 +119,7 @@ interface ProcessResult {
   participant_id?: string
   canonical_mutations?: Record<string, unknown>
   issues?: string[]
+  submitter?: { name: string | null; email: string | null }
 }
 
 interface Lookups {
@@ -202,6 +214,7 @@ async function processSubmission(
   // Step 2: Handle unmatched or conflicted identity
   if (!participantId) {
     result.status = 'unmatched'
+    result.submitter = { name: submitterDisplayName(sub, answers), email: emailNorm }
     return result
   }
 
@@ -388,8 +401,14 @@ Deno.serve(async (req) => {
     return json(400, { error: 'Required: action (preview|apply), event_id' })
   }
 
-  if (!['preview', 'apply'].includes(action)) {
-    return json(400, { error: 'action must be preview or apply' })
+  if (!['preview', 'apply', 'add_unmatched'].includes(action)) {
+    return json(400, { error: 'action must be preview, apply or add_unmatched' })
+  }
+  const requestedIds: Set<string> | null = action === 'add_unmatched'
+    ? new Set(Array.isArray(body.submission_ids) ? body.submission_ids.map(String) : [])
+    : null
+  if (requestedIds && requestedIds.size === 0) {
+    return json(400, { error: 'add_unmatched requires submission_ids' })
   }
 
   const { data: caller } = await supabase
@@ -487,6 +506,47 @@ Deno.serve(async (req) => {
   }
   const results: ProcessResult[] = []
   for (const sub of allSubmissions) {
+    if (requestedIds) {
+      if (!requestedIds.has(sub.id)) continue
+      // Only submissions that are genuinely unmatched right now may be added.
+      const check = await processSubmission(sub, supabase, event_id, 'preview', lookups)
+      if (check.status !== 'unmatched') {
+        results.push({ ...check, issues: [...(check.issues || []), 'not_unmatched'] })
+        continue
+      }
+      const answers = (sub.answers || {}) as Record<string, unknown>
+      const name = submitterDisplayName(sub, answers)
+      if (!name) {
+        results.push({ submission_id: sub.id, status: 'error', issues: ['no_name'] })
+        continue
+      }
+      const created = await supabase
+        .from('icplc_participants')
+        .insert({
+          event_id,
+          full_name: name,
+          email: normalizeEmail(answers[FIELD_IDS.email] as string),
+          registration_status: 'not_registered',
+          participation_status: 'tracking',
+          source_values: {
+            created_from: {
+              source: 'cmp_documentation',
+              submission_id: sub.id,
+              observed_at: new Date().toISOString(),
+            },
+          },
+        })
+        .select('*')
+        .single()
+      if (created.error || !created.data) {
+        results.push({ submission_id: sub.id, status: 'error', issues: [created.error?.message || 'insert_failed'] })
+        continue
+      }
+      lookups.participants.set(created.data.id, created.data)
+      lookups.identityMaps.set(sub.id, created.data.id)
+      results.push(await processSubmission(sub, supabase, event_id, 'apply', lookups))
+      continue
+    }
     const result = await processSubmission(sub, supabase, event_id, action, lookups)
     results.push(result)
   }

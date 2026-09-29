@@ -235,12 +235,14 @@ function CMPSyncAction() {
   const eventId = config?.id
   const qc = useQueryClient()
 
-  async function run(action) {
+  const [addedNote, setAddedNote] = useState(null)
+
+  async function run(action, extra = {}) {
     setError(null)
     setPhase(action === 'preview' ? 'previewing' : 'applying')
     try {
       const { data, error: invokeError } = await supabase.functions.invoke('cmp-documentation-sync', {
-        body: { action, event_id: eventId },
+        body: { action, event_id: eventId, ...extra },
       })
       if (invokeError) {
         // FunctionsHttpError carries the response; surface the function's own message.
@@ -252,6 +254,16 @@ function CMPSyncAction() {
         try { message = (await invokeError.context?.json?.())?.error || message } catch { /* keep default */ }
         throw new Error(message)
       }
+      if (action === 'add_unmatched') {
+        const added = (data.results || []).filter((r) => r.participant_id).length
+        const failed = (data.results || []).length - added
+        setAddedNote(`Added ${added} to the Working List as not registered${failed ? `; ${failed} could not be added` : ''}.`)
+        qc.invalidateQueries({ queryKey: ['icplc_participants'] })
+        qc.invalidateQueries({ queryKey: ['icplc_wl_registrations'] })
+        await run('preview')
+        return
+      }
+      setAddedNote(null)
       setResult({ ...data, action })
       setPhase(action === 'preview' ? 'previewed' : 'applied')
       if (action === 'apply') {
@@ -295,7 +307,8 @@ function CMPSyncAction() {
   const busy = phase === 'previewing' || phase === 'applying'
   const counts = result?.counts || {}
   const matched = (counts.matched_applied || 0) + (counts.matched_source_only || 0)
-  const notable = (result?.results || []).filter((r) => r.status !== 'matched_applied' && r.status !== 'matched_source_only')
+  const notable = (result?.results || []).filter((r) => r.status !== 'matched_applied' && r.status !== 'matched_source_only' && r.status !== 'unmatched')
+  const unmatchedRows = (result?.results || []).filter((r) => r.status === 'unmatched')
 
   return (
     <section>
@@ -388,6 +401,41 @@ function CMPSyncAction() {
                 </table>
               </div>
             )}
+            {addedNote && (
+              <div role="status" style={{ marginTop: 12, fontSize: 13, color: '#166534', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '8px 12px' }}>
+                {addedNote}
+              </div>
+            )}
+            {unmatchedRows.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>
+                    {unmatchedRows.length} submission{unmatchedRows.length === 1 ? '' : 's'} not on the Working List
+                  </div>
+                  <button type="button" className="icplc-btn" disabled={busy}
+                    onClick={() => run('add_unmatched', { submission_ids: unmatchedRows.map((r) => r.submission_id) })}>
+                    Add all to Working List
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  They are added as <strong>not registered</strong>; their documentation is attached. Registration and participation stay unchanged until staff or the Registration import set them.
+                </div>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {unmatchedRows.slice(0, 100).map((r) => (
+                    <li key={r.submission_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontSize: 12 }}>
+                      <span>
+                        <strong>{r.submitter?.name || 'No name'}</strong>
+                        {r.submitter?.email && <span style={{ color: 'var(--text-secondary)' }}> · {r.submitter.email}</span>}
+                      </span>
+                      <button type="button" className="icplc-btn" disabled={busy || !r.submitter?.name}
+                        onClick={() => run('add_unmatched', { submission_ids: [r.submission_id] })}>
+                        Add to Working List
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {notable.length > 0 && (
               <details style={{ marginTop: 12 }}>
                 <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>{notable.length} submission{notable.length === 1 ? '' : 's'} need attention</summary>
@@ -404,7 +452,7 @@ function CMPSyncAction() {
         )}
 
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
-          Matching is by durable submission ID or exact email. Unmatched submissions never create participants.
+          Matching is by durable submission ID or exact email. Unmatched submissions are never added automatically — staff can add them to the Working List as not registered.
         </div>
       </div>
     </section>

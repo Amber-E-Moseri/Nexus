@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -8,6 +8,10 @@ import path from 'node:path'
 import pg from 'pg'
 import { CMP_FIELD_IDS } from '../../features/icplc/lib/cmpDocumentation.js'
 
+// DB-backed suite: each helper opens a fresh pg connection (~1-2s/test alone). Under the full
+// parallel run the 5s default is exceeded by load, not by a race; give it headroom.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
+
 const API_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321'
 const FUNCTIONS_URL = process.env.SUPABASE_FUNCTIONS_URL || `${API_URL}/functions/v1`
 const ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
@@ -16,7 +20,11 @@ const PG_URL = process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@12
 
 const EVENT_ID = '00000000-0000-0000-0000-000000009101'
 const PARTICIPANT_ID = '00000000-0000-0000-0000-000000009199'
+const OTHER_EVENT_ID = '00000000-0000-0000-0000-000000009102'
 const PASSWORD = 'Local-cmp-cert-123456!'
+
+// When set, the mock CMP API serves exactly these submissions (default: one fresh submission per request).
+let mockSubmissions = null
 
 const USERS = {
   superAdmin: { id: '00000000-0000-0000-0000-000000009111', email: 'cmp-sa@local.test', role: 'super_admin' },
@@ -105,7 +113,37 @@ function cmpSubmission(id) {
   }
 }
 
-async function invoke(token, action = 'apply') {
+
+function newcomer(id, overrides = {}) {
+  return {
+    ...cmpSubmission(id),
+    submitterName: 'Newcomer Person',
+    answers: {
+      ...cmpSubmission(id).answers,
+      [CMP_FIELD_IDS.email]: 'Newcomer@Local.Test',
+      [CMP_FIELD_IDS.firstName]: 'Newcomer',
+      [CMP_FIELD_IDS.lastName]: 'Person',
+      [CMP_FIELD_IDS.canadianStatus]: 'Permanent Resident',
+      ...overrides,
+    },
+  }
+}
+
+async function eventParticipants(eventId, email) {
+  return (await pgExec(
+    'SELECT * FROM public.icplc_participants WHERE event_id = $1 AND email = $2',
+    [eventId, email],
+  )).rows
+}
+
+async function removeAddedParticipants() {
+  for (const eid of [EVENT_ID, OTHER_EVENT_ID]) {
+    await pgExec('DELETE FROM public.icplc_identity_maps WHERE event_id = $1 AND participant_id <> $2', [eid, PARTICIPANT_ID])
+    await pgExec('DELETE FROM public.icplc_participants WHERE event_id = $1 AND id <> $2', [eid, PARTICIPANT_ID])
+  }
+}
+
+async function invoke(token, action = 'apply', extra = {}, eventId = EVENT_ID) {
   return fetch(`${FUNCTIONS_URL}/cmp-documentation-sync`, {
     method: 'POST',
     headers: {
@@ -113,17 +151,28 @@ async function invoke(token, action = 'apply') {
       apikey: ANON_KEY,
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ action, event_id: EVENT_ID }),
+    body: JSON.stringify({ action, event_id: eventId, ...extra }),
   })
 }
 
 async function waitForFunction(token) {
-  const deadline = Date.now() + 30_000
+  // `functions serve` replaces the previous run's edge container. The old container can answer the first
+  // probes and then vanish, so require an unbroken window of good responses, not a single one.
+  const deadline = Date.now() + 60_000
+  const STABLE_MS = 6_000
+  let stableSince = null
   while (Date.now() < deadline) {
+    let ok = false
     try {
       const res = await invoke(token, 'preview')
-      if (res.status === 403) return
+      ok = res.status === 403
     } catch {}
+    if (ok) {
+      stableSince ??= Date.now()
+      if (Date.now() - stableSince >= STABLE_MS) return
+    } else {
+      stableSince = null
+    }
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   throw new Error('cmp-documentation-sync local function did not become ready')
@@ -193,11 +242,14 @@ describe('CMP documentation sync edge authorization', () => {
     mockServer = http.createServer((req, res) => {
       res.setHeader('content-type', 'application/json')
       res.end(JSON.stringify({
-        data: [cmpSubmission(`cmp-auth-${Date.now()}`)],
-        pagination: { total: 1, page: 1, pageSize: 1000 },
+        data: mockSubmissions ?? [cmpSubmission(`cmp-auth-${Date.now()}`)],
+        pagination: { total: (mockSubmissions ?? [1]).length, page: 1, pageSize: 1000 },
       }))
     })
-    await new Promise((resolve) => mockServer.listen(0, '0.0.0.0', resolve))
+    // Fixed port: the edge runtime bakes CMP_DOCUMENTATION_FORM_URL into its container env, and the readiness
+    // probe can be answered by the previous run's still-running container. A random port would leave that
+    // container pointing at a dead mock server.
+    await new Promise((resolve) => mockServer.listen(54398, '0.0.0.0', resolve))
     mockUrl = `http://host.docker.internal:${mockServer.address().port}/submissions`
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmp-doc-auth-'))
@@ -221,7 +273,7 @@ describe('CMP documentation sync edge authorization', () => {
     functionProcess.stdout?.on('data', (chunk) => { functionLogs += chunk.toString() })
     functionProcess.stderr?.on('data', (chunk) => { functionLogs += chunk.toString() })
     await waitForFunction(tokens.member)
-  }, 90_000)
+  }, 120_000)
 
   afterAll(async () => {
     if (functionProcess) functionProcess.kill()
@@ -229,6 +281,9 @@ describe('CMP documentation sync edge authorization', () => {
     await pgExec('DELETE FROM public.icplc_email_claims WHERE event_id = $1', [EVENT_ID])
     await pgExec('DELETE FROM public.icplc_identity_maps WHERE event_id = $1', [EVENT_ID])
     await pgExec('DELETE FROM public.icplc_participants WHERE event_id = $1', [EVENT_ID])
+    await pgExec('DELETE FROM public.icplc_email_claims WHERE event_id = $1', [OTHER_EVENT_ID])
+    await pgExec('DELETE FROM public.icplc_identity_maps WHERE event_id = $1', [OTHER_EVENT_ID])
+    await pgExec('DELETE FROM public.icplc_participants WHERE event_id = $1', [OTHER_EVENT_ID])
     await pgExec('DELETE FROM public.sprint_team_members WHERE user_id = ANY($1::uuid[])', [Object.values(USERS).map((u) => u.id)])
     await pgExec('DELETE FROM public.activity_log WHERE user_id = ANY($1::uuid[])', [Object.values(USERS).map((u) => u.id)])
     await pgExec('DELETE FROM public.users WHERE id = ANY($1::uuid[])', [Object.values(USERS).map((u) => u.id)])
@@ -267,4 +322,136 @@ describe('CMP documentation sync edge authorization', () => {
     expect(res.status).toBe(401)
     expect(await snapshotParticipant()).toEqual(before)
   }, 45_000)
+
+  describe('add_unmatched', () => {
+    afterEach(async () => {
+      mockSubmissions = null
+      await removeAddedParticipants()
+      await pgExec('DELETE FROM public.icplc_email_claims WHERE event_id = $1 AND participant_id <> $2', [EVENT_ID, PARTICIPANT_ID])
+    })
+
+    it('adds an unmatched submission as a not-registered, tracking participant and applies its documentation', async () => {
+      await resetParticipant()
+      mockSubmissions = [newcomer('cmp-um-1')]
+      const preview = await (await invoke(tokens.superAdmin, 'preview')).json()
+      expect(preview.results[0].status).toBe('unmatched')
+      expect(preview.results[0].submitter).toEqual({ name: 'Newcomer Person', email: 'newcomer@local.test' })
+      expect(await eventParticipants(EVENT_ID, 'newcomer@local.test')).toHaveLength(0) // preview never creates
+
+      const res = await invoke(tokens.superAdmin, 'add_unmatched', { submission_ids: ['cmp-um-1'] })
+      const body = await res.json()
+      expect(res.status, JSON.stringify(body)).toBe(200)
+      expect(body.results).toHaveLength(1)
+      expect(body.results[0].status).toBe('matched_applied')
+
+      const rows = await eventParticipants(EVENT_ID, 'newcomer@local.test')
+      expect(rows).toHaveLength(1)
+      const row = rows[0]
+      expect(row.full_name).toBe('Newcomer Person')
+      expect(row.registration_status).toBe('not_registered')
+      expect(row.participation_status).toBe('tracking')
+      expect(row.canada_residency_status).toBe('PERMANENT_RESIDENT')
+      expect(row.passport_readiness).toBe('ready')
+      expect(row.source_values.created_from.source).toBe('cmp_documentation')
+      expect(row.source_values.cmp_documentation.submission_id).toBe('cmp-um-1')
+      expect(row.source_values.cmp_documentation.phone).toBe('555-3333')
+      const map = await pgExec(
+        `SELECT participant_id FROM public.icplc_identity_maps WHERE event_id = $1 AND source_type = 'cmp_documentation' AND source_key = 'cmp-um-1'`,
+        [EVENT_ID],
+      )
+      expect(map.rows[0]?.participant_id).toBe(row.id)
+    }, 60_000)
+
+    it('is safe to repeat: a second call and an already-matched participant never create duplicates', async () => {
+      await resetParticipant()
+      mockSubmissions = [newcomer('cmp-um-2')]
+      await invoke(tokens.superAdmin, 'add_unmatched', { submission_ids: ['cmp-um-2'] })
+      const again = await (await invoke(tokens.superAdmin, 'add_unmatched', { submission_ids: ['cmp-um-2'] })).json()
+      expect(again.results[0].issues).toContain('not_unmatched')
+      expect(await eventParticipants(EVENT_ID, 'newcomer@local.test')).toHaveLength(1)
+
+      // Submission for a participant that already exists (matched by email) must not be added again.
+      await resetParticipant()
+      mockSubmissions = [cmpSubmission('cmp-um-matched')]
+      const matched = await (await invoke(tokens.superAdmin, 'add_unmatched', { submission_ids: ['cmp-um-matched'] })).json()
+      expect(matched.results[0].issues).toContain('not_unmatched')
+      expect(await eventParticipants(EVENT_ID, 'cmp-auth-owner@local.test')).toHaveLength(1)
+      const total = await pgExec('SELECT count(*)::int AS n FROM public.icplc_participants WHERE event_id = $1', [EVENT_ID])
+      expect(total.rows[0].n).toBe(2)
+    }, 60_000)
+
+    it('only adds the submissions the caller selected', async () => {
+      await resetParticipant()
+      mockSubmissions = [newcomer('cmp-um-a'), newcomer('cmp-um-b', { [CMP_FIELD_IDS.email]: 'other-newcomer@local.test' })]
+      const body = await (await invoke(tokens.superAdmin, 'add_unmatched', { submission_ids: ['cmp-um-b'] })).json()
+      expect(body.results).toHaveLength(1)
+      expect(await eventParticipants(EVENT_ID, 'other-newcomer@local.test')).toHaveLength(1)
+      expect(await eventParticipants(EVENT_ID, 'newcomer@local.test')).toHaveLength(0)
+      const missing = await invoke(tokens.superAdmin, 'add_unmatched', {})
+      expect(missing.status).toBe(400)
+    }, 60_000)
+
+    it('keeps staff overrides protected on later CMP syncs of an added participant', async () => {
+      await resetParticipant()
+      mockSubmissions = [newcomer('cmp-um-3')]
+      await invoke(tokens.superAdmin, 'add_unmatched', { submission_ids: ['cmp-um-3'] })
+      const [added] = await eventParticipants(EVENT_ID, 'newcomer@local.test')
+      await pgExec(
+        `UPDATE public.icplc_participants
+         SET passport_readiness = 'no_passport',
+             override_fields = '{"passport_readiness":{"overridden":true,"source":"manual"}}'::jsonb,
+             participation_status = 'confirmed'
+         WHERE id = $1`,
+        [added.id],
+      )
+      const res = await invoke(tokens.superAdmin, 'apply') // CMP still says "I have a valid passport"
+      expect(res.status).toBe(200)
+      const [after] = await eventParticipants(EVENT_ID, 'newcomer@local.test')
+      expect(after.passport_readiness).toBe('no_passport')
+      expect(after.participation_status).toBe('confirmed')
+      expect(after.registration_status).toBe('not_registered')
+      expect(after.source_values.created_from.source).toBe('cmp_documentation')
+    }, 60_000)
+
+    it('stays inside the requested event', async () => {
+      await resetParticipant()
+      await pgExec(
+        `INSERT INTO public.event_configs(id, event_name, sprint_pattern, is_active)
+         VALUES ($1, 'CMP Auth Other Event', 'cmp-auth-other', false) ON CONFLICT (id) DO NOTHING`,
+        [OTHER_EVENT_ID],
+      )
+      await pgExec(
+        `INSERT INTO public.icplc_participants(event_id, full_name, email) VALUES ($1, 'Other Event Person', 'newcomer@local.test')`,
+        [OTHER_EVENT_ID],
+      )
+      mockSubmissions = [newcomer('cmp-um-4')]
+      const body = await (await invoke(tokens.superAdmin, 'add_unmatched', { submission_ids: ['cmp-um-4'] })).json()
+      expect(body.results[0].status).toBe('matched_applied')
+      const inEvent = await eventParticipants(EVENT_ID, 'newcomer@local.test')
+      const inOther = await eventParticipants(OTHER_EVENT_ID, 'newcomer@local.test')
+      expect(inEvent).toHaveLength(1)
+      expect(inOther).toHaveLength(1)
+      expect(inOther[0].full_name).toBe('Other Event Person')
+      expect(inOther[0].source_values.cmp_documentation).toBeUndefined()
+      const otherMaps = await pgExec('SELECT count(*)::int AS n FROM public.icplc_identity_maps WHERE event_id = $1', [OTHER_EVENT_ID])
+      expect(otherMaps.rows[0].n).toBe(0)
+    }, 60_000)
+
+    it('rejects callers without ICPLC write access and creates nothing', async () => {
+      await resetParticipant()
+      mockSubmissions = [newcomer('cmp-um-5')]
+      for (const key of ['member', 'finance', 'transportation', 'accommodation', 'hospitality']) {
+        const res = await invoke(tokens[key], 'add_unmatched', { submission_ids: ['cmp-um-5'] })
+        expect(res.status, key).toBe(403)
+      }
+      expect((await invoke(null, 'add_unmatched', { submission_ids: ['cmp-um-5'] })).status).toBe(401)
+      expect(await eventParticipants(EVENT_ID, 'newcomer@local.test')).toHaveLength(0)
+      for (const key of ['regionalSecretary', 'writer']) {
+        const res = await invoke(tokens[key], 'add_unmatched', { submission_ids: ['cmp-um-5'] })
+        expect(res.status, key).toBe(200)
+        await removeAddedParticipants()
+        await pgExec('DELETE FROM public.icplc_email_claims WHERE event_id = $1 AND participant_id <> $2', [EVENT_ID, PARTICIPANT_ID])
+      }
+    }, 60_000)
+  })
 })
