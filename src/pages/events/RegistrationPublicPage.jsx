@@ -235,7 +235,6 @@ export default function RegistrationPublicPage() {
             </div>
           );
         })()}
-        )}
 
         {/* ── Subgroup pills (hidden when scoped via URL) ────────────────── */}
         {!lockedSubgroup && subgroups.length > 0 && (

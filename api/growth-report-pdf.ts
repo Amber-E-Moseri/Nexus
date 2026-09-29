@@ -5,7 +5,6 @@
 import { readFileSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
-import type { VercelRequest, VercelResponse } from '@vercel/node'
 import puppeteer from 'puppeteer-core'
 import { renderGrowthReportHTMLWithTemplate } from '../src/lib/growthReportRenderer.js'
 import type { GrowthReport } from '../src/lib/reportModels.js'
@@ -56,6 +55,16 @@ async function getBrowserArgs() {
   }
 }
 
+// Minimal request/response shapes (type-only; avoids a dependency on @vercel/node types)
+interface VercelRequest { method?: string; body?: unknown }
+interface VercelResponse {
+  status(code: number): VercelResponse
+  setHeader(name: string, value: string): VercelResponse
+  json(body: unknown): VercelResponse
+  send(body: unknown): VercelResponse
+  end(): VercelResponse
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') {
     return res.status(200).setHeader('Access-Control-Allow-Origin', '*').end()
@@ -80,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     browser = await puppeteer.launch(launchArgs)
 
     const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle0' })
+    await page.setContent(html, { waitUntil: 'load' })
 
     const pdfBuffer = await page.pdf({
       format: 'Letter',

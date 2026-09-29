@@ -2,7 +2,7 @@
 // Canonical presentation logic shared by Vite (browser) and Node (API) contexts.
 // Use renderGrowthReportHTMLWithTemplate(report, templateStr) — environment-neutral.
 
-import { GrowthReport, TrendPoint, fmt, delta, statusLabel } from './reportModels'
+import { GrowthReport, TrendPoint, fmt, delta, statusLabel } from './reportModels.js'
 
 // ─── Chart ────────────────────────────────────────────────────────────────────
 
