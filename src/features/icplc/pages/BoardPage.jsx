@@ -8,11 +8,11 @@ const PARTICIPATION_COLUMNS = ['tracking', 'likely', 'confirmed', 'uncertain', '
 const READINESS_COLUMNS = ['unknown', 'in_progress', 'action_required', 'blocked', 'ready']
 
 const PARTICIPATION_DOTS = {
-  tracking: '#8A7F99', likely: '#4C6FBF', confirmed: '#2D8653',
+  tracking: '#6B7280', likely: '#2563EB', confirmed: '#2D8653',
   uncertain: '#C97820', not_attending: '#C94830',
 }
 const READINESS_DOTS = {
-  unknown: '#C4BBD4', in_progress: '#4C6FBF',
+  unknown: '#9CA3AF', in_progress: '#2563EB',
   action_required: '#C97820', blocked: '#C94830', ready: '#2D8653',
 }
 
@@ -89,7 +89,7 @@ export default function BoardPage({ canWrite }) {
     <div>
       {/* Group by toolbar */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Group by:</span>
+        <span style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>Group by:</span>
         {['participation', 'readiness'].map((opt) => (
           <button
             key={opt}
@@ -106,31 +106,31 @@ export default function BoardPage({ canWrite }) {
       <div style={{ display: 'flex', gap: 10, overflowX: 'auto', alignItems: 'flex-start', paddingBottom: 16 }}>
         {columns.map((col) => {
           const cards = grouped[col] || []
-          const dotColor = dots[col] || '#C4BBD4'
+          const dotColor = dots[col] || '#9CA3AF'
           return (
             <div
               key={col}
               style={{
                 minWidth: 220, width: 220, flexShrink: 0,
-                background: 'var(--surface-2)', borderRadius: 8,
-                border: '1px solid var(--border)',
+                background: 'var(--icplc-grey-bg, var(--surface-2))', borderRadius: 8,
+                border: '1px solid var(--icplc-border, var(--border))',
               }}
             >
               {/* Column header */}
               <div style={{
-                padding: '9px 12px', borderBottom: '1px solid var(--border)',
+                padding: '9px 12px', borderBottom: '1px solid var(--icplc-border, var(--border))',
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
                 <span style={{
                   width: 8, height: 8, borderRadius: '50%',
                   background: dotColor, flexShrink: 0,
                 }} />
-                <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>
+                <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: 'var(--icplc-text, var(--text-primary))' }}>
                   {colLabels[col]}
                 </span>
                 <span style={{
-                  fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)',
-                  background: 'var(--surface-1, #fff)', border: '1px solid var(--border)',
+                  fontSize: 11, fontWeight: 700, color: 'var(--icplc-text-soft, var(--text-secondary))',
+                  background: 'var(--icplc-surface, #fff)', border: '1px solid var(--icplc-border, var(--border))',
                   borderRadius: 10, padding: '1px 7px', minWidth: 20, textAlign: 'center',
                 }}>
                   {cards.length}
@@ -148,8 +148,8 @@ export default function BoardPage({ canWrite }) {
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfile(p.id) } }}
                     aria-label={`Open profile: ${p.full_name}`}
                     style={{
-                      padding: '12px 14px', background: 'var(--surface-1, #fff)', borderRadius: 8,
-                      border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12,
+                      padding: '12px 14px', background: 'var(--icplc-surface, #fff)', borderRadius: 8,
+                      border: '1px solid var(--icplc-border, var(--border))', cursor: 'pointer', fontSize: 12,
                       boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                     }}
                   >

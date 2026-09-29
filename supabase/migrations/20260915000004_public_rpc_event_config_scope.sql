@@ -8,6 +8,10 @@
 -- APPROACH: Resolve the event config whose public_token_key matches the stored token,
 -- then scope all three data tables to that event's records only.
 
+-- Drop first so we can change the return type (PostgreSQL won't allow
+-- CREATE OR REPLACE when OUT-parameter signatures differ).
+DROP FUNCTION IF EXISTS public.get_public_registration_data(text);
+
 CREATE OR REPLACE FUNCTION public.get_public_registration_data(p_token text)
 RETURNS TABLE (
   row_num             bigint,

@@ -17,6 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_growth_unmatched_hosts_name ON public.growth_sync
 ALTER TABLE public.growth_sync_unmatched_hosts ENABLE ROW LEVEL SECURITY;
 
 -- Admin only access
+DROP POLICY IF EXISTS "growth_sync_unmatched_hosts_admin" ON public.growth_sync_unmatched_hosts;
 CREATE POLICY "growth_sync_unmatched_hosts_admin" ON public.growth_sync_unmatched_hosts
   FOR ALL USING (auth.jwt() ->> 'user_role' = 'super_admin');
 

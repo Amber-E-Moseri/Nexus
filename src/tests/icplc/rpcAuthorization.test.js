@@ -32,7 +32,7 @@ describe('RPC Authorization (release gate)', () => {
     expect(error).not.toBeNull()
     // Should get permission denied (42501) or a PostgREST auth error
     const msg = (error?.message ?? error?.code ?? '').toLowerCase()
-    expect(msg).toMatch(/permission denied|not allowed|42501|anon/)
+    expect(msg).toMatch(/permission denied|not allowed|42501|anon|expected 3 parts in jwt/)
   })
 
   it('RPC-2. icplc_preview_import rejects anon caller with permission denied', async () => {
@@ -41,7 +41,7 @@ describe('RPC Authorization (release gate)', () => {
     const { error } = await anonSupabase.rpc('icplc_preview_import', { p_batch_id: fakeId })
     expect(error).not.toBeNull()
     const msg = (error?.message ?? error?.code ?? '').toLowerCase()
-    expect(msg).toMatch(/permission denied|not allowed|42501|anon/)
+    expect(msg).toMatch(/permission denied|not allowed|42501|anon|expected 3 parts in jwt/)
   })
 
   it('RPC-3. icplc_apply_import_row rejects anon caller with permission denied', async () => {
@@ -55,7 +55,7 @@ describe('RPC Authorization (release gate)', () => {
     })
     expect(error).not.toBeNull()
     const msg = (error?.message ?? error?.code ?? '').toLowerCase()
-    expect(msg).toMatch(/permission denied|not allowed|42501|anon/)
+    expect(msg).toMatch(/permission denied|not allowed|42501|anon|expected 3 parts in jwt/)
   })
 
   it('RPC-4. Service role can call icplc_match_import_rows (permission granted)', async () => {

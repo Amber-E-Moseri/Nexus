@@ -34,6 +34,7 @@ export function deriveIdentityKey(rawRow, headerMapping) {
  * Returns a new object with canonical field names.
  * "Participation" columns are stored under 'participation_reference' and
  * never mapped to participation_status.
+ * If full_name is not present but first_name and last_name are, combines them.
  */
 export function applyHeaderMapping(rawRow, headerMapping) {
   const result = { _raw: rawRow }
@@ -47,6 +48,17 @@ export function applyHeaderMapping(rawRow, headerMapping) {
       result[canonical] = value
     }
   }
+
+  // If full_name is not set but first_name and/or last_name are, combine them
+  if (!result.full_name && (result.first_name || result.last_name)) {
+    const parts = []
+    if (result.first_name && result.first_name.trim()) parts.push(result.first_name.trim())
+    if (result.last_name && result.last_name.trim()) parts.push(result.last_name.trim())
+    if (parts.length > 0) {
+      result.full_name = parts.join(' ')
+    }
+  }
+
   return result
 }
 

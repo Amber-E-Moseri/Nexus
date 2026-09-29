@@ -33,6 +33,7 @@ export default function OverviewTab({ participant, canWrite }) {
       <section>
         <div className="icplc-field-grid">
           <Field label="Full Name" value={participant.full_name} />
+          <Field label="KingsChat Handle" value={participant.kingschat_username} />
           <Field label="Region" value={participant.region} />
           <Field label="Subgroup" value={participant.subgroup} />
           <Field label="Group" value={participant.group_name} />

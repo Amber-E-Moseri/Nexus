@@ -1,10 +1,8 @@
 // Growth Report HTML Renderer
 // Canonical presentation logic shared by Vite (browser) and Node (API) contexts.
-// Environment-neutral core: renderGrowthReportHTMLWithTemplate(report, templateStr)
-// Vite convenience wrapper: renderGrowthReportHTML(report) — uses ?raw import
+// Use renderGrowthReportHTMLWithTemplate(report, templateStr) — environment-neutral.
 
 import { GrowthReport, TrendPoint, fmt, delta, statusLabel } from './reportModels'
-import template from './growthReportTemplate.html?raw'
 
 // ─── Chart ────────────────────────────────────────────────────────────────────
 
@@ -160,8 +158,3 @@ export function renderGrowthReportHTMLWithTemplate(report: GrowthReport, templat
     .replace('{{GENERATED_AT}}', escapeHtml(generatedAt))
 }
 
-// ─── Vite/browser convenience wrapper ─────────────────────────────────────────
-
-export function renderGrowthReportHTML(report: GrowthReport): string {
-  return renderGrowthReportHTMLWithTemplate(report, template)
-}

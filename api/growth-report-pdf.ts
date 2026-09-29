@@ -2,7 +2,7 @@
 // POST /api/growth-report-pdf
 // Orchestrates Chromium PDF generation using the canonical renderer.
 
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -22,6 +22,21 @@ function loadTemplate(): string {
   }
 }
 
+function findLocalChrome(): string {
+  const candidates = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+  ]
+  for (const p of candidates) {
+    if (existsSync(p)) return p
+  }
+  throw new Error('No local Chrome/Chromium found for local PDF generation. Install Chrome or deploy to Vercel.')
+}
+
 async function getBrowserArgs() {
   const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME
   if (isServerless) {
@@ -33,10 +48,9 @@ async function getBrowserArgs() {
       headless: chromium.default.headless as true,
     }
   }
-  // Local development: use puppeteer's bundled Chromium
-  const localPuppeteer = await import('puppeteer')
+  // Local development: find system Chrome
   return {
-    executablePath: localPuppeteer.default.executablePath(),
+    executablePath: findLocalChrome(),
     headless: true as const,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   }

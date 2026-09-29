@@ -1,14 +1,13 @@
 import React, { useMemo, useState } from 'react'
 import { UserPlus } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useCreateParticipant, useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import ParticipantTable from '../components/ParticipantTable.jsx'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
-import RegistrationsPage from './RegistrationsPage.jsx'
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import {
   REGISTRATION_SOURCE_TYPE,
@@ -20,7 +19,7 @@ export default function PeoplePage({ canWrite }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
-  const [view, setView] = useState('list') // 'list' | 'sources'
+  const [viewMode, setViewMode] = useState('table') // 'table' or 'cards'
 
   const { data: participants, isLoading, error } = useICPLCParticipants(eventId, {
     search: filters.search,
@@ -78,70 +77,113 @@ export default function PeoplePage({ canWrite }) {
 
   return (
     <div>
-      {/* Sub-view toggle + primary action */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', borderRadius: 8, padding: 3 }}>
-          {[{ key: 'list', label: 'Working List' }, { key: 'sources', label: 'Registration Sources' }].map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setView(key)}
-              style={{
-                padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 13, cursor: 'pointer',
-                background: view === key ? 'var(--surface-1, #fff)' : 'transparent',
-                color: view === key ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontWeight: view === key ? 600 : 400,
-                boxShadow: view === key ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                transition: 'background 0.12s',
-              }}
-            >
-              {label}
-            </button>
-          ))}
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--icplc-text-soft, var(--text-secondary))', marginBottom: 3 }}>
+            Canonical participant pool
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--icplc-text, var(--text-primary))' }}>Working List</div>
+          <div style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))', marginTop: 3 }}>
+            One row per participant — registration, confirmation, readiness and attention in one place.
+          </div>
         </div>
-        {canWrite && view === 'list' && (
-          <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary">
+        {canWrite && (
+          <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary" style={{ flexShrink: 0 }}>
             <UserPlus size={14} aria-hidden /> Add Participant
           </button>
         )}
       </div>
 
-      {view === 'sources' && <RegistrationsPage canWrite={canWrite} />}
+      {/* Search bar */}
+      <div style={{ marginBottom: 12 }}>
+        <SearchBar />
+      </div>
 
-      {view === 'list' && (
-        <>
-          {/* Search bar */}
-          <div style={{ marginBottom: 12 }}>
-            <SearchBar />
+      {/* Filters */}
+      <ParticipantFilters />
+
+      {/* View toggle + Count */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div role="status" style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>
+          {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
+        </div>
+        {!loading && (
+          <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', borderRadius: 6, padding: 2 }}>
+            <button
+              onClick={() => setViewMode('table')}
+              title="Table view"
+              style={{
+                padding: '6px 12px', fontSize: 12, fontWeight: viewMode === 'table' ? 600 : 400,
+                background: viewMode === 'table' ? 'white' : 'transparent',
+                border: 'none', borderRadius: 4, cursor: 'pointer', color: 'var(--text-primary)',
+              }}
+            >
+              Table
+            </button>
+            <button
+              onClick={() => setViewMode('cards')}
+              title="Card view"
+              style={{
+                padding: '6px 12px', fontSize: 12, fontWeight: viewMode === 'cards' ? 600 : 400,
+                background: viewMode === 'cards' ? 'white' : 'transparent',
+                border: 'none', borderRadius: 4, cursor: 'pointer', color: 'var(--text-primary)',
+              }}
+            >
+              Cards
+            </button>
           </div>
+        )}
+      </div>
 
-          {/* Filters */}
-          <ParticipantFilters />
-
-          {/* Count */}
-          {!loading && (
-            <div role="status" style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
-              {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
-            </div>
-          )}
-
-          {error && (
-            <div style={{
-              border: '1px solid #F3BDB8', borderRadius: 8, padding: '14px 18px',
-              background: '#FEF2F2', display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12,
-            }}>
-              <span style={{ fontSize: 16, lineHeight: 1 }}>⚠</span>
-              <div style={{ fontSize: 13, color: '#991B1B' }}>
-                Failed to load participants. {error?.message || 'Please refresh the page.'}
-              </div>
-            </div>
-          )}
-
-          <ParticipantTable participants={displayedParticipants} loading={loading} />
-        </>
+      {error && (
+        <div style={{
+          border: '1px solid #F3BDB8', borderRadius: 8, padding: '14px 18px',
+          background: '#FEF2F2', display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12,
+        }}>
+          <span style={{ fontSize: 16, lineHeight: 1 }}>⚠</span>
+          <div style={{ fontSize: 13, color: '#991B1B' }}>
+            Failed to load participants. {error?.message || 'Please refresh the page.'}
+          </div>
+        </div>
       )}
 
-      {/* Canonical profile drawer (shared across both views) */}
+      {/* Conditional rendering based on view mode */}
+      {viewMode === 'table' ? (
+        <ParticipantTable participants={displayedParticipants} loading={loading} />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+          {displayedParticipants.map((p) => (
+            <div
+              key={p.id}
+              onClick={() => openProfile(p.id)}
+              style={{
+                border: '1px solid var(--border)', borderRadius: 8, padding: 14,
+                cursor: 'pointer', background: 'white',
+                transition: 'border-color 0.2s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)' }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{p.full_name}</div>
+              {p.email && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{p.email}</div>}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {p.registration_status && (
+                  <span style={{ fontSize: 11, padding: '2px 8px', background: '#E8F5E9', borderRadius: 3, color: '#2E7D32' }}>
+                    {p.registration_status}
+                  </span>
+                )}
+                {p.participation_status && (
+                  <span style={{ fontSize: 11, padding: '2px 8px', background: '#E3F2FD', borderRadius: 3, color: '#1565C0' }}>
+                    {p.participation_status}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {activeProfileId && (
         <ParticipantProfileDrawer
           participantId={activeProfileId}

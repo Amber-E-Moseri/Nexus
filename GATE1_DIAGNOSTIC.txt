@@ -1,0 +1,115 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║         REGISTRATION CSV PHASE 3 — GATE 1 ACCESS DIAGNOSTIC                ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════════════════════
+1. ADMIN JWT VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Admin JWT role:             service_role
+Environment valid:          YES
+  - SUPABASE_URL:           http://127.0.0.1:54321
+  - SUPABASE_SERVICE_ROLE_KEY: (loaded from .env.test)
+  - Role claim decoded:     service_role
+  - Token expiry:           1983812996 (year 2032, valid)
+
+═══════════════════════════════════════════════════════════════════════════════
+2. TABLE ACCESS PROBE (ALL TABLES)
+═══════════════════════════════════════════════════════════════════════════════
+
+icplc_participants:         42501 (permission denied)
+icplc_import_rows:          42501 (permission denied)
+icplc_import_batches:       42501 (permission denied)
+event_configs:              42501 (permission denied)
+users:                       42501 (permission denied)
+
+═══════════════════════════════════════════════════════════════════════════════
+3. FIRST INSERT ERROR (icplc_participants)
+═══════════════════════════════════════════════════════════════════════════════
+
+code:                       42501
+message:                    permission denied for table icplc_participants
+details:                    null
+hint:                       GRANT SELECT, INSERT ON public.icplc_participants 
+                            TO service_role;
+
+═══════════════════════════════════════════════════════════════════════════════
+4. FIRST SELECT ERROR (after INSERT attempt)
+═══════════════════════════════════════════════════════════════════════════════
+
+Since INSERT itself fails with 42501, no SELECT is attempted.
+Same error (42501) blocks table access entirely.
+
+═══════════════════════════════════════════════════════════════════════════════
+5. CLASSIFICATION — EXACT PROVEN CAUSE
+═══════════════════════════════════════════════════════════════════════════════
+
+ROOT CAUSE: PostgreSQL Table Privilege Defect (Fresh-Install)
+
+PostgreSQL error 42501 = "permission denied"
+Supabase service_role lacks base table privileges on:
+  - icplc_participants
+  - icplc_import_rows
+  - icplc_import_batches
+  - event_configs
+  - users
+
+Migrations created these tables with RLS enabled, but did NOT grant 
+SELECT/INSERT/UPDATE/DELETE to service_role.
+
+This is NOT an RLS policy issue. It is a base table GRANT issue.
+
+The hint from PostgreSQL is explicit:
+  GRANT SELECT, INSERT ON public.icplc_participants TO service_role;
+
+═══════════════════════════════════════════════════════════════════════════════
+6. HARNESS INTEGRITY
+═══════════════════════════════════════════════════════════════════════════════
+
+Prior source located:         YES (REGISTRATION_CSV_PHASE3_REPAIR_CERTIFICATION.md)
+11 scenarios preserved:       YES ✅
+  - CSV Parsing:            5 tests
+  - Identity Matching:      4 tests
+  - Import Preview:         1 test
+  - Event Isolation:        1 test
+  Total:                    11 tests
+
+Certification status:         PHASE 3 CERTIFIED (per REPAIR_CERTIFICATION.md)
+Test execution status:        BLOCKED (prior to DB privilege defect discovery)
+
+Assertions weakened:          NO
+  - All 11 test scenarios match certified specification
+  - No test scenarios deleted or omitted
+  - Test file cleanup removed only debug logging and direct PostgreSQL helpers
+
+Discrepancies found:          NONE
+  - Test categories align with spec (parsing, matching, preview, isolation)
+  - Test counts align (11 total)
+  - Test names match intended scenarios
+
+═══════════════════════════════════════════════════════════════════════════════
+7. ENVIRONMENT ASSESSMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+.env.test provides:           service_role JWT (local Supabase demo)
+Supabase instance:            Local (127.0.0.1:54321)
+Database state:               Tables exist + RLS enabled, but missing grants
+
+═══════════════════════════════════════════════════════════════════════════════
+8. RECOMMENDED ACTION
+═══════════════════════════════════════════════════════════════════════════════
+
+This is a fresh-install defect in the migration design:
+- Tables created with RLS enabled ✅
+- RLS policies defined ✅
+- service_role table privileges MISSING ❌
+
+Two options:
+A) Verify migrations 20270929000000/000001/000002 include 
+   GRANT statements for service_role (may be missing after reset)
+
+B) If migrations are correct but local db reset lost grants:
+   Apply missing grants manually during local testing setup
+
+This is a DATABASE CONFIGURATION issue, not a test harness issue.
+

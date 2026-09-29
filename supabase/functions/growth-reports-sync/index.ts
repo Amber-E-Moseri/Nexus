@@ -57,6 +57,23 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' })
 
+  // Caller authorization: cron/service_role key bypasses; manual triggers require elevated role
+  {
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const callerToken = authHeader.replace('Bearer ', '').trim()
+    const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    if (callerToken !== svcKey) {
+      const callerClient = createClient(Deno.env.get('SUPABASE_URL')!, callerToken)
+      const { data: { user }, error: authErr } = await callerClient.auth.getUser()
+      if (authErr || !user) return json(401, { error: 'Unauthorized' })
+      const adminClient = createClient(Deno.env.get('SUPABASE_URL')!, svcKey)
+      const { data: ur } = await adminClient.from('users').select('role').eq('id', user.id).single()
+      if (!ur || !['super_admin', 'regional_secretary'].includes(ur.role)) {
+        return json(403, { error: 'Forbidden: requires super_admin or regional_secretary role' })
+      }
+    }
+  }
+
   const apiToken = Deno.env.get('REPORTS_API_TOKEN')
   if (!apiToken) return json(500, { error: 'REPORTS_API_TOKEN secret not configured' })
 

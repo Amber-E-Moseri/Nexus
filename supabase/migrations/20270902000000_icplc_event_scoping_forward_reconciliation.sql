@@ -320,6 +320,9 @@ COMMENT ON TABLE public.event_payments IS
 -- This function references registrations/working_list/event_payments but is PL/pgSQL
 -- so it validates at call time, not creation time.
 
+-- Drop first: return type gains manually_confirmed column vs prior definition.
+DROP FUNCTION IF EXISTS public.get_public_registration_data(text);
+
 CREATE OR REPLACE FUNCTION public.get_public_registration_data(p_token text)
 RETURNS TABLE (
   row_num              bigint,

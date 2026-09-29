@@ -2,11 +2,25 @@
 -- Add 'SundayGathering' to service_kind CHECK constraint
 
 -- ─── 1. Update service_kind CHECK constraint to allow 'SundayGathering' ──────
-ALTER TABLE public.service_reports
-  DROP CONSTRAINT service_kind_check;
+DO $$
+DECLARE
+  v_constraint_name text;
+BEGIN
+  SELECT conname INTO v_constraint_name
+  FROM pg_constraint
+  WHERE conrelid = 'public.service_reports'::regclass
+    AND contype = 'c'
+    AND pg_get_constraintdef(oid) ILIKE '%service_kind%'
+  LIMIT 1;
 
-ALTER TABLE public.service_reports
-  ADD CONSTRAINT service_kind_check CHECK (service_kind IN ('SundayService', 'SundayGathering', 'GlobalService'));
+  IF v_constraint_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE public.service_reports DROP CONSTRAINT %I', v_constraint_name);
+  END IF;
+
+  ALTER TABLE public.service_reports
+    ADD CONSTRAINT service_kind_check CHECK (service_kind IN ('SundayService', 'SundayGathering', 'GlobalService'));
+END;
+$$;
 
 -- ─── 2. Update church names in service_center_schedule ──────────────────────
 UPDATE public.service_center_schedule SET church_name = 'BLW Niagara Church'          WHERE church_unit_id = 'cmphy72jl00gvoaqnwxbl323m';

@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../../../lib/supabase'
 import { useICPLC } from '../ICPLCContext.jsx'
 
 const PARTICIPATION_OPTIONS = ['tracking', 'likely', 'confirmed', 'uncertain', 'not_attending']
+const FLIGHT_STATUS_OPTIONS = ['booked', 'awaiting', 'missing']
 const WORKING_LIST_VIEW_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'registered', label: 'Registered' },
@@ -14,10 +17,26 @@ const READINESS_OPTIONS = ['unknown', 'in_progress', 'action_required', 'blocked
 const VISA_REQ_OPTIONS = ['review', 'required', 'not_required']
 
 export default function ParticipantFilters() {
-  const { filters, setFilters } = useICPLC()
+  const { config, filters, setFilters } = useICPLC()
   const [popoverOpen, setPopoverOpen] = useState(false)
   const popoverRef = useRef(null)
   const btnRef = useRef(null)
+
+  // Load available subgroups from the DB so we can render "turn off" chips
+  const { data: availableSubgroups = [] } = useQuery({
+    queryKey: ['icplc_subgroups', config?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('icplc_participants')
+        .select('subgroup')
+        .eq('event_id', config.id)
+        .not('subgroup', 'is', null)
+      if (error) throw error
+      return [...new Set((data || []).map(r => r.subgroup).filter(Boolean))].sort()
+    },
+    enabled: !!config?.id,
+    staleTime: 5 * 60_000,
+  })
 
   useEffect(() => {
     if (!popoverOpen) return
@@ -45,6 +64,7 @@ export default function ParticipantFilters() {
       passport_readiness: [],
       visa_requirement: [],
       readiness: [],
+      flight_status: [],
     }))
   }
 
@@ -56,6 +76,8 @@ export default function ParticipantFilters() {
       passport_readiness: [],
       visa_requirement: [],
       readiness: [],
+      flight_status: [],
+      subgroup: [],
     }))
   }
 
@@ -64,12 +86,16 @@ export default function ParticipantFilters() {
     filters.passport_readiness,
     filters.visa_requirement,
     filters.readiness,
+    filters.flight_status,
   ].some((a) => a?.length > 0)
 
-  const hasFilters = advancedActive || (filters.working_list_view || 'all') !== 'all'
+  const excludedSubgroups = filters.subgroup || []
+  const hasSubgroupFilter = excludedSubgroups.length > 0
+  const hasFilters = advancedActive || hasSubgroupFilter || (filters.working_list_view || 'all') !== 'all'
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: '8px 0' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
       {/* Primary chips: Working List View */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {WORKING_LIST_VIEW_OPTIONS.map((opt) => {
@@ -106,7 +132,7 @@ export default function ParticipantFilters() {
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
             <path d="M1 3h14M4 8h8M7 13h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
-          Filters{advancedActive ? ` (${[filters.participation_status, filters.passport_readiness, filters.visa_requirement, filters.readiness].reduce((s, a) => s + (a?.length || 0), 0)})` : ''}
+          Filters{advancedActive ? ` (${[filters.participation_status, filters.passport_readiness, filters.visa_requirement, filters.readiness, filters.flight_status].reduce((s, a) => s + (a?.length || 0), 0)})` : ''}
         </button>
 
         {popoverOpen && (
@@ -151,6 +177,12 @@ export default function ParticipantFilters() {
                 onToggle={(v) => toggle('readiness', v)}
               />
               <PopoverFilterGroup
+                label="Flight Status"
+                options={FLIGHT_STATUS_OPTIONS}
+                active={filters.flight_status}
+                onToggle={(v) => toggle('flight_status', v)}
+              />
+              <PopoverFilterGroup
                 label="Passport"
                 options={PASSPORT_OPTIONS}
                 active={filters.passport_readiness}
@@ -183,6 +215,42 @@ export default function ParticipantFilters() {
         >
           Clear all
         </button>
+      )}
+      </div>{/* end inner flex row */}
+
+      {/* Subgroup visibility — each chip is ON (visible) by default; clicking hides that subgroup */}
+      {availableSubgroups.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginRight: 2, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+            Subgroups
+          </span>
+          {availableSubgroups.map((sg) => {
+            const isOff = excludedSubgroups.includes(sg)
+            return (
+              <button
+                key={sg}
+                type="button"
+                className="icplc-chip"
+                aria-pressed={!isOff}
+                title={isOff ? `${sg} — hidden (click to show)` : `${sg} — visible (click to hide)`}
+                onClick={() => toggle('subgroup', sg)}
+                style={{
+                  opacity: isOff ? 0.4 : 1,
+                  background: isOff ? 'var(--surface-2, #f3f4f6)' : undefined,
+                  color: isOff ? 'var(--text-secondary)' : undefined,
+                  border: isOff ? '1px solid var(--border)' : undefined,
+                  maxWidth: 180,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {isOff && <span aria-hidden style={{ marginRight: 4 }}>✕</span>}
+                {sg}
+              </button>
+            )
+          })}
+        </div>
       )}
     </div>
   )

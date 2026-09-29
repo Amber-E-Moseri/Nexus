@@ -6,7 +6,7 @@ import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx
 import { ATTENTION_CATEGORIES, attentionCategoryKeys } from '../lib/documentationRules.js'
 import { isActiveParticipant } from '../lib/reconciliation.js'
 
-export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }) {
+export default function OverviewPage({ canWrite, onShowPeople }) {
   const { config, activeProfileId, activeProfileTab, closeProfile, setFilters } = useICPLC()
   const eventId = config?.id
   const { participants, ambiguousRegistrations, isLoading } = useICPLCWorkingList(eventId)
@@ -25,9 +25,11 @@ export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }
       readinessCounts[r] = (readinessCounts[r] || 0) + 1
     }
     const ready = readinessCounts.ready
+    const needsAttention = readinessCounts.action_required + readinessCounts.blocked
     return {
-      total, registered, confirmed, ready,
+      total, registered, confirmed, ready, needsAttention,
       registeredPct: pct(registered), confirmedPct: pct(confirmed), readyPct: pct(ready),
+      needsAttentionPct: pct(needsAttention),
       attention,
       bySubgroup: countBy(active, 'subgroup'),
       readinessCounts,
@@ -35,27 +37,33 @@ export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }
     }
   }, [participants])
 
-  if (isLoading) return <div role="status" style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading...</div>
+  if (isLoading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="icplc-stat-grid">
+        {[1,2,3,4].map((i) => (
+          <div key={i} className="icplc-stat-card" style={{ height: 120, animation: 'pulse 1.5s ease-in-out infinite' }} />
+        ))}
+      </div>
+    </div>
+  )
 
   const attentionCards = ATTENTION_CATEGORIES.filter((c) => stats.attention.get(c.key))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Stat cards */}
       <div className="icplc-stat-grid">
-        <StatCard label="Working List" value={`${stats.total}`} detail="participants" />
         <StatCard
-          label="Registered"
-          value={`${stats.registered} / ${stats.total}`}
-          detail={`${stats.registeredPct}%`}
-          onClick={() => {
-            setFilters((prev) => ({ ...prev, working_list_view: 'registered' }))
-            onShowPeople?.()
-          }}
+          label="Working List"
+          value={stats.total}
+          sub="total participants"
         />
         <StatCard
           label="Confirmed"
-          value={`${stats.confirmed} / ${stats.total}`}
-          detail={`${stats.confirmedPct}%`}
+          value={stats.confirmed}
+          sub={`${stats.confirmedPct}% of ${stats.total}`}
+          pct={stats.confirmedPct}
+          barColor="var(--icplc-green)"
           onClick={() => {
             setFilters((prev) => ({ ...prev, working_list_view: 'confirmed' }))
             onShowPeople?.()
@@ -63,90 +71,138 @@ export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }
         />
         <StatCard
           label="Ready"
-          value={`${stats.ready} / ${stats.total}`}
-          detail={`${stats.readyPct}%`}
+          value={stats.ready}
+          sub={`${stats.readyPct}% of ${stats.total}`}
+          pct={stats.readyPct}
+          barColor="var(--icplc-green)"
           onClick={() => {
             setFilters((prev) => ({ ...prev, working_list_view: 'all', readiness: ['ready'] }))
             onShowPeople?.()
           }}
         />
+        <StatCard
+          label="Needs Attention"
+          value={stats.needsAttention}
+          sub={`${stats.needsAttentionPct}% of ${stats.total}`}
+          pct={stats.needsAttentionPct}
+          barColor="var(--icplc-orange)"
+          onClick={() => {
+            setFilters((prev) => ({ ...prev, working_list_view: 'needs_attention' }))
+            onShowPeople?.()
+          }}
+        />
       </div>
 
-      <ReadinessBar counts={stats.readinessCounts} total={stats.total} />
+      {/* Readiness Distribution */}
+      <div className="icplc-overview-section">
+        <ReadinessBar counts={stats.readinessCounts} total={stats.total} />
+      </div>
 
+      {/* Ambiguous registrations */}
       {ambiguousRegistrations.length > 0 && (
         <div style={{
-          border: '1px solid var(--border)', borderRadius: 8, padding: 14,
-          background: 'var(--surface-1)', display: 'flex', justifyContent: 'space-between',
+          border: '1px solid var(--icplc-border)', borderRadius: 8, padding: '14px 18px',
+          background: 'var(--icplc-orange-bg)', display: 'flex', justifyContent: 'space-between',
           gap: 12, alignItems: 'center', flexWrap: 'wrap',
         }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Ambiguous Registration Match</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--icplc-text)' }}>Ambiguous Registration Match</div>
+            <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)', marginTop: 3 }}>
               {ambiguousRegistrations.length} registration{ambiguousRegistrations.length === 1 ? '' : 's'} need review — not linked, no duplicate created.
             </div>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Review in the Registrations tab</div>
+          <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)' }}>Review in Imports</div>
         </div>
       )}
 
-      <section aria-labelledby="ov-attn">
-        <h3 id="ov-attn" style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600 }}>Needs Attention</h3>
+      {/* Needs Attention */}
+      <div className="icplc-overview-section">
+        <h3 className="icplc-overview-section-title">Needs Attention</h3>
         {attentionCards.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Nothing needs attention right now.</div>
+          <div style={{ fontSize: 13, color: 'var(--icplc-text-soft)' }}>Nothing needs attention right now.</div>
         ) : (
           <div className="icplc-attn-grid">
             {attentionCards.map((c) => (
               <button
                 key={c.key}
                 type="button"
-                onClick={() => onShowAttention?.()}
+                onClick={() => {
+                  setFilters((prev) => ({ ...prev, working_list_view: 'needs_attention' }))
+                  onShowPeople?.()
+                }}
                 className="icplc-btn"
-                style={{ justifyContent: 'space-between', textAlign: 'left', padding: '10px 12px', minHeight: 44 }}
+                style={{ justifyContent: 'space-between', textAlign: 'left', padding: '10px 14px', minHeight: 44 }}
               >
-                <span>{c.label}</span>
-                <strong>{stats.attention.get(c.key)}</strong>
+                <span style={{ fontSize: 13 }}>{c.label}</span>
+                <strong style={{ fontSize: 14, color: 'var(--icplc-orange)' }}>{stats.attention.get(c.key)}</strong>
               </button>
             ))}
           </div>
         )}
-      </section>
+      </div>
 
-      <section>
-        <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600 }}>By Subgroup</h3>
+      {/* By Subgroup */}
+      <div className="icplc-overview-section">
+        <h3 className="icplc-overview-section-title">By Subgroup</h3>
         <div style={{ overflowX: 'auto' }}>
-        <table className="fs-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Subgroup</th>
-              <th style={thStyle}>Total</th>
-              <th style={thStyle}>Confirmed</th>
-              <th style={thStyle}>Registered</th>
-              <th style={thStyle}>Action Required</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(stats.bySubgroup)
-              .sort((a, b) => b[1] - a[1])
-              .map(([subgroup, count]) => {
-                const inSubgroup = stats.active.filter((p) => p.subgroup === subgroup)
-                const confirmed = inSubgroup.filter((p) => p.participation_status === 'confirmed').length
-                const registeredInSubgroup = inSubgroup.filter((p) => p.registration_link_status === 'registered').length
-                const actionRequired = inSubgroup.filter((p) => deriveReadiness(p).readiness === 'action_required').length
-                return (
-                  <tr key={subgroup || 'unassigned'}>
-                    <td style={tdStyle}>{subgroup || <em style={{ color: 'var(--text-secondary)' }}>Unassigned</em>}</td>
-                    <td style={tdStyle}>{count}</td>
-                    <td style={tdStyle}>{confirmed}</td>
-                    <td style={tdStyle}>{registeredInSubgroup}</td>
-                    <td style={tdStyle}>{actionRequired}</td>
-                  </tr>
-                )
-              })}
-          </tbody>
-        </table>
+          <table className="icplc-table">
+            <thead>
+              <tr>
+                <th>Subgroup</th>
+                <th>Total</th>
+                <th>Confirmed</th>
+                <th>Registered</th>
+                <th>Ready</th>
+                <th>Confirmed %</th>
+                <th>Issues</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(stats.bySubgroup)
+                .sort((a, b) => b[1] - a[1])
+                .map(([subgroup, count]) => {
+                  const inSubgroup = stats.active.filter((p) => p.subgroup === subgroup)
+                  const confirmed = inSubgroup.filter((p) => p.participation_status === 'confirmed').length
+                  const registeredInSubgroup = inSubgroup.filter((p) => p.registration_link_status === 'registered').length
+                  const ready = inSubgroup.filter((p) => deriveReadiness(p).readiness === 'ready').length
+                  const confirmedPct = count ? Math.round((confirmed / count) * 100) : 0
+                  const issues = inSubgroup.filter((p) => {
+                    const r = deriveReadiness(p).readiness
+                    return r === 'action_required' || r === 'blocked'
+                  }).length
+                  return (
+                    <tr key={subgroup || 'unassigned'}>
+                      <td style={{ fontWeight: 500 }}>{subgroup || <em style={{ color: 'var(--icplc-text-muted)' }}>Unassigned</em>}</td>
+                      <td>{count}</td>
+                      <td>{confirmed}</td>
+                      <td>{registeredInSubgroup}</td>
+                      <td>{ready}</td>
+                      <td>
+                        <span>{confirmedPct}%</span>
+                        <span className="icplc-mini-bar-track">
+                          <span className="icplc-mini-bar-fill" style={{ width: `${confirmedPct}%` }} />
+                        </span>
+                      </td>
+                      <td>
+                        {issues > 0 ? (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+                            background: 'var(--icplc-red-bg)', color: 'var(--icplc-red)',
+                          }}>
+                            {issues}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--icplc-text-muted)' }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
         </div>
-      </section>
+      </div>
 
       {activeProfileId && (
         <ParticipantProfileDrawer
@@ -161,39 +217,39 @@ export default function OverviewPage({ canWrite, onShowPeople, onShowAttention }
 }
 
 const READINESS_SEGMENTS = [
-  { key: 'ready',          label: 'Ready',           color: '#2D8653' },
-  { key: 'in_progress',    label: 'In Progress',     color: '#4C6FBF' },
-  { key: 'action_required',label: 'Action Required', color: '#C97820' },
-  { key: 'blocked',        label: 'Blocked',         color: '#C94830' },
-  { key: 'unknown',        label: 'Unknown',         color: '#C4BBD4' },
+  { key: 'ready',           label: 'Ready',           color: '#2D8653' },
+  { key: 'in_progress',     label: 'In Progress',     color: '#2563EB' },
+  { key: 'action_required', label: 'Action Required', color: '#C97820' },
+  { key: 'blocked',         label: 'Blocked',         color: '#C94830' },
+  { key: 'unknown',         label: 'Unknown',         color: '#9CA3AF' },
 ]
 
 function ReadinessBar({ counts, total }) {
   if (!total) return null
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--icplc-text)' }}>
           Readiness Distribution
         </h3>
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{total} participants</span>
+        <span style={{ fontSize: 12, color: 'var(--icplc-text-muted)' }}>{total} participants</span>
       </div>
-      <div style={{ display: 'flex', height: 14, borderRadius: 4, overflow: 'hidden', background: 'var(--surface-2)' }}>
+      <div className="icplc-readiness-bar">
         {READINESS_SEGMENTS.map(({ key, color }) => {
           const pct = total ? (counts[key] || 0) / total * 100 : 0
           if (!pct) return null
-          return <div key={key} style={{ width: `${pct}%`, background: color, transition: 'width 0.3s' }} />
+          return <div key={key} className="icplc-readiness-segment" style={{ width: `${pct}%`, background: color }} />
         })}
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 8 }}>
+      <div className="icplc-readiness-legend">
         {READINESS_SEGMENTS.map(({ key, label, color }) => {
           const n = counts[key] || 0
           if (!n) return null
           return (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
-              <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
-              <strong style={{ color: 'var(--text-primary)' }}>{n}</strong>
+            <div key={key} className="icplc-legend-item">
+              <span className="icplc-legend-dot" style={{ background: color }} />
+              <span>{label}</span>
+              <strong style={{ color: 'var(--icplc-text)' }}>{n}</strong>
             </div>
           )
         })}
@@ -202,27 +258,23 @@ function ReadinessBar({ counts, total }) {
   )
 }
 
-function StatCard({ label, value, detail, tone, onClick }) {
-  const bg = tone === 'success' ? '#F0FDF4' : tone === 'warn' ? '#FFFBEB' : tone === 'danger' ? '#FEF2F2' : 'var(--surface-2)'
-  const color = tone === 'success' ? '#166534' : tone === 'warn' ? '#92400E' : tone === 'danger' ? '#991B1B' : 'var(--text-primary)'
+function StatCard({ label, value, sub, pct, barColor, onClick }) {
   const Component = onClick ? 'button' : 'div'
   return (
     <Component
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      style={{
-        padding: 16,
-        borderRadius: 8,
-        background: bg,
-        border: '1px solid var(--border)',
-        textAlign: 'left',
-        cursor: onClick ? 'pointer' : 'default',
-        font: 'inherit',
-      }}
+      className="icplc-stat-card"
+      style={{ cursor: onClick ? 'pointer' : 'default', font: 'inherit', textAlign: 'left' }}
     >
-      <div style={{ fontSize: 28, fontWeight: 700, color }}>{value}</div>
-      {detail && <div style={{ fontSize: 12, fontWeight: 700, color, marginTop: 2 }}>{detail}</div>}
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{label}</div>
+      <div className="icplc-stat-card-label">{label}</div>
+      <div className="icplc-stat-card-value">{value}</div>
+      {sub && <div className="icplc-stat-card-sub">{sub}</div>}
+      {pct != null && (
+        <div className="icplc-progress-track">
+          <div className="icplc-progress-fill" style={{ width: `${pct}%`, background: barColor }} />
+        </div>
+      )}
     </Component>
   )
 }
@@ -234,9 +286,3 @@ function countBy(arr, field) {
     return acc
   }, {})
 }
-
-const thStyle = {
-  padding: '8px 12px', textAlign: 'left', fontSize: 12,
-  fontWeight: 600, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)',
-}
-const tdStyle = { padding: '10px 12px', borderBottom: '1px solid var(--border)', fontSize: 13 }

@@ -70,18 +70,25 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'GET') return json(405, { error: 'Method not allowed — use GET' })
 
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const platformToken = Deno.env.get('LEADERS_PLATFORM_TOKEN')
+if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+if (req.method !== 'GET') return json(405, { error: 'Method not allowed — use GET' })
 
-  if (!platformToken) {
-    return json(500, { error: 'LEADERS_PLATFORM_TOKEN secret not configured in Supabase Vault' })
-  }
+const platformToken = Deno.env.get('LEADERS_PLATFORM_TOKEN')
 
-  // Require service-role auth — this endpoint is for staff/admin use only
-  const authHeader = req.headers.get('authorization') || ''
-  if (authHeader !== `Bearer ${supabaseServiceKey}`) {
-    return json(401, { error: 'Service-role authorization required' })
-  }
+if (!platformToken) {
+  return json(500, { error: 'LEADERS_PLATFORM_TOKEN secret not configured in Supabase Vault' })
+}
+
+// Step 1: Get total count...supabase functions deploy cmp-documentation-discovery --project-ref kraurtuhflouyorgtpun
+Bundling Function: cmp-documentation-discovery
+Deploying Function: cmp-documentation-discovery (script size: 3.505kB)
+Deployed Functions on project kraurtuhflouyorgtpun: cmp-documentation-discovery
+You can inspect your deployment in the Dashboard: https://supabase.com/dashboard/project/kraurtuhflouyorgtpun/functions
+A new version of Supabase CLI is available: v2.118.0 (currentlyinstalled v2.98.2)
+We recommend updating regularly for new features and bug fixes:https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+
+moser@Amber MINGW64 ~/Downloads/clickup (perf/wave-1)
+$ 
 
   // Step 1: Get total count (pageSize=0 is not supported; fetch 1 to get pagination.total)
   let totalCount = 0

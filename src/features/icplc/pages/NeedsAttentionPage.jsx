@@ -67,7 +67,7 @@ export default function NeedsAttentionPage({ canWrite }) {
             Ambiguous Registration Match <span style={countStyle}>{ambiguousRegistrations.length}</span>
           </h3>
           <div style={descStyle}>
-            These registrations could belong to an existing participant. They are not linked and no duplicate was created — review them in the Registrations tab.
+            These registrations could belong to an existing participant. They are not linked and no duplicate was created — review them in the Working List's Registration Sources segment.
           </div>
           <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
             {ambiguousRegistrations.slice(0, 20).map((r) => (
@@ -113,7 +113,7 @@ export default function NeedsAttentionPage({ canWrite }) {
 const SEVERITY_BORDER = {
   danger: '#C94830',
   warn: '#C97820',
-  info: '#4C6FBF',
+  info: '#2563EB',
 }
 
 const CATEGORY_SEVERITY = {

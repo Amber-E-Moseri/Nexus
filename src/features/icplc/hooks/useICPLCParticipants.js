@@ -49,7 +49,13 @@ async function fetchParticipants(eventId, filters) {
     q = q.in('visa_process_status', filters.visa_process_status)
   }
   if (filters.subgroup?.length) {
-    q = q.in('subgroup', filters.subgroup)
+    // subgroup is an EXCLUSION list. Wrap value in PostgREST double-quotes so
+    // names with spaces work, and add is.null arm so unassigned participants
+    // remain visible when named subgroups are hidden.
+    for (const sg of filters.subgroup) {
+      const escaped = sg.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      q = q.or(`subgroup.neq."${escaped}",subgroup.is.null`)
+    }
   }
 
   const { data, error } = await q

@@ -17,10 +17,21 @@ create index if not exists idx_host_name_history_unit_id on host_name_history(ch
 alter table host_name_history enable row level security;
 
 -- Policy: admins only
-create policy "host_name_history_admin_access" on host_name_history
-  for all using (
-    auth.jwt() ->> 'user_role' = 'super_admin' or
-    auth.jwt() ->> 'user_role' = 'admin'
-  );
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename  = 'host_name_history'
+      and policyname = 'host_name_history_admin_access'
+  ) then
+    execute $p$
+      create policy "host_name_history_admin_access" on host_name_history
+        for all using (
+          auth.jwt() ->> 'user_role' = 'super_admin' or
+          auth.jwt() ->> 'user_role' = 'admin'
+        )
+    $p$;
+  end if;
+end $$;
 
 comment on table host_name_history is 'Maps historical host names to current church_unit_id for sync accuracy when center names change';

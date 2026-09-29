@@ -115,7 +115,7 @@ function TagsSection({ eventId }) {
         />
         <button
           onClick={() => addTag.mutate()}
-          disabled={!newName.trim() || addTag.isLoading}
+          disabled={!newName.trim() || addTag.isPending}
           style={primaryBtn}
         >
           Add
@@ -238,7 +238,7 @@ function VisaDefaultsSection({ eventId }) {
         </select>
         <button
           onClick={() => upsertDefault.mutate()}
-          disabled={!country.trim() || upsertDefault.isLoading}
+          disabled={!country.trim() || upsertDefault.isPending}
           style={primaryBtn}
         >
           Save
@@ -361,8 +361,8 @@ function IntegrationsSection({ eventId }) {
         />
         <IntegrationRow
           label="CMP Documentation Sync"
-          status="not_configured"
-          detail="Not configured — contact the admin to enable."
+          status="beta"
+          detail="BETA — discovery and mapping engine ready; Sync/Apply requires DB certification. Configure in the Imports tab."
         />
         <IntegrationRow
           label="Registration Form"
@@ -378,10 +378,11 @@ function IntegrationRow({ label, status, detail }) {
   const dot = {
     ok: { color: '#2D8653', label: 'Active' },
     loading: { color: '#C97820', label: 'Checking' },
-    never: { color: '#8A7F99', label: 'No data' },
-    not_configured: { color: '#8A7F99', label: 'Not configured' },
+    never: { color: '#9CA3AF', label: 'No data' },
+    not_configured: { color: '#9CA3AF', label: 'Not configured' },
+    beta: { color: '#2563EB', label: 'Beta' },
     error: { color: '#C94830', label: 'Error' },
-  }[status] || { color: '#8A7F99', label: status }
+  }[status] || { color: '#9CA3AF', label: status }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8 }}>

@@ -134,3 +134,27 @@ export function readinessLabel(readiness) {
     default:                return 'Unknown'
   }
 }
+
+/**
+ * Derives flight booking status for Working List and Travel page.
+ * Separate from deriveItineraryStatus() — this is the three-state Working List contract.
+ * @param {object} p - icplc_participants row
+ * @returns {'booked' | 'missing' | 'awaiting'}
+ */
+export function deriveFlightStatus(p) {
+  if (p.arrival_flight && p.departure_flight) return 'booked'
+  if (p.participation_status === 'confirmed') return 'missing'
+  return 'awaiting'
+}
+
+export function flightStatusTone(status) {
+  if (status === 'booked') return 'done'
+  if (status === 'missing') return 'at_risk'
+  return 'mute'
+}
+
+export function flightStatusLabel(status) {
+  if (status === 'booked') return 'Booked'
+  if (status === 'missing') return 'Missing'
+  return 'Awaiting'
+}

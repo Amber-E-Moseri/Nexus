@@ -360,8 +360,10 @@ async function exportProfessionalPDF(activeWeek, activeRows, growthData, network
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      alert(`Failed to generate PDF: ${error.error}`)
+      const text = await response.text()
+      let message = `HTTP ${response.status}`
+      try { message = JSON.parse(text)?.error || message } catch {}
+      alert(`Failed to generate PDF: ${message}`)
       return
     }
 
@@ -683,7 +685,7 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
 
 // ── Settings tab ───────────────────────────────────────────────────────────────
 
-function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, syncing }) {
+function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, syncing, isAdmin }) {
   const { profile } = useAuth()
   const [newEmail, setNewEmail] = useState('')
   const [flagCenter, setFlagCenter] = useState('')
@@ -702,31 +704,53 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
   }, [])
 
   async function toggleActive(id, current) {
-    await supabase.from('service_center_schedule').update({ active: !current }).eq('id', id)
+    const { data, error } = await supabase
+      .from('service_center_schedule')
+      .update({ active: !current })
+      .eq('id', id)
+      .select('id, active')
+      .single()
+    if (error || !data || data.active !== !current) {
+      alert(error?.message ?? 'Toggle failed — the row may not have updated.')
+      return
+    }
     onRefresh()
   }
 
   async function addRecipient() {
     if (!newEmail.trim()) return
-    await supabase.from('report_recipients').insert({ email: newEmail.trim().toLowerCase() })
+    const { error } = await supabase
+      .from('report_recipients')
+      .insert({ email: newEmail.trim().toLowerCase() })
+    if (error) { alert('Failed to add recipient: ' + error.message); return }
     setNewEmail('')
     onRefresh()
   }
 
   async function toggleRecipient(id, current) {
-    await supabase.from('report_recipients').update({ active: !current }).eq('id', id)
+    const { data, error } = await supabase
+      .from('report_recipients')
+      .update({ active: !current })
+      .eq('id', id)
+      .select('id, active')
+      .single()
+    if (error || !data || data.active !== !current) {
+      alert(error?.message ?? 'Toggle failed.')
+      return
+    }
     onRefresh()
   }
 
   async function removeRecipient(id) {
-    await supabase.from('report_recipients').delete().eq('id', id)
+    const { error } = await supabase.from('report_recipients').delete().eq('id', id)
+    if (error) { alert('Failed to remove recipient: ' + error.message); return }
     onRefresh()
   }
 
   async function saveFlag() {
     if (!flagCenter || !flagWeek) return
     setFlagSaving(true)
-    await supabase.from('service_center_week_status').upsert({
+    const { error } = await supabase.from('service_center_week_status').upsert({
       schedule_id:     flagCenter,
       week_start_date: flagWeek,
       status:          flagStatus,
@@ -734,8 +758,9 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
       set_by:          profile?.id ?? null,
       set_at:          new Date().toISOString(),
     }, { onConflict: 'schedule_id,week_start_date' })
-    setFlagNote('')
     setFlagSaving(false)
+    if (error) { alert('Failed to save flag: ' + error.message); return }
+    setFlagNote('')
     onRefresh()
   }
 
@@ -753,7 +778,8 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
   }
 
   async function removeFlag(id) {
-    await supabase.from('service_center_week_status').delete().eq('id', id)
+    const { error } = await supabase.from('service_center_week_status').delete().eq('id', id)
+    if (error) { alert('Failed to remove flag: ' + error.message); return }
     onRefresh()
   }
 
@@ -927,18 +953,31 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
         <Card style={{ padding: 22 }}>
           <p style={{ margin: '0 0 16px', fontSize: 13, color: C.mute, fontFamily: 'Inter', lineHeight: 1.6 }}>
             These addresses receive the automated Sunday 7:45 PM ET growth report.
+            {!isAdmin && <span style={{ color: C.amber }}> (read-only — contact your admin to make changes)</span>}
           </p>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-            <Input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@example.com" style={{ flex: 1 }} onKeyDown={e => e.key === 'Enter' && addRecipient()} />
-            <Btn onClick={addRecipient} disabled={!newEmail.trim()}>Add</Btn>
-          </div>
+          {isAdmin && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+              <Input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@example.com" style={{ flex: 1 }} onKeyDown={e => e.key === 'Enter' && addRecipient()} />
+              <Btn onClick={addRecipient} disabled={!newEmail.trim()}>Add</Btn>
+            </div>
+          )}
+          {recipients.length === 0 && (
+            <div style={{ fontSize: 13, color: C.mute, fontFamily: 'Inter' }}>No recipients configured.</div>
+          )}
           {recipients.map(r => (
             <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: `1px solid ${C.line}`, fontSize: 13, fontFamily: 'Inter' }}>
               <span style={{ flex: 1, color: r.active ? C.ink : C.mute, textDecoration: r.active ? 'none' : 'line-through' }}>{r.email}</span>
-              <Btn tone="ghost" small onClick={() => toggleRecipient(r.id, r.active)}>{r.active ? 'Pause' : 'Resume'}</Btn>
-              <button onClick={() => removeRecipient(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, display: 'inline-flex', padding: 4 }}>
-                <Trash2 size={14} />
-              </button>
+              {r.active
+                ? <span style={{ fontSize: 11, color: C.green, fontWeight: 600 }}>Active</span>
+                : <span style={{ fontSize: 11, color: C.mute, fontWeight: 600 }}>Paused</span>}
+              {isAdmin && (
+                <>
+                  <Btn tone="ghost" small onClick={() => toggleRecipient(r.id, r.active)}>{r.active ? 'Pause' : 'Resume'}</Btn>
+                  <button onClick={() => removeRecipient(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, display: 'inline-flex', padding: 4 }}>
+                    <Trash2 size={14} />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </Card>
@@ -1166,6 +1205,8 @@ const TABS = [
 ]
 
 export default function GrowthTrackingPage({ embedded = false }) {
+  const { profile } = useAuth()
+  const isAdmin = profile?.role === 'super_admin'
   const [tab, setTab] = useState('dashboard')
   const [growthData, setGrowthData] = useState([])
   const [schedule, setSchedule] = useState([])
@@ -1409,6 +1450,7 @@ export default function GrowthTrackingPage({ embedded = false }) {
             onRefresh={load}
             onSync={handleSync}
             syncing={syncing}
+            isAdmin={isAdmin}
           />
         )}
       </div>

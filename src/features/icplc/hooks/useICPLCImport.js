@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
-import { parseCSV, buildHeaderMapping, deriveIdentityKey } from '../lib/importProcessor.js'
+import { parseCSV, buildHeaderMapping, deriveIdentityKey, applyHeaderMapping } from '../lib/importProcessor.js'
 
 // Import step machine states
 export const IMPORT_STEPS = ['upload', 'match', 'preview', 'confirm', 'done']
@@ -53,13 +53,17 @@ export function useICPLCImport(eventId) {
         .single()
       if (bErr) throw bErr
 
-      // Insert import rows (raw_payload + identity_key)
-      const rowInserts = parsed.rows.map((raw, idx) => ({
-        batch_id: batch.id,
-        row_number: idx + 1,
-        raw_payload: raw,
-        identity_key: deriveIdentityKey(raw, mapping),
-      }))
+      // Insert import rows (raw_payload + mapped_payload + identity_key)
+      const rowInserts = parsed.rows.map((raw, idx) => {
+        const mapped = applyHeaderMapping(raw, mapping)
+        return {
+          batch_id: batch.id,
+          row_number: idx + 1,
+          raw_payload: raw,
+          mapped_payload: mapped,
+          identity_key: deriveIdentityKey(raw, mapping),
+        }
+      })
 
       // Insert in chunks of 500
       for (let i = 0; i < rowInserts.length; i += 500) {

@@ -62,7 +62,7 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
         <Dialog.Overlay
           style={{
             position: 'fixed', inset: 0, zIndex: 40,
-            background: 'rgba(0,0,0,0.35)',
+            background: 'rgba(0,0,0,0.8)',
           }}
         />
         <Dialog.Content
@@ -77,20 +77,20 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
           {/* Header */}
           <div style={{
             padding: '16px 20px 0',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--icplc-border, var(--border))',
             flexShrink: 0,
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
               <div>
                 {isLoading ? (
-                  <div style={{ height: 22, width: 200, background: 'var(--surface-2)', borderRadius: 4 }} />
+                  <div style={{ height: 22, width: 200, background: 'var(--icplc-grey-bg, var(--surface-2))', borderRadius: 4 }} />
                 ) : (
-                  <Dialog.Title style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  <Dialog.Title style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--icplc-text, var(--text-primary))' }}>
                     {participant?.full_name || 'Participant'}
                   </Dialog.Title>
                 )}
                 {participant?.subgroup && (
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))', marginTop: 2 }}>
                     {participant.subgroup}{participant.region ? ` · ${participant.region}` : ''}
                   </div>
                 )}
@@ -113,8 +113,8 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
                   style={{
                     padding: '8px 14px', minHeight: 44,
                     background: 'none', border: 'none',
-                    borderBottom: activeTab === t.key ? '2px solid var(--accent)' : '2px solid transparent',
-                    color: activeTab === t.key ? 'var(--accent)' : 'var(--text-secondary)',
+                    borderBottom: activeTab === t.key ? '2px solid var(--icplc-purple, var(--accent))' : '2px solid transparent',
+                    color: activeTab === t.key ? 'var(--icplc-purple, var(--accent))' : 'var(--icplc-text-soft, var(--text-secondary))',
                     fontSize: 13, fontWeight: activeTab === t.key ? 600 : 400,
                     cursor: 'pointer', whiteSpace: 'nowrap',
                   }}
