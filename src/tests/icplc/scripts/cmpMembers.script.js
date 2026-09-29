@@ -1,7 +1,7 @@
 /**
  * CMP Members API — Fetch, Filter & Export to CSV
  *
- * Usage: node src/tests/icplc/cmpMembers.test.js <leader_token>
+ * Usage: node src/tests/icplc/scripts/cmpMembers.script.js <leader_token>
  *
  * Output: cmp-members.csv
  */
@@ -12,15 +12,15 @@ import {
   fetchMembersByRoles,
   membersToCSV,
   TARGET_ROLES,
-} from '../../features/icplc/lib/cmpMembers.js'
+} from '../../../features/icplc/lib/cmpMembers.js'
 
 async function main() {
   const leaderToken = process.argv[2]
 
   if (!leaderToken) {
-    console.error('Usage: node src/tests/icplc/cmpMembers.test.js <leader_token>')
+    console.error('Usage: node src/tests/icplc/scripts/cmpMembers.script.js <leader_token>')
     console.error('\nExample:')
-    console.error('  node src/tests/icplc/cmpMembers.test.js abc123def456')
+    console.error('  node src/tests/icplc/scripts/cmpMembers.script.js abc123def456')
     process.exit(1)
   }
 

@@ -1,12 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import pg from 'pg'
 
+// DB-backed suite: each helper opens a fresh pg connection (~1-2s/test alone). Under the full
+// parallel run the 5s default is exceeded by load, not by a race; give it headroom.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const TEST_EVENT_ID   = '00000000-0000-0000-0000-000000009001'
-const ALT_EVENT_ID    = '00000000-0000-0000-0000-000000009002'
-const SPRINT_EVENT_ID = '00000000-0000-0000-0000-000000009003'
+const TEST_EVENT_ID   = '00000000-0000-0000-0000-000000009501'
+const ALT_EVENT_ID    = '00000000-0000-0000-0000-000000009502'
+const SPRINT_EVENT_ID = '00000000-0000-0000-0000-000000009503'
 const TEST_USER_ID    = 'bd8b9e18-8d03-47f5-a66a-b83e58db7f8f'
 
 const API_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321'
@@ -111,11 +115,19 @@ async function cleanup() {
 
 // ── Auth user helper ─────────────────────────────────────────────────────────
 
+// Auth users that ran the apply RPC own activity_log rows (FK, no cascade), so a bare
+// deleteUser fails silently and the next run's createUser hits 'already registered'.
+async function deleteAuthUser(userId) {
+  await pgExec('DELETE FROM public.activity_log WHERE user_id = $1', [userId])
+  const { error } = await admin.auth.admin.deleteUser(userId)
+  if (error) throw new Error('deleteUser ' + userId + ': ' + error.message)
+}
+
 async function createTestAuthUser(email, password, role) {
   // Idempotent: delete if exists before creating
   const { data: existing } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch(() => ({ data: { users: [] } }))
   const prev = existing?.users?.find(u => u.email === email)
-  if (prev) await admin.auth.admin.deleteUser(prev.id)
+  if (prev) await deleteAuthUser(prev.id)
 
   const { data: createData, error: ce } = await admin.auth.admin.createUser({
     email, password, email_confirm: true,
@@ -152,7 +164,7 @@ describe('ICPLC Registration CSV — Certification Matrix', () => {
   })
 
   afterAll(async () => {
-    if (superAdmin) await admin.auth.admin.deleteUser(superAdmin.userId)
+    if (superAdmin) await deleteAuthUser(superAdmin.userId)
   })
 
   afterEach(async () => { await cleanup() })
@@ -912,7 +924,7 @@ describe('ICPLC Registration CSV — Certification Matrix', () => {
 
       // Delete auth users (cascade deletes public.users rows)
       for (const u of Object.values(authUsers)) {
-        await admin.auth.admin.deleteUser(u.userId).catch(() => {})
+        await deleteAuthUser(u.userId).catch(() => {})
       }
     })
 

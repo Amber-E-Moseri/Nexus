@@ -105,7 +105,8 @@ describe('Adoption System - Onboarding Tables', () => {
       .select()
 
     // Either succeeds (auth prevents it) or fails with unique constraint
-    expect(duplicateError?.code).toMatch(/23505|auth/i)
+    // 42501 = permission denied / RLS violation, i.e. auth prevented the insert
+    expect(duplicateError?.code).toMatch(/23505|42501|auth/i)
   })
 })
 
@@ -134,7 +135,7 @@ describe('Adoption System - Onboarding RPCs', () => {
     })
 
     // Should fail with auth error, not "function does not exist"
-    expect(error?.code).not.toMatch(/42883|undefined function/i)
+    expect(error?.code ?? '').not.toMatch(/42883|undefined function/i)
   })
 })
 

@@ -438,7 +438,7 @@ function IntegrationsSection({ eventId }) {
         <IntegrationRow
           label="CMP Documentation Sync"
           status="beta"
-          detail="BETA — discovery and mapping engine ready; Sync/Apply requires DB certification. Configure in the Imports tab."
+          detail="BETA — discovery, mapping and Sync/Apply are available. Configure in the Imports tab."
         />
         <IntegrationRow
           label="Registration Form"

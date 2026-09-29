@@ -3,12 +3,12 @@
  *
  * Exports members added in the last 30 days (or custom days)
  *
- * Usage: node src/tests/icplc/cmpMembersRecent.test.js <leader_token> [days]
+ * Usage: node src/tests/icplc/scripts/cmpMembersRecent.script.js <leader_token> [days]
  *
  * Example:
- *   node src/tests/icplc/cmpMembersRecent.test.js <token>        # Last 30 days
- *   node src/tests/icplc/cmpMembersRecent.test.js <token> 7      # Last 7 days
- *   node src/tests/icplc/cmpMembersRecent.test.js <token> 60     # Last 60 days
+ *   node src/tests/icplc/scripts/cmpMembersRecent.script.js <token>        # Last 30 days
+ *   node src/tests/icplc/scripts/cmpMembersRecent.script.js <token> 7      # Last 7 days
+ *   node src/tests/icplc/scripts/cmpMembersRecent.script.js <token> 60     # Last 60 days
  *
  * Output: cmp-members-recent.csv
  */
@@ -20,17 +20,17 @@ import {
   filterMembersByDaysAdded,
   getMembershipStatus,
   membersToCSV,
-} from '../../features/icplc/lib/cmpMembers.js'
+} from '../../../features/icplc/lib/cmpMembers.js'
 
 async function main() {
   const leaderToken = process.argv[2]
   const days = parseInt(process.argv[3], 10) || 30
 
   if (!leaderToken) {
-    console.error('Usage: node src/tests/icplc/cmpMembersRecent.test.js <leader_token> [days]')
+    console.error('Usage: node src/tests/icplc/scripts/cmpMembersRecent.script.js <leader_token> [days]')
     console.error('\nExamples:')
-    console.error('  node src/tests/icplc/cmpMembersRecent.test.js <token>        # Last 30 days')
-    console.error('  node src/tests/icplc/cmpMembersRecent.test.js <token> 7      # Last 7 days')
+    console.error('  node src/tests/icplc/scripts/cmpMembersRecent.script.js <token>        # Last 30 days')
+    console.error('  node src/tests/icplc/scripts/cmpMembersRecent.script.js <token> 7      # Last 7 days')
     process.exit(1)
   }
 

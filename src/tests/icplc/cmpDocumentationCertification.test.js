@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest'
 import pg from 'pg'
 import {
   CMP_FIELD_IDS,
@@ -9,8 +9,14 @@ import {
 } from '../../features/icplc/lib/cmpDocumentation.js'
 import { DOCUMENT_TYPE, deriveDocumentType } from '../../features/registration/icplcDocReadiness.js'
 
-const TEST_EVENT_ID = '00000000-0000-0000-0000-000000009001'
-const ALT_EVENT_ID = '00000000-0000-0000-0000-000000009002'
+// DB-backed suite: each helper opens a fresh pg connection (~1-2s/test alone). Under the full
+// parallel run the 5s default is exceeded by load, not by a race; give it headroom.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
+
+// Distinct from the registrationCSV* suites (9001/9002): vitest runs files in
+// parallel against one DB, and each suite's cleanup deletes its own event rows.
+const TEST_EVENT_ID = '00000000-0000-0000-0000-000000009401'
+const ALT_EVENT_ID = '00000000-0000-0000-0000-000000009402'
 const TEST_USER_ID = 'bd8b9e18-8d03-47f5-a66a-b83e58db7f8f'
 const PG_URL = process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
 

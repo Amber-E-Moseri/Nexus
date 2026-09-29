@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
 import { isStaleCompletedTask, STATUS_CATEGORIES } from '../lib/taskStatuses'
 import { applyTaskFilters, EMPTY_FILTERS } from '../features/tasks/hooks/useTaskFilters'
 
@@ -26,7 +26,14 @@ describe('isStaleCompletedTask', () => {
   })
 
   test('completed task exactly at the threshold boundary is not stale (strictly greater-than only)', () => {
-    expect(isStaleCompletedTask(completedTask(daysAgo(THRESHOLD_DAYS)), THRESHOLD_DAYS)).toBe(false)
+    // Freeze the clock: with a live clock, any ms elapsed between daysAgo() and the check makes the task
+    // "older than" the threshold and the boundary case flakes under load.
+    vi.useFakeTimers({ now: new Date('2026-01-15T12:00:00Z') })
+    try {
+      expect(isStaleCompletedTask(completedTask(daysAgo(THRESHOLD_DAYS)), THRESHOLD_DAYS)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test('completed task with missing completed_at fails open (not stale)', () => {

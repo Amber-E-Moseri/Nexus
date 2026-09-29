@@ -8,7 +8,7 @@ const leaderToken = process.argv[2]
 const memberId = process.argv[3] || 'cmowbbyjv000bj1thc59gz98q'
 
 if (!leaderToken) {
-  console.error('Usage: node src/tests/icplc/cmpActivityExplore.test.js <token> [memberId]')
+  console.error('Usage: node src/tests/icplc/scripts/cmpActivityExplore.script.js <token> [memberId]')
   process.exit(1)
 }
 

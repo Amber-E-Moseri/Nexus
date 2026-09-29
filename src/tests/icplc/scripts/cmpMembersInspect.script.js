@@ -7,13 +7,13 @@
 import {
   fetchMembers,
   filterMembersByDaysAdded,
-} from '../../features/icplc/lib/cmpMembers.js'
+} from '../../../features/icplc/lib/cmpMembers.js'
 
 async function main() {
   const leaderToken = process.argv[2]
 
   if (!leaderToken) {
-    console.error('Usage: node src/tests/icplc/cmpMembersInspect.test.js <leader_token>')
+    console.error('Usage: node src/tests/icplc/scripts/cmpMembersInspect.script.js <leader_token>')
     process.exit(1)
   }
 

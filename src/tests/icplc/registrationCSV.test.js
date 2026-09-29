@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import pg from 'pg'
+
+// DB-backed suite: each helper opens a fresh pg connection (~1-2s/test alone). Under the full
+// parallel run the 5s default is exceeded by load, not by a race; give it headroom.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
 
 const TEST_EVENT_ID = '00000000-0000-0000-0000-000000009001'
 const ALT_EVENT_ID  = '00000000-0000-0000-0000-000000009002'
