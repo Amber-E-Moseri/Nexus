@@ -1,5 +1,12 @@
 -- Seed Flock CRM contacts for pastor bfe9b3c0-fd5f-45fc-8780-539694ca1195.
 -- Skips any row where the same pastor_id + full_name already exists.
+-- GUARD: hardcoded user UUID only exists on production; skip on fresh installs.
+DO $$
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = 'bfe9b3c0-fd5f-45fc-8780-539694ca1195') THEN
+  RAISE NOTICE 'Skipping flock seed: pastor bfe9b3c0 not found';
+  RETURN;
+END IF;
 
 INSERT INTO public.flock_contacts (pastor_id, full_name, role, fellowship, cadence_days)
 VALUES
@@ -31,3 +38,5 @@ VALUES
   ('bfe9b3c0-fd5f-45fc-8780-539694ca1195', 'Sis Fayzah Lawal',                'Category A Coordinators',    'UOttawa',                               28),
   ('bfe9b3c0-fd5f-45fc-8780-539694ca1195', 'Sis Dorcas Mukhendi',             'Category A Coordinators',    'University of Alberta',                 28)
 ON CONFLICT DO NOTHING;
+END;
+$$;

@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 
 const BASE_URL = 'https://leaders.lwcanada.org'
 const ROOT_UNIT_ID = 'cmotpb106000ewkxbi3md8xs6'  // BLW Canada — returns all sub-unit data
-const PHASE1_KINDS = new Set(['SundayService', 'GlobalService'])
+const PHASE1_KINDS = new Set(['SundayService', 'SundayGathering', 'GlobalService'])
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -57,6 +57,23 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' })
 
+  // Caller authorization: cron/service_role key bypasses; manual triggers require elevated role
+  {
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const callerToken = authHeader.replace('Bearer ', '').trim()
+    const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    if (callerToken !== svcKey) {
+      const callerClient = createClient(Deno.env.get('SUPABASE_URL')!, callerToken)
+      const { data: { user }, error: authErr } = await callerClient.auth.getUser()
+      if (authErr || !user) return json(401, { error: 'Unauthorized' })
+      const adminClient = createClient(Deno.env.get('SUPABASE_URL')!, svcKey)
+      const { data: ur } = await adminClient.from('users').select('role').eq('id', user.id).single()
+      if (!ur || !['super_admin', 'regional_secretary'].includes(ur.role)) {
+        return json(403, { error: 'Forbidden: requires super_admin or regional_secretary role' })
+      }
+    }
+  }
+
   const apiToken = Deno.env.get('REPORTS_API_TOKEN')
   if (!apiToken) return json(500, { error: 'REPORTS_API_TOKEN secret not configured' })
 
@@ -74,21 +91,66 @@ serve(async (req) => {
     ? new Date(body.from)
     : new Date(toDate.getTime() - 14 * 24 * 60 * 60 * 1000)
 
-  // Build name → unit_id map from schedule table
+  // Build name → unit_id map from current schedule + historical names
   const { data: schedule, error: schedErr } = await supabase
     .from('service_center_schedule')
     .select('church_unit_id, church_name')
   if (schedErr) return json(500, { error: 'Could not load schedule', details: schedErr.message })
 
-  const churchByName = new Map<string, string>(
-    (schedule ?? []).map((s: { church_unit_id: string; church_name: string }) =>
-      [s.church_name.toLowerCase().trim(), s.church_unit_id]
-    )
-  )
+  const { data: history, error: histErr } = await supabase
+    .from('host_name_history')
+    .select('church_unit_id, old_host_name')
+  if (histErr) return json(500, { error: 'Could not load host name history', details: histErr.message })
+
+  const churchByName = new Map<string, string>()
+
+  // Add current names from schedule
+  for (const s of (schedule ?? [])) {
+    churchByName.set(s.church_name.toLowerCase().trim(), s.church_unit_id)
+  }
+
+  // Add historical names (old_host_name → church_unit_id)
+  for (const h of (history ?? [])) {
+    churchByName.set(h.old_host_name.toLowerCase().trim(), h.church_unit_id)
+  }
+
+  // Helper: auto-provision a new fellowship
+  const autoProvisionFellowship = async (hostName: string): Promise<string | null> => {
+    // Generate a deterministic but unique unit_id based on host name hash
+    const encoder = new TextEncoder()
+    const data = encoder.encode(`blw-${hostName.toLowerCase().trim()}`)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+    const unit_id = `auto-${hashHex.slice(0, 20)}`
+
+    try {
+      const { error } = await supabase.from('service_center_schedule').insert({
+        church_name: hostName,
+        church_unit_id: unit_id,
+        active: true,
+      })
+
+      if (error && error.code !== '23505') {
+        // 23505 = unique constraint (already exists), that's ok
+        console.error(`Failed to auto-provision ${hostName}:`, error.message)
+        return null
+      }
+
+      newFellowships.push({ name: hostName, unit_id })
+      churchByName.set(hostName.toLowerCase().trim(), unit_id)
+      return unit_id
+    } catch (e) {
+      console.error(`Exception auto-provisioning ${hostName}:`, String(e))
+      return null
+    }
+  }
 
   let totalUpserted = 0
   const errors: string[] = []
   const reactivated: string[] = []
+  const unmatchedHosts = new Map<string, number>()
+  const newFellowships: { name: string; unit_id: string }[] = []
 
   for (const { from, to } of monthRange(fromDate, toDate)) {
     let csvText: string
@@ -109,6 +171,28 @@ serve(async (req) => {
 
     const rows = parseCSV(csvText)
 
+    // Get potential rows and auto-provision any missing hosts
+    const potentialRows = rows.filter(r =>
+      PHASE1_KINDS.has(r['Kind']) &&
+      r['Status'] === 'Submitted' &&
+      r['Host unit'] &&
+      !r['Service date'].startsWith('TRUNCATED')
+    )
+
+    // Auto-provision unmatched hosts
+    const autoProvisionedThisRound = new Set<string>()
+    for (const row of potentialRows) {
+      const nameKey = row['Host unit'].toLowerCase().trim()
+      if (!churchByName.has(nameKey) && !autoProvisionedThisRound.has(nameKey)) {
+        const unitId = await autoProvisionFellowship(row['Host unit'])
+        if (unitId) {
+          autoProvisionedThisRound.add(nameKey)
+        } else {
+          unmatchedHosts.set(nameKey, (unmatchedHosts.get(nameKey) ?? 0) + 1)
+        }
+      }
+    }
+
     // Filter: phase-1 scope only, submitted, non-truncation rows
     const phaseRows = rows.filter(r =>
       PHASE1_KINDS.has(r['Kind']) &&
@@ -126,12 +210,17 @@ serve(async (req) => {
       const nameKey = row['Host unit'].toLowerCase().trim()
       const churchUnitId = churchByName.get(nameKey)!
       const serviceDate = row['Service date'].split(' ')[0]  // strip time component
+
+      // Look up current church name from schedule to ensure consistency
+      const currentCenter = (schedule ?? []).find((s: { church_unit_id: string }) => s.church_unit_id === churchUnitId)
+      const currentChurchName = currentCenter?.church_name ?? row['Host unit']
+
       const key = `${churchUnitId}::${row['Kind']}::${serviceDate}::${row['Service']}`
 
       if (!agg.has(key)) {
         agg.set(key, {
           church_unit_id: churchUnitId,
-          church_name:    row['Host unit'],
+          church_name:    currentChurchName,
           service_kind:   row['Kind'],
           service_date:   serviceDate,
           service_name:   row['Service'],
@@ -196,11 +285,35 @@ serve(async (req) => {
     }
   }
 
+  // Log unmatched hosts for debugging
+  if (unmatchedHosts.size > 0) {
+    const unmatchedRecords = [...unmatchedHosts.entries()].map(([hostName, count]) => ({
+      sync_date: new Date().toISOString(),
+      host_name: hostName,
+      service_kind: 'SundayService|SundayGathering',
+      report_count: count,
+      notes: 'Dropped during sync — not in service_center_schedule or host_name_history',
+    }))
+
+    await supabase
+      .from('growth_sync_unmatched_hosts')
+      .insert(unmatchedRecords)
+      .then(() => {
+        // Log recorded
+      })
+      .catch((e) => {
+        // If logging fails, don't block the sync
+        console.error('Failed to log unmatched hosts:', e.message)
+      })
+  }
+
   return json(200, {
     ok: errors.length === 0,
     upserted: totalUpserted,
     reactivated: reactivated.length > 0 ? reactivated : undefined,
+    auto_provisioned: newFellowships.length > 0 ? newFellowships : undefined,
     range: { from: fromDate.toISOString().split('T')[0], to: toDate.toISOString().split('T')[0] },
     errors: errors.length > 0 ? errors : undefined,
+    unmatched_hosts: unmatchedHosts.size > 0 ? Object.fromEntries(unmatchedHosts) : undefined,
   })
 })

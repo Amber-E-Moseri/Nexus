@@ -130,34 +130,20 @@ BEGIN
 END $$;
 
 -- ─── RLS Policies for calendar_subscriptions ──────────────────────
-
-DROP POLICY IF EXISTS "manage_own_subscriptions" ON public.calendar_subscriptions;
-DROP POLICY IF EXISTS "view_subscription" ON public.calendar_subscriptions;
-
--- Users can create their own subscriptions
-CREATE POLICY "create_own_subscriptions"
-  ON public.calendar_subscriptions
-  FOR INSERT
-  WITH CHECK (user_id = auth.uid());
-
--- Users can view and manage their own subscriptions
-CREATE POLICY "manage_own_subscriptions"
-  ON public.calendar_subscriptions
-  FOR SELECT
-  USING (user_id = auth.uid());
-
--- Users can update their own subscriptions
-CREATE POLICY "update_own_subscriptions"
-  ON public.calendar_subscriptions
-  FOR UPDATE
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
-
--- Users can delete their own subscriptions
-CREATE POLICY "delete_own_subscriptions"
-  ON public.calendar_subscriptions
-  FOR DELETE
-  USING (user_id = auth.uid());
+-- GUARD: calendar_subscriptions created later by 20260730000000 (which defines its own policies).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'calendar_subscriptions' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE 'DROP POLICY IF EXISTS "manage_own_subscriptions" ON public.calendar_subscriptions';
+    EXECUTE 'DROP POLICY IF EXISTS "view_subscription" ON public.calendar_subscriptions';
+    EXECUTE $pol$CREATE POLICY "create_own_subscriptions" ON public.calendar_subscriptions FOR INSERT WITH CHECK (user_id = auth.uid())$pol$;
+    EXECUTE $pol$CREATE POLICY "manage_own_subscriptions" ON public.calendar_subscriptions FOR SELECT USING (user_id = auth.uid())$pol$;
+    EXECUTE $pol$CREATE POLICY "update_own_subscriptions" ON public.calendar_subscriptions FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid())$pol$;
+    EXECUTE $pol$CREATE POLICY "delete_own_subscriptions" ON public.calendar_subscriptions FOR DELETE USING (user_id = auth.uid())$pol$;
+  END IF;
+END;
+$$;
 
 -- ─── View for Calendar Permissions Summary ─────────────────────
 
@@ -208,25 +194,35 @@ GROUP BY
   u.email, gcs.connected_at;
 
 -- ─── View for Subscription Analytics ────────────────────────────
-
-CREATE OR REPLACE VIEW public.subscription_analytics AS
-SELECT
-  cs.id,
-  cs.token,
-  cs.name,
-  cs.space_id,
-  d.name AS space_name,
-  u.email AS created_by_email,
-  cs.is_public,
-  cs.filter_priority,
-  cs.filter_status,
-  cs.access_count,
-  cs.last_accessed_at,
-  cs.created_at,
-  EXTRACT(DAY FROM NOW() - cs.created_at) AS days_active
-FROM public.calendar_subscriptions cs
-LEFT JOIN public.departments d ON d.id = cs.space_id
-LEFT JOIN public.users u ON u.id = cs.user_id;
+-- GUARD: calendar_subscriptions created later by 20260730000000.
+-- View references dead columns (name, space_id, is_public, filter_priority, etc.) reverted outside migration history.
+DO $guard$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'calendar_subscriptions' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE $v$
+      CREATE OR REPLACE VIEW public.subscription_analytics AS
+      SELECT
+        cs.id,
+        cs.token,
+        cs.name,
+        cs.space_id,
+        d.name AS space_name,
+        u.email AS created_by_email,
+        cs.is_public,
+        cs.filter_priority,
+        cs.filter_status,
+        cs.access_count,
+        cs.last_accessed_at,
+        cs.created_at,
+        EXTRACT(DAY FROM NOW() - cs.created_at) AS days_active
+      FROM public.calendar_subscriptions cs
+      LEFT JOIN public.departments d ON d.id = cs.space_id
+      LEFT JOIN public.users u ON u.id = cs.user_id
+    $v$;
+  END IF;
+END;
+$guard$;
 
 -- ─── Helper Function to Check User Role for Space ─────────────────
 
@@ -256,8 +252,15 @@ CREATE INDEX IF NOT EXISTS activity_log_calendar_idx
   ON public.activity_log(action)
   WHERE entity_type = 'calendar_event' OR entity_type = 'google_calendar_sync';
 
-CREATE INDEX IF NOT EXISTS calendar_subscriptions_user_created_idx
-  ON public.calendar_subscriptions(user_id, created_at DESC);
+-- GUARD: calendar_subscriptions created later by 20260730000000.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'calendar_subscriptions' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS calendar_subscriptions_user_created_idx ON public.calendar_subscriptions(user_id, created_at DESC)';
+  END IF;
+END;
+$$;
 
 -- ─── Test Data & Seed Values (Optional, commented out) ───────────
 -- Uncomment after determining which users should have which roles

@@ -714,7 +714,7 @@ const DEFAULT_TABS = [
   { key: 'documentation', label: 'Documentation', icon: FileCheck2, hidden: true },
 ];
 
-export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false, userTeamNames = [], initialTab, eventConfig: eventConfigProp }) {
+export default function App({ limitedToSubgroups = null, sprintEditAccess = false, financeAccess = false, limitedToRegistrationDataOnly = false, userTeamNames = [], initialTab, embedded = false, roomPeople = null, eventConfig: eventConfigProp }) {
   const { profile, role } = useAuth();
   const { config, reload: reloadConfig } = useEventConfig();
   // Prop wins so callers (e.g. RegistrationPage) can inject a specific event config
@@ -1241,7 +1241,8 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
   const visibleTabs = useMemo(() => {
     const overrides = Object.fromEntries((eventConfig.tab_config || []).map((item) => [item.key, item]));
     let tabs = DEFAULT_TABS.map((item) => ({ ...item, ...(config ? { hidden: false } : {}), ...(overrides[item.key] || {}) }));
-    if (role === 'super_admin') tabs = [...tabs, { key: 'settings', label: 'Settings', icon: Settings }];
+    // Embedded (ICPLC) uses the ICPLC Settings tab instead.
+    if (role === 'super_admin' && !embedded) tabs = [...tabs, { key: 'settings', label: 'Settings', icon: Settings }];
     const privileged = role === 'super_admin' || role === 'regional_secretary';
     const allowed = tabs.filter(t => {
       if (t.hidden) return false;
@@ -1734,16 +1735,18 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         }
       `}</style>
 
-      {/* header */}
-      <div className="reg-header" style={{ background: C.purple, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, color: '#fff', letterSpacing: -0.3 }}>
-            {eventConfig.event_name}{isLimited && <span style={{ fontSize: 14, fontWeight: 500, marginLeft: 12, opacity: 0.9 }}>• Viewing: {limitedToSubgroups.join(', ')}</span>}
+      {/* header — omitted when embedded in the ICPLC portal, which already shows the event header */}
+      {!embedded && (
+        <div className="reg-header" style={{ background: C.purple, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 20, color: '#fff', letterSpacing: -0.3 }}>
+              {eventConfig.event_name}{isLimited && <span style={{ fontSize: 14, fontWeight: 500, marginLeft: 12, opacity: 0.9 }}>• Viewing: {limitedToSubgroups.join(', ')}</span>}
+            </div>
+          </div>
+          <div className="reg-header-stats">
           </div>
         </div>
-        <div className="reg-header-stats">
-        </div>
-      </div>
+      )}
 
       {/* tabs */}
       <div className="reg-tabs-bar">
@@ -1806,7 +1809,7 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
         {tab === 'discipleship' && <DiscipleshipTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited, role, viewDefaults: eventConfig.discipleship_view_defaults, onSaveViewDefaults: async (defaults) => { if (!config?.id) return; await supabase.from('event_configs').update({ discipleship_view_defaults: defaults }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'tii-report' && <TiiReportTab {...{ registrations: registrationsFiltered, eventId: config?.id, eventConfig }} />}
         {tab === 'compliance' && <DelegateComplianceTab {...{ merged, subgroupFilter, setSubgroupFilter, subgroups, isLimited }} />}
-        {tab === 'rooms' && <RoomAssignmentTab {...{ merged: merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited, eventName: eventConfig.event_name }} />}
+        {tab === 'rooms' && <RoomAssignmentTab {...{ merged: roomPeople ?? merged.filter(r => r.fullyConfirmed), rooms, handleAddRoom, handleBulkCreateRooms, handleDeleteRoom, handleAssignPerson, handleRemovePersonFromRoom, handleUpdateRoomCapacity, handleSetRoomHead, handleRenameRoom, roomsNote, handleUpdateRoomsNote, peoplePerRoom, isLimited, eventName: eventConfig.event_name }} />}
         {tab === 'transport' && <TransportTab {...{ merged, isLimited, subgroups, onApplied: refetchRegistrations, onClearFlight: handleClearFlight, onUpdateFlight: handleUpdateFlight, onToggleFlightLock: handleToggleFlightLock, exemptFellowships, crossCountrySubgroups, onBulkMarkDriving: bulkMarkDriving, onToggleCrossCountry: toggleConfirm, onSetTransportMode: setTransportMode, onUpdateCrossCountrySubgroups: async (list) => { if (!config?.id) return; await supabase.from('event_configs').update({ cross_country_subgroups: list }).eq('id', config.id); reloadConfig(); } }} />}
         {tab === 'finance' && (hasFinanceAccess
           ? <FinanceTab {...{ registrations: registrationsFiltered.filter(r => !absentEmailsForMerge.has(r.email)), payments, setPayments, userId: profile?.id, eventConfigId: eventConfig?.id, earlyCutoffAt: eventConfig.early_cutoff_at, earlyFee: eventConfig.early_fee, standardFee: eventConfig.standard_fee }} />

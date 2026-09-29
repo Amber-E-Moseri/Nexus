@@ -13,10 +13,23 @@
 --      directly, independent of the calendar_permissions boolean mismatch.
 
 -- 1. Backfill the boolean flag from the text permission grants.
-update public.calendar_permissions
-set can_manage = true
-where permission = 'can_manage'
-  and can_manage is distinct from true;
+-- GUARD: permission column only exists if 20260730000000 created the table
+-- (it was a no-op on fresh local reset since 20260625000000 already created it).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'calendar_permissions' AND column_name = 'permission'
+  ) THEN
+    EXECUTE $stmt$
+      UPDATE public.calendar_permissions
+      SET can_manage = true
+      WHERE permission = 'can_manage'
+        AND can_manage IS DISTINCT FROM true
+    $stmt$;
+  END IF;
+END;
+$$;
 
 -- 2. Harden the manage policy on calendar_event_types.
 drop policy if exists "Manage event types" on public.calendar_event_types;

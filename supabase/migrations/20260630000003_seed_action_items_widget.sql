@@ -88,10 +88,20 @@ $$;
 grant execute on function public.get_dashboard_presets(text) to authenticated;
 
 -- 2. Reset path: dashboard_role_defaults table -------------------------------
-insert into public.dashboard_role_defaults (role, widget_key, visible, sort_order) values
-  ('member',              'action_items', true, 2),
-  ('dept_lead',           'action_items', true, 2),
-  ('pastor',              'action_items', true, 2),
-  ('regional_secretary',  'action_items', true, 2),
-  ('super_admin',         'action_items', true, 2)
-on conflict (role, widget_key) do nothing;
+-- GUARD: table created later by 20260701000001_dashboard.sql.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'dashboard_role_defaults' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE $ins$
+      insert into public.dashboard_role_defaults (role, widget_key, visible, sort_order) values
+        ('member',              'action_items', true, 2),
+        ('dept_lead',           'action_items', true, 2),
+        ('pastor',              'action_items', true, 2),
+        ('regional_secretary',  'action_items', true, 2),
+        ('super_admin',         'action_items', true, 2)
+      on conflict (role, widget_key) do nothing
+    $ins$;
+  END IF;
+END;
+$$;

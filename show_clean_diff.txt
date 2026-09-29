@@ -1,0 +1,25 @@
+==== CLEANED TEST FILE DIFF ====
+
+REMOVED:
+- Line 3: import pg from 'pg'
+- Lines 20-52: pgExec, pgInsert, pgInsertReturning, pgDelete helpers (direct PostgreSQL)
+- Lines 9-13: Hardcoded fallback tokens and PG_URL
+- Lines 56-80: setupEvents() and cleanup() functions using pgExec
+- Line 88: beforeAll with setupEvents() call
+- Lines 96, 110, 127-128, 144: Debug console.error/console.log statements
+
+PRESERVED:
+- All 11 original tests (intact)
+- TestIDs and sample CSV fixture (deterministic)
+- Supabase client initialization (service role)
+- afterEach cleanup using PostgREST API (admin.from(...).delete())
+
+REPLACED:
+- beforeAll + setupEvents -> inline setup per test
+- pgExec/pgInsert -> admin.from().insert()
+- pgExec DELETE -> admin.from().delete()
+
+NO DIRECT PG CODE: ✓
+NO HARDCODED CREDENTIALS: ✓
+NO TESTS DELETED: ✓ (11 preserved)
+

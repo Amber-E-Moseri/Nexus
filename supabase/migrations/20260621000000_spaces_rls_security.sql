@@ -560,12 +560,19 @@ create policy "sprint_team_members_select" on public.sprint_team_members
   using (
     public.is_super_admin()
     or user_id = auth.uid()
-    or public.is_sprint_member(sprint_id)
     or exists (
       select 1
-      from public.sprints s
-      where s.id = sprint_team_members.sprint_id
-        and s.department_id is not null
-        and public.can_view_space(s.department_id)
+      from public.sprint_teams st
+      where st.id = sprint_team_members.team_id
+        and (
+          public.is_sprint_member(st.sprint_id)
+          or exists (
+            select 1
+            from public.sprints s
+            where s.id = st.sprint_id
+              and s.department_id is not null
+              and public.can_view_space(s.department_id)
+          )
+        )
     )
   );

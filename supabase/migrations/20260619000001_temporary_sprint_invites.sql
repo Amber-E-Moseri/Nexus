@@ -21,37 +21,50 @@ create index if not exists idx_sprint_members_is_temporary on public.sprint_memb
 create index if not exists idx_sprint_members_invited_by on public.sprint_members(invited_by);
 
 -- Update RLS policy to allow sprint owners to update temp member end dates
-drop policy if exists "sprint_members_write" on public.sprint_members;
-create policy "sprint_members_write" on public.sprint_members
-  for all to authenticated
-  using (
-    public.current_user_role() in ('super_admin', 'dept_lead')
-    or public.can_manage_sprint(sprint_id)
-    or (
-      is_temporary = true
-      and (
-        public.current_user_role() = 'super_admin'
-        or exists (
-          select 1 from public.sprints s
-          where s.id = sprint_id and s.created_by = auth.uid()
+-- NOTE: The sprint_members_write policy depends on can_manage_sprint(uuid)
+-- which is created in 20260620000000_sprint_system_hardening.sql.
+-- This migration defers policy creation until after that function exists.
+-- The forward convergence migration 20260620000029 recreates this policy.
+do $$
+begin
+  if exists (
+    select 1 from pg_proc
+    where proname = 'can_manage_sprint'
+    and pronamespace = (select oid from pg_namespace where nspname = 'public')
+  ) then
+    drop policy if exists "sprint_members_write" on public.sprint_members;
+    create policy "sprint_members_write" on public.sprint_members
+      for all to authenticated
+      using (
+        public.current_user_role() in ('super_admin', 'dept_lead')
+        or public.can_manage_sprint(sprint_id)
+        or (
+          is_temporary = true
+          and (
+            public.current_user_role() = 'super_admin'
+            or exists (
+              select 1 from public.sprints s
+              where s.id = sprint_id and s.created_by = auth.uid()
+            )
+          )
         )
       )
-    )
-  )
-  with check (
-    public.current_user_role() in ('super_admin', 'dept_lead')
-    or public.can_manage_sprint(sprint_id)
-    or (
-      is_temporary = true
-      and (
-        public.current_user_role() = 'super_admin'
-        or exists (
-          select 1 from public.sprints s
-          where s.id = sprint_id and s.created_by = auth.uid()
+      with check (
+        public.current_user_role() in ('super_admin', 'dept_lead')
+        or public.can_manage_sprint(sprint_id)
+        or (
+          is_temporary = true
+          and (
+            public.current_user_role() = 'super_admin'
+            or exists (
+              select 1 from public.sprints s
+              where s.id = sprint_id and s.created_by = auth.uid()
+            )
+          )
         )
-      )
-    )
-  );
+      );
+  end if;
+end $$;
 
 -- Function to check if temporary member access has expired
 create or replace function public.is_temp_member_expired(

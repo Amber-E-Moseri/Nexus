@@ -7,12 +7,22 @@ const PARTICIPANTS_KEY = (eventId, filters) => ['icplc_participants', eventId, f
  * Fetch ICPLC participants for the given event, with tags joined.
  * Filters are applied server-side where possible.
  */
+/** Drop empty filter values so "no filters" always has the same cache key ({}), whichever page asks. */
+function normalizeFilters(filters = {}) {
+  return Object.fromEntries(
+    Object.entries(filters).filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== '')),
+  )
+}
+
 export function useICPLCParticipants(eventId, filters = {}) {
+  const normalized = normalizeFilters(filters)
   return useQuery({
-    queryKey: PARTICIPANTS_KEY(eventId, filters),
+    queryKey: PARTICIPANTS_KEY(eventId, normalized),
     queryFn: () => fetchParticipants(eventId, filters),
     enabled: !!eventId,
     staleTime: 30_000,
+    // Data is edited from imports/migrations outside this tab; refresh when the user comes back.
+    refetchOnWindowFocus: true,
   })
 }
 
@@ -31,7 +41,7 @@ async function fetchParticipants(eventId, filters) {
     .order('full_name', { ascending: true })
 
   if (filters.search) {
-    q = q.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`)
+    q = q.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,alternate_email.ilike.%${filters.search}%`)
   }
   if (filters.participation_status?.length) {
     q = q.in('participation_status', filters.participation_status)
@@ -49,7 +59,13 @@ async function fetchParticipants(eventId, filters) {
     q = q.in('visa_process_status', filters.visa_process_status)
   }
   if (filters.subgroup?.length) {
-    q = q.in('subgroup', filters.subgroup)
+    // subgroup is an EXCLUSION list. Wrap value in PostgREST double-quotes so
+    // names with spaces work, and add is.null arm so unassigned participants
+    // remain visible when named subgroups are hidden.
+    for (const sg of filters.subgroup) {
+      const escaped = sg.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      q = q.or(`subgroup.neq."${escaped}",subgroup.is.null`)
+    }
   }
 
   const { data, error } = await q

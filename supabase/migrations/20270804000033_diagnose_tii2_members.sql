@@ -9,7 +9,10 @@ declare
   v_count int;
 begin
   -- Count existing sprint_team_members for TII2
-  select count(*) into v_count from public.sprint_team_members where sprint_id = v_sprint;
+  select count(*) into v_count
+  from public.sprint_team_members stm
+  join public.sprint_teams st on st.id = stm.team_id
+  where st.sprint_id = v_sprint;
   raise notice '✓ TII2 sprint_team_members count: %', v_count;
 
   -- Check if key people are active

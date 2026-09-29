@@ -5,50 +5,63 @@
 -- do NOT write them. NULL means "not yet collected" for every column.
 -- The event_config_id on every registrations row already scopes these
 -- to ICPLC — no cross-event leakage is possible.
+--
+-- GUARD: registrations table managed by external Apps Script sync, not by migrations.
 
-ALTER TABLE public.registrations
-  ADD COLUMN IF NOT EXISTS participation_status text
-    CHECK (participation_status IN (
-      'TRACKING', 'LIKELY', 'CONFIRMED', 'UNCERTAIN', 'NOT_ATTENDING'
-    )),
-  ADD COLUMN IF NOT EXISTS passport_country text,
-  ADD COLUMN IF NOT EXISTS passport_readiness text
-    CHECK (passport_readiness IN (
-      'READY', 'UNSURE', 'RENEWAL_NEEDED', 'NOT_APPLICABLE'
-    )),
-  ADD COLUMN IF NOT EXISTS visa_requirement text
-    CHECK (visa_requirement IN (
-      'NOT_REQUIRED', 'REQUIRED', 'REVIEW'
-    )),
-  ADD COLUMN IF NOT EXISTS visa_process text
-    CHECK (visa_process IN (
-      'NOT_APPLICABLE', 'NOT_STARTED', 'IN_PROGRESS', 'APPROVED'
-    )),
-  ADD COLUMN IF NOT EXISTS icplc_tags text[] DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS operational_note text;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'registrations' AND relnamespace = 'public'::regnamespace) THEN
+    RAISE NOTICE 'Skipping: registrations table not yet created';
+    RETURN;
+  END IF;
 
-COMMENT ON COLUMN public.registrations.participation_status IS
-  'ICPLC operational tracking of how likely the participant is to attend. '
-  'NULL means not yet assessed (treated as TRACKING by UI). '
-  'Allowed: TRACKING | LIKELY | CONFIRMED | UNCERTAIN | NOT_ATTENDING.';
+  EXECUTE $stmt$
+    ALTER TABLE public.registrations
+      ADD COLUMN IF NOT EXISTS participation_status text
+        CHECK (participation_status IN (
+          'TRACKING', 'LIKELY', 'CONFIRMED', 'UNCERTAIN', 'NOT_ATTENDING'
+        )),
+      ADD COLUMN IF NOT EXISTS passport_country text,
+      ADD COLUMN IF NOT EXISTS passport_readiness text
+        CHECK (passport_readiness IN (
+          'READY', 'UNSURE', 'RENEWAL_NEEDED', 'NOT_APPLICABLE'
+        )),
+      ADD COLUMN IF NOT EXISTS visa_requirement text
+        CHECK (visa_requirement IN (
+          'NOT_REQUIRED', 'REQUIRED', 'REVIEW'
+        )),
+      ADD COLUMN IF NOT EXISTS visa_process text
+        CHECK (visa_process IN (
+          'NOT_APPLICABLE', 'NOT_STARTED', 'IN_PROGRESS', 'APPROVED'
+        )),
+      ADD COLUMN IF NOT EXISTS icplc_tags text[] DEFAULT '{}',
+      ADD COLUMN IF NOT EXISTS operational_note text
+  $stmt$;
 
-COMMENT ON COLUMN public.registrations.passport_country IS
-  'Passport issuing country for ICPLC participants (manual, never synced).';
+  EXECUTE $stmt$COMMENT ON COLUMN public.registrations.participation_status IS
+    'ICPLC operational tracking of how likely the participant is to attend. '
+    'NULL means not yet assessed (treated as TRACKING by UI). '
+    'Allowed: TRACKING | LIKELY | CONFIRMED | UNCERTAIN | NOT_ATTENDING.'$stmt$;
 
-COMMENT ON COLUMN public.registrations.passport_readiness IS
-  'Operational readiness of the participant''s passport. '
-  'Allowed: READY | UNSURE | RENEWAL_NEEDED | NOT_APPLICABLE.';
+  EXECUTE $stmt$COMMENT ON COLUMN public.registrations.passport_country IS
+    'Passport issuing country for ICPLC participants (manual, never synced).'$stmt$;
 
-COMMENT ON COLUMN public.registrations.visa_requirement IS
-  'Whether a destination visa is required for this participant. '
-  'Allowed: NOT_REQUIRED | REQUIRED | REVIEW.';
+  EXECUTE $stmt$COMMENT ON COLUMN public.registrations.passport_readiness IS
+    'Operational readiness of the participant''s passport. '
+    'Allowed: READY | UNSURE | RENEWAL_NEEDED | NOT_APPLICABLE.'$stmt$;
 
-COMMENT ON COLUMN public.registrations.visa_process IS
-  'Current status of visa application process. '
-  'Allowed: NOT_APPLICABLE | NOT_STARTED | IN_PROGRESS | APPROVED.';
+  EXECUTE $stmt$COMMENT ON COLUMN public.registrations.visa_requirement IS
+    'Whether a destination visa is required for this participant. '
+    'Allowed: NOT_REQUIRED | REQUIRED | REVIEW.'$stmt$;
 
-COMMENT ON COLUMN public.registrations.icplc_tags IS
-  'Operational tags for ICPLC (e.g. Finances, School, Work). Array of strings.';
+  EXECUTE $stmt$COMMENT ON COLUMN public.registrations.visa_process IS
+    'Current status of visa application process. '
+    'Allowed: NOT_APPLICABLE | NOT_STARTED | IN_PROGRESS | APPROVED.'$stmt$;
 
-COMMENT ON COLUMN public.registrations.operational_note IS
-  'Free-text operational notes for ICPLC coordinators. Manual-only.';
+  EXECUTE $stmt$COMMENT ON COLUMN public.registrations.icplc_tags IS
+    'Operational tags for ICPLC (e.g. Finances, School, Work). Array of strings.'$stmt$;
+
+  EXECUTE $stmt$COMMENT ON COLUMN public.registrations.operational_note IS
+    'Free-text operational notes for ICPLC coordinators. Manual-only.'$stmt$;
+END;
+$$;

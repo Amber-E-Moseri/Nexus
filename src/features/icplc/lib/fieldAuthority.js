@@ -72,3 +72,18 @@ export function setOverridePatch(field, userId) {
     },
   }
 }
+
+// Staff-managed Canadian documentation fields — never written by any import source,
+// but recorded as overrides so the UI can show "staff override active".
+const STAFF_OVERRIDE_FIELDS = new Set(['canada_residency_status', 'canada_status_document_readiness'])
+
+/**
+ * Of the fields a staff member just edited, which must be recorded as overrides?
+ * Any field an import source may write (so re-imports cannot clobber the edit)
+ * plus the staff-managed Canadian fields.
+ */
+export function overrideFieldsForEdit(changedFields) {
+  return changedFields.filter((field) =>
+    STAFF_OVERRIDE_FIELDS.has(field) ||
+    Object.values(MUTABLE_FIELDS_BY_SOURCE).some((set) => set.has(field)))
+}

@@ -1,4 +1,11 @@
 {
+  "functions": {
+    "api/growth-report-pdf.ts": {
+      "maxDuration": 30,
+      "memory": 1024,
+      "includeFiles": "src/lib/growthReportTemplate.html"
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/cleanup-tts-cache",

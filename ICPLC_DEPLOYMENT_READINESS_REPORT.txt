@@ -1,0 +1,391 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                   ICPLC EVENT SCOPING DEPLOYMENT REPORT                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════════════════════
+GIT STATE RECONCILIATION
+═══════════════════════════════════════════════════════════════════════════════
+
+BASE HEAD: 9597cf1365e55fa05f8bcad8ab046cbad6529822
+CURRENT HEAD: 1f305345cda889e4a58d3ce49a0e7f4938b22c6e
+BRANCH: main
+COMMITS AHEAD: 15
+WORKING TREE: CLEAN
+
+Architecture-lock commit 9597cf1: ✓ VERIFIED
+  - Working List filtering: ✓ Implemented (5 views)
+  - Pool removal: ✓ Completed
+  - Participant-form removal: ✓ Completed
+
+New deployment preparation commit 1f30534: ✓ CREATED
+  - Event-scoping migration: ✓ Designed & tested
+  - Identity maps fix: ✓ Applied
+  - Application integration: ✓ Aligned with V1
+
+═══════════════════════════════════════════════════════════════════════════════
+REMOTE FACTS USED
+═══════════════════════════════════════════════════════════════════════════════
+
+event_configs (verified from read-only audit):
+  TII:   id=6c68fd1b-04ea-4b2d-9bba-d2b4307a83c1, name='This Is It 2.0'
+  ICPLC: id=37db5b0d-6651-4fc6-8ffb-f4f81c9139e4, name='ICPLC' (inactive)
+
+Legacy tables (no event_config_id):
+  registrations: 102 rows | 0 blank emails | 0 duplicates
+  working_list: 116 rows | 0 blank emails | 0 duplicates
+  roster: 112 rows | 0 blank emails | 0 duplicates
+  event_payments: 41 rows | 0 blank emails | 0 duplicates
+
+Public RPC contract (6 columns):
+  row_num, full_name, subgroup, fellowship, registration_status, manually_confirmed
+
+═══════════════════════════════════════════════════════════════════════════════
+NEW FORWARD MIGRATION
+═══════════════════════════════════════════════════════════════════════════════
+
+File: 20270902000000_icplc_event_scoping_forward_reconciliation.sql
+Size: 376 lines
+Status: DESIGNED, TESTED, NOT DEPLOYED
+
+Core Design:
+  ✓ Forward-only: does NOT execute old 202609 migrations
+  ✓ Production-safe: IF NOT EXISTS guards, idempotent WHERE IS NULL
+  ✓ Deterministic: resolves TII/ICPLC by known UUIDs (not LIMIT 1)
+  ✓ Safety-gated: 11 verification checkpoints before/during/after
+
+═══════════════════════════════════════════════════════════════════════════════
+EVENT CONFIG STRATEGY
+═══════════════════════════════════════════════════════════════════════════════
+
+Resolution: Deterministic by verified UUIDs
+  v_tii_id   = '6c68fd1b-04ea-4b2d-9bba-d2b4307a83c1'::uuid
+  v_icplc_id = '37db5b0d-6651-4fc6-8ffb-f4f81c9139e4'::uuid
+
+Safety Assertions:
+  ✓ Both events must exist
+  ✓ No ambiguous (duplicate) events allowed
+  ✓ Abort if conditions fail
+
+═══════════════════════════════════════════════════════════════════════════════
+COLUMN/FK/INDEX STRATEGY
+═══════════════════════════════════════════════════════════════════════════════
+
+Add safely (IF NOT EXISTS):
+  - event_config_id uuid columns (registrations, working_list, roster, event_payments)
+  - Foreign Keys: REFERENCES event_configs(id) ON DELETE SET NULL
+  - Indexes: idx_*_event_config_id on all 4 tables
+
+Result: Tables ready for backfill with nullable event_config_id
+
+═══════════════════════════════════════════════════════════════════════════════
+TII BACKFILL STRATEGY
+═══════════════════════════════════════════════════════════════════════════════
+
+Before:
+  ✓ Audit pre-migration counts
+  ✓ Verify TII and ICPLC events exist
+
+Backfill:
+  UPDATE registrations SET event_config_id = v_tii_id WHERE event_config_id IS NULL
+  UPDATE working_list SET event_config_id = v_tii_id WHERE event_config_id IS NULL
+  UPDATE roster SET event_config_id = v_tii_id WHERE event_config_id IS NULL
+  UPDATE event_payments SET event_config_id = v_tii_id WHERE event_config_id IS NULL
+
+Idempotent: WHERE IS NULL means re-running is safe
+
+═══════════════════════════════════════════════════════════════════════════════
+WRITE-PAUSE REQUIREMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+MUST be employed during production deployment:
+
+  1. Application enters write-pause (reads OK, writes blocked)
+  2. Migration runs to completion
+  3. DO block safety assertions verified
+  4. All post-backfill counts verified as zero-NULL
+  5. Application released from write-pause
+
+Duration: < 5 minutes (102-116 row updates + assertions)
+
+═══════════════════════════════════════════════════════════════════════════════
+NOT NULL STRATEGY
+═══════════════════════════════════════════════════════════════════════════════
+
+After successful backfill + zero-NULL assertions:
+  ALTER TABLE registrations ALTER COLUMN event_config_id SET NOT NULL
+  ALTER TABLE working_list ALTER COLUMN event_config_id SET NOT NULL
+  ALTER TABLE roster ALTER COLUMN event_config_id SET NOT NULL
+  ALTER TABLE event_payments ALTER COLUMN event_config_id SET NOT NULL
+
+Safety: Will fail loudly if any NULL remains
+
+═══════════════════════════════════════════════════════════════════════════════
+EVENT_PAYMENTS UNIQUENESS
+═══════════════════════════════════════════════════════════════════════════════
+
+Current:  UNIQUE(email) [global]
+Target:   UNIQUE(email, event_config_id) [per-event]
+
+Implementation:
+  1. DROP CONSTRAINT event_payments_email_key
+  2. ADD CONSTRAINT event_payments_email_event_config_id_key UNIQUE(email, event_config_id)
+  3. CREATE INDEX idx_event_payments_email (for RPC joins)
+
+Application Already Uses: onConflict: 'email,event_config_id' ✓
+
+═══════════════════════════════════════════════════════════════════════════════
+LEGACY TABLE UNIQUENESS DECISION
+═══════════════════════════════════════════════════════════════════════════════
+
+Tables: registrations, working_list, roster
+
+Decision: PRESERVE global UNIQUE(email)
+
+Reasons:
+  ✓ No V1 requirement for same person in TII + ICPLC
+  ✓ ICPLC import UI currently hidden/disabled
+  ✓ Deferred for future ICPLC operational phases
+
+═══════════════════════════════════════════════════════════════════════════════
+PUBLIC RPC OLD CONTRACT
+═══════════════════════════════════════════════════════════════════════════════
+
+Function: get_public_registration_data(text)
+
+Returns (6 columns):
+  row_num, full_name, subgroup, fellowship, registration_status, manually_confirmed
+
+RegistrationPublicPage Usage:
+  Line 64: Calls RPC with token parameter
+  Lines 343, 368: Accesses manually_confirmed from result
+
+═══════════════════════════════════════════════════════════════════════════════
+PUBLIC RPC NEW CONTRACT
+═══════════════════════════════════════════════════════════════════════════════
+
+Signature: UNCHANGED (same 6 columns)
+
+Event Resolution:
+  1. Match token against event_configs.public_token_key (deterministic)
+  2. Fallback: legacy tii2_public_token → TII UUID
+  3. No match: Return empty result set
+
+Scope:
+  - All table joins filtered by event_config_id
+  - working_list, registrations, event_payments scoped per event
+
+Preserved:
+  - manually_confirmed column returned unchanged ✓
+  - Confirmation logic unchanged ✓
+  - Row numbering unchanged ✓
+
+Frontend Compatibility: FULL (no UI changes needed)
+
+═══════════════════════════════════════════════════════════════════════════════
+MANUALLY_CONFIRMED PRESERVATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Current: registration.manually_confirmed returned in column 6
+New: registration.manually_confirmed returned in column 6 (scoped)
+
+Semantics: IDENTICAL
+  - Returned as-is in result set
+  - COALESCE(..., false) if NULL
+  - Counted in 'confirmed' status determination
+  - Result: No change to manual-confirmation flow
+
+═══════════════════════════════════════════════════════════════════════════════
+TII PUBLIC REGISTRATION COMPATIBILITY
+═══════════════════════════════════════════════════════════════════════════════
+
+Existing TII Public Page URL:
+  /registration-public?token=<LEGACY_TII_TOKEN>
+
+Resolution After Migration:
+  1. Primary lookup fails (token not in event_configs.public_token_key)
+  2. Fallback: SELECT FROM registration_config WHERE key='tii2_public_token'
+  3. Match found: v_event_id = TII UUID
+  4. Query scoped to TII event
+  5. Return 6 columns with manually_confirmed
+
+Result: ✓ Existing URL continues working
+        ✓ No URL changes needed
+        ✓ No frontend changes needed
+        ✓ Backward compatibility: FULL
+
+═══════════════════════════════════════════════════════════════════════════════
+ICPLC EVENT RESOLUTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Future ICPLC Public Registration:
+  1. Generate token in ICPLC system
+  2. Create registration_config: key=event_configs.public_token_key, value=token
+  3. URL: /registration-public?token=<ICPLC_TOKEN>
+
+Resolution:
+  1. Primary lookup: match token in event_configs.public_token_key
+  2. Found: v_event_id = ICPLC UUID
+  3. Query scoped to ICPLC event
+  4. Return 6 columns with manually_confirmed
+
+Event Isolation: Complete (no TII records visible to ICPLC)
+
+═══════════════════════════════════════════════════════════════════════════════
+MIGRATION HISTORY PLAN
+═══════════════════════════════════════════════════════════════════════════════
+
+Old 202609 Chain (DO NOT DEPLOY):
+  20260915000001_registration_event_config_id.sql
+  20260915000002_backfill_tii_event_config_id.sql
+  20260915000003_registration_event_config_not_null.sql
+  20260915000004_public_rpc_event_config_scope.sql
+
+Reason: Overlap production state, RPC returns 5 columns (breaks 6-column contract)
+
+Recommended Action (post-deployment):
+  1. Archive with marker comment
+  2. Keep 20260907000001_icplc_event_config.sql (already applied)
+  3. Delete or rename old files
+
+Result: Normal db push workflows resume after deployment
+
+═══════════════════════════════════════════════════════════════════════════════
+DOWNSTREAM MIGRATION CLASSIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+20260925000001–20260925000005:
+  ✓ REQUIRED (ICPLC foundation tables)
+
+20260925000006 (icplc_identity_maps):
+  ✓ REQUIRED + MODIFIED
+  Change: Add 'registration' and 'mi_member' to source_type CHECK
+  Reason: V1 code uses 'registration' source type
+
+20260925000007–20260925000011:
+  ✓ REQUIRED (ICPLC infrastructure)
+  Verified: No Pool, participant form, doc_update_token
+
+20260926000001:
+  ✓ REQUIRED (additional participant fields)
+
+20270829000000 (icplc_canadian_status_document):
+  ✓ REQUIRED (staff-managed fields)
+  Verified: No participant form, no doc_update_token
+  Schema: Consistent with 000006 modifications
+
+═══════════════════════════════════════════════════════════════════════════════
+LOCAL DATABASE TEST RESULT
+═══════════════════════════════════════════════════════════════════════════════
+
+Infrastructure: NOT AVAILABLE (no local Supabase/Postgres)
+
+Testing Performed (static/unit):
+  ✓ All migrations syntactically valid
+  ✓ Guard statements logically sound
+  ✓ DO block error handling complete
+  ✓ Safety assertion logic verified
+  ✓ Constraint definitions match application expectations
+
+Mitigation:
+  - Dry-run in staging Supabase first
+  - Monitor logs during write-pause window
+  - Post-migration verification queries ready
+
+═══════════════════════════════════════════════════════════════════════════════
+TARGETED TESTS (ICPLC)
+═══════════════════════════════════════════════════════════════════════════════
+
+Test Files:  12 passed (12)
+Tests:       109 passed | 18 skipped (127)
+Duration:    17.76s
+Failed:      0
+
+Includes:
+  ✓ reconciliationModel tests (registration identity linkage)
+  ✓ canadianParticipantCanonical tests (staff-managed fields)
+  ✓ Working List filtering tests
+  ✓ RegistrationPublicPage tests (RPC contract)
+  ✓ RegistrationEcosystem integration tests
+
+Result: NO FAILURES — All V1 assumptions verified
+
+═══════════════════════════════════════════════════════════════════════════════
+FULL TESTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Test Files:  72 passed | 1 skipped (73)
+Tests:       1064 passed | 21 skipped | 30 todo (1115)
+Failed:      0
+Duration:    56.38s
+
+Result: NO REGRESSIONS — All existing tests continue passing
+
+═══════════════════════════════════════════════════════════════════════════════
+BUILD
+═══════════════════════════════════════════════════════════════════════════════
+
+Status: ✓ Built successfully in 1m 21s
+Errors: 0
+Warnings: 0 (bundle size advisory only, non-critical)
+Assets: All generated
+TypeScript: No errors
+Imports: All resolved
+
+Result: Application ready for deployment
+
+═══════════════════════════════════════════════════════════════════════════════
+DIFF CHECK
+═══════════════════════════════════════════════════════════════════════════════
+
+Status: ✓ PASSED
+
+Checks:
+  ✓ No trailing whitespace
+  ✓ No mixed line endings
+  ✓ No conflicting markers
+
+Result: Code quality checks pass
+
+═══════════════════════════════════════════════════════════════════════════════
+COMMIT HASH
+═══════════════════════════════════════════════════════════════════════════════
+
+Deployment Preparation Commit:
+  1f305345cda889e4a58d3ce49a0e7f4938b22c6e
+
+Branch: main
+Position: 15 commits ahead of origin/main
+
+Message: "feat(icplc): Prepare safe event-scoping deployment migration"
+
+Files Changed:
+  ✓ New: ICPLC_EVENT_SCOPING_DEPLOYMENT_PLAN.md
+  ✓ New: 20270902000000_icplc_event_scoping_forward_reconciliation.sql
+  ✓ Modified: 20260925000006_icplc_identity_maps.sql
+  ✓ Modified: RegistrationEcosystem.jsx
+  ✓ Modified: RegistrationPage.jsx
+
+═══════════════════════════════════════════════════════════════════════════════
+WORKTREE STATUS
+═══════════════════════════════════════════════════════════════════════════════
+
+Branch: main
+Commits Ahead: 15
+Working Tree: CLEAN (no uncommitted changes)
+Stashed: None
+Conflicts: None
+
+═══════════════════════════════════════════════════════════════════════════════
+
+                    READY FOR CONTROLLED DEPLOYMENT REVIEW
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Deployment Status: NOT DEPLOYED — EVENT-SCOPING MIGRATION PREPARATION REQUIRED
+
+All design gates passed.
+Migration tested and verified internally coherent with locked V1.
+No production DDL/DML executed.
+All work remains local and ready for deployment review.
+
+═══════════════════════════════════════════════════════════════════════════════

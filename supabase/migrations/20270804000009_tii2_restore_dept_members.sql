@@ -19,22 +19,22 @@ declare
   v_dept_media uuid := '9798f8e3-50f2-4e5b-a456-c4ad9f94fe85';
 begin
   -- ORS → T1
-  insert into public.sprint_team_members (sprint_id, team_id, user_id)
-  select v_sprint, v_t1, u.id
+  insert into public.sprint_team_members (team_id, user_id)
+  select v_t1, u.id
   from public.users u
   where u.department_id = v_dept_ors and u.status = 'active'
   on conflict (team_id, user_id) do nothing;
 
   -- PFCC → T2
-  insert into public.sprint_team_members (sprint_id, team_id, user_id)
-  select v_sprint, v_t2, u.id
+  insert into public.sprint_team_members (team_id, user_id)
+  select v_t2, u.id
   from public.users u
   where u.department_id = v_dept_pfcc and u.status = 'active'
   on conflict (team_id, user_id) do nothing;
 
   -- Media → T16
-  insert into public.sprint_team_members (sprint_id, team_id, user_id)
-  select v_sprint, v_t16, u.id
+  insert into public.sprint_team_members (team_id, user_id)
+  select v_t16, u.id
   from public.users u
   where u.department_id = v_dept_media and u.status = 'active'
   on conflict (team_id, user_id) do nothing;
@@ -43,7 +43,8 @@ begin
   insert into public.sprint_members (sprint_id, user_id, role)
   select distinct v_sprint, stm.user_id, 'contributor'
   from public.sprint_team_members stm
-  where stm.sprint_id = v_sprint
+  join public.sprint_teams st on st.id = stm.team_id
+  where st.sprint_id = v_sprint
     and stm.team_id in (v_t1, v_t2, v_t16)
   on conflict (sprint_id, user_id) do nothing;
 end $$;

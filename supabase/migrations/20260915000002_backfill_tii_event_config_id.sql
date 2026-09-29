@@ -13,6 +13,7 @@
 -- GUARD: Aborts if the active event_config is not This Is It 2.0 (name contains "This Is It").
 -- Never assign records to the wrong event merely to eliminate NULLs.
 
+-- GUARD: all referenced tables created later.
 DO $$
 DECLARE
   v_tii_id   uuid;
@@ -22,6 +23,10 @@ DECLARE
   r_roster   bigint := 0;
   r_pay      bigint := 0;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'registrations' AND relnamespace = 'public'::regnamespace) THEN
+    RAISE NOTICE 'Skipping backfill: registrations not yet created';
+    RETURN;
+  END IF;
   -- Identify the active (TII) config
   SELECT id, event_name
     INTO v_tii_id, v_tii_name

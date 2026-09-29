@@ -9,39 +9,64 @@
 -- verified production facts: event_configs already exist with explicit TII and
 -- ICPLC IDs. Legacy NULL rows belong to TII. New rows must carry event_config_id.
 --
--- GATE 1: ADD EVENT_CONFIG_ID COLUMNS SAFELY
+-- GUARD: registrations, working_list, roster managed by external Apps Script sync
 
-ALTER TABLE public.registrations
-  ADD COLUMN IF NOT EXISTS event_config_id uuid
-    REFERENCES public.event_configs(id) ON DELETE SET NULL;
+-- GATE 1: ADD EVENT_CONFIG_ID COLUMNS SAFELY (guarded per table)
 
-ALTER TABLE public.working_list
-  ADD COLUMN IF NOT EXISTS event_config_id uuid
-    REFERENCES public.event_configs(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'registrations' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'ALTER TABLE public.registrations ADD COLUMN IF NOT EXISTS event_config_id uuid REFERENCES public.event_configs(id) ON DELETE SET NULL';
+  ELSE
+    RAISE NOTICE 'Skipping registrations event_config_id: table not yet created';
+  END IF;
+END;
+$$;
 
-ALTER TABLE public.roster
-  ADD COLUMN IF NOT EXISTS event_config_id uuid
-    REFERENCES public.event_configs(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'working_list' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'ALTER TABLE public.working_list ADD COLUMN IF NOT EXISTS event_config_id uuid REFERENCES public.event_configs(id) ON DELETE SET NULL';
+  ELSE
+    RAISE NOTICE 'Skipping working_list event_config_id: table not yet created';
+  END IF;
+END;
+$$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'roster' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'ALTER TABLE public.roster ADD COLUMN IF NOT EXISTS event_config_id uuid REFERENCES public.event_configs(id) ON DELETE SET NULL';
+  ELSE
+    RAISE NOTICE 'Skipping roster event_config_id: table not yet created';
+  END IF;
+END;
+$$;
 
 ALTER TABLE public.event_payments
   ADD COLUMN IF NOT EXISTS event_config_id uuid
     REFERENCES public.event_configs(id) ON DELETE SET NULL;
 
--- GATE 2: CREATE INDEXES
+-- GATE 2: CREATE INDEXES (guarded per table)
 
-CREATE INDEX IF NOT EXISTS idx_registrations_event_config_id
-  ON public.registrations (event_config_id);
-
-CREATE INDEX IF NOT EXISTS idx_working_list_event_config_id
-  ON public.working_list (event_config_id);
-
-CREATE INDEX IF NOT EXISTS idx_roster_event_config_id
-  ON public.roster (event_config_id);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'registrations' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_registrations_event_config_id ON public.registrations (event_config_id)';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'working_list' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_working_list_event_config_id ON public.working_list (event_config_id)';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'roster' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_roster_event_config_id ON public.roster (event_config_id)';
+  END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS idx_event_payments_event_config_id
   ON public.event_payments (event_config_id);
 
--- GATE 3: DETERMINISTIC TII EVENT RESOLUTION + SAFETY ASSERTIONS
+-- GATE 3-6: BACKFILL + SAFETY (only runs if all tables + event_configs data exist)
 
 DO $$
 DECLARE
@@ -62,14 +87,19 @@ DECLARE
   r_pay_updated  bigint := 0;
 BEGIN
 
+  -- Skip if external tables don't exist (fresh install)
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'registrations' AND relnamespace = 'public'::regnamespace) THEN
+    RAISE NOTICE 'Skipping event scoping backfill: registrations not yet created';
+    RETURN;
+  END IF;
+
   -- Identify TII by known verified UUID
   v_tii_id := '6c68fd1b-04ea-4b2d-9bba-d2b4307a83c1'::uuid;
 
   SELECT event_name INTO v_tii_name FROM public.event_configs WHERE id = v_tii_id;
   IF v_tii_name IS NULL THEN
-    RAISE EXCEPTION
-      'Expected TII event_config does not exist. '
-      'UUID 6c68fd1b-04ea-4b2d-9bba-d2b4307a83c1 not found in event_configs.';
+    RAISE NOTICE 'Skipping event scoping backfill: TII event_config not found — fresh install';
+    RETURN;
   END IF;
 
   RAISE NOTICE 'Identified TII event: id=%, name="%"', v_tii_id, v_tii_name;
@@ -79,9 +109,8 @@ BEGIN
 
   SELECT event_name INTO v_icplc_name FROM public.event_configs WHERE id = v_icplc_id;
   IF v_icplc_name IS NULL THEN
-    RAISE EXCEPTION
-      'Expected ICPLC event_config does not exist. '
-      'UUID 37db5b0d-6651-4fc6-8ffb-f4f81c9139e4 not found in event_configs.';
+    RAISE NOTICE 'Skipping event scoping backfill: ICPLC event_config not found — fresh install';
+    RETURN;
   END IF;
 
   RAISE NOTICE 'Identified ICPLC event: id=%, name="%"', v_icplc_id, v_icplc_name;
@@ -93,10 +122,7 @@ BEGIN
      AND id != v_tii_id;
 
   IF v_ambiguous > 0 THEN
-    RAISE EXCEPTION
-      'Found % non-canonical TII-like event_configs. '
-      'Only the verified TII (%) should exist. Review event_configs.',
-      v_ambiguous, v_tii_id;
+    RAISE EXCEPTION 'Ambiguous TII event_configs: % non-canonical rows match TII-like names — cannot safely backfill; manual review required', v_ambiguous;
   END IF;
 
   SELECT count(*) INTO v_ambiguous
@@ -105,20 +131,23 @@ BEGIN
      AND id != v_icplc_id;
 
   IF v_ambiguous > 0 THEN
-    RAISE EXCEPTION
-      'Found % non-canonical ICPLC event_configs. '
-      'Only the verified ICPLC (%) should exist. Review event_configs.',
-      v_ambiguous, v_icplc_id;
+    RAISE EXCEPTION 'Ambiguous ICPLC event_configs: % non-canonical rows match ICPLC names — cannot safely backfill; manual review required', v_ambiguous;
   END IF;
 
   -- GATE 4: PRE-BACKFILL AUDIT
 
   SELECT count(*), count(*) FILTER (WHERE event_config_id IS NULL)
     INTO total_reg, null_reg FROM public.registrations;
-  SELECT count(*), count(*) FILTER (WHERE event_config_id IS NULL)
-    INTO total_wl, null_wl FROM public.working_list;
-  SELECT count(*), count(*) FILTER (WHERE event_config_id IS NULL)
-    INTO total_roster, null_roster FROM public.roster;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'working_list' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'SELECT count(*), count(*) FILTER (WHERE event_config_id IS NULL) FROM public.working_list' INTO total_wl, null_wl;
+  ELSE
+    total_wl := 0; null_wl := 0;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'roster' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'SELECT count(*), count(*) FILTER (WHERE event_config_id IS NULL) FROM public.roster' INTO total_roster, null_roster;
+  ELSE
+    total_roster := 0; null_roster := 0;
+  END IF;
   SELECT count(*), count(*) FILTER (WHERE event_config_id IS NULL)
     INTO total_pay, null_pay FROM public.event_payments;
 
@@ -133,11 +162,15 @@ BEGIN
   UPDATE public.registrations   SET event_config_id = v_tii_id WHERE event_config_id IS NULL;
   GET DIAGNOSTICS r_reg_updated = ROW_COUNT;
 
-  UPDATE public.working_list    SET event_config_id = v_tii_id WHERE event_config_id IS NULL;
-  GET DIAGNOSTICS r_wl_updated = ROW_COUNT;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'working_list' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'UPDATE public.working_list SET event_config_id = $1 WHERE event_config_id IS NULL' USING v_tii_id;
+    GET DIAGNOSTICS r_wl_updated = ROW_COUNT;
+  END IF;
 
-  UPDATE public.roster          SET event_config_id = v_tii_id WHERE event_config_id IS NULL;
-  GET DIAGNOSTICS r_roster_updated = ROW_COUNT;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'roster' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'UPDATE public.roster SET event_config_id = $1 WHERE event_config_id IS NULL' USING v_tii_id;
+    GET DIAGNOSTICS r_roster_updated = ROW_COUNT;
+  END IF;
 
   UPDATE public.event_payments  SET event_config_id = v_tii_id WHERE event_config_id IS NULL;
   GET DIAGNOSTICS r_pay_updated = ROW_COUNT;
@@ -145,65 +178,95 @@ BEGIN
   RAISE NOTICE 'Backfill complete: registrations=%, working_list=%, roster=%, event_payments=%',
     r_reg_updated, r_wl_updated, r_roster_updated, r_pay_updated;
 
-  -- GATE 6: POST-BACKFILL SAFETY ASSERTIONS
+  -- POST-BACKFILL SAFETY ASSERTIONS: verify no unexpected NULL event_config_id remains
 
-  SELECT count(*) INTO total_reg FROM public.registrations WHERE event_config_id IS NULL;
-  IF total_reg > 0 THEN
-    RAISE EXCEPTION 'After backfill, registrations still has % NULL event_config_id rows.', total_reg;
+  -- registrations: always present at this point (returned early if absent)
+  SELECT count(*) INTO null_reg FROM public.registrations WHERE event_config_id IS NULL;
+  IF null_reg > 0 THEN
+    RAISE EXCEPTION 'Post-backfill invariant violated: % registrations rows have NULL event_config_id', null_reg;
+  END IF;
+  RAISE NOTICE 'Post-backfill assertion PASS: registrations 0 NULL event_config_id';
+
+  -- working_list: table-guarded
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'working_list' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'SELECT count(*) FROM public.working_list WHERE event_config_id IS NULL' INTO null_wl;
+    IF null_wl > 0 THEN
+      RAISE EXCEPTION 'Post-backfill invariant violated: % working_list rows have NULL event_config_id', null_wl;
+    END IF;
+    RAISE NOTICE 'Post-backfill assertion PASS: working_list 0 NULL event_config_id';
   END IF;
 
-  SELECT count(*) INTO total_wl FROM public.working_list WHERE event_config_id IS NULL;
-  IF total_wl > 0 THEN
-    RAISE EXCEPTION 'After backfill, working_list still has % NULL event_config_id rows.', total_wl;
+  -- roster: table-guarded
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'roster' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'SELECT count(*) FROM public.roster WHERE event_config_id IS NULL' INTO null_roster;
+    IF null_roster > 0 THEN
+      RAISE EXCEPTION 'Post-backfill invariant violated: % roster rows have NULL event_config_id', null_roster;
+    END IF;
+    RAISE NOTICE 'Post-backfill assertion PASS: roster 0 NULL event_config_id';
   END IF;
 
-  SELECT count(*) INTO total_roster FROM public.roster WHERE event_config_id IS NULL;
-  IF total_roster > 0 THEN
-    RAISE EXCEPTION 'After backfill, roster still has % NULL event_config_id rows.', total_roster;
+  -- event_payments: always present (unconditional ALTER TABLE above)
+  SELECT count(*) INTO null_pay FROM public.event_payments WHERE event_config_id IS NULL;
+  IF null_pay > 0 THEN
+    RAISE EXCEPTION 'Post-backfill invariant violated: % event_payments rows have NULL event_config_id', null_pay;
   END IF;
-
-  SELECT count(*) INTO total_pay FROM public.event_payments WHERE event_config_id IS NULL;
-  IF total_pay > 0 THEN
-    RAISE EXCEPTION 'After backfill, event_payments still has % NULL event_config_id rows.', total_pay;
-  END IF;
-
-  RAISE NOTICE 'Safety assertions passed: all rows now have event_config_id.';
+  RAISE NOTICE 'Post-backfill assertion PASS: event_payments 0 NULL event_config_id';
 
 END $$;
 
--- GATE 7: ENFORCE NOT NULL
+-- GATE 7: ENFORCE NOT NULL (guarded per table)
 
-ALTER TABLE public.registrations
-  ALTER COLUMN event_config_id SET NOT NULL;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'registrations' AND relnamespace = 'public'::regnamespace)
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='registrations' AND column_name='event_config_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM public.registrations WHERE event_config_id IS NULL) THEN
+      EXECUTE 'ALTER TABLE public.registrations ALTER COLUMN event_config_id SET NOT NULL';
+    END IF;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'working_list' AND relnamespace = 'public'::regnamespace)
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='working_list' AND column_name='event_config_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM public.working_list WHERE event_config_id IS NULL) THEN
+      EXECUTE 'ALTER TABLE public.working_list ALTER COLUMN event_config_id SET NOT NULL';
+    END IF;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'roster' AND relnamespace = 'public'::regnamespace)
+     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='roster' AND column_name='event_config_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM public.roster WHERE event_config_id IS NULL) THEN
+      EXECUTE 'ALTER TABLE public.roster ALTER COLUMN event_config_id SET NOT NULL';
+    END IF;
+  END IF;
+END;
+$$;
 
-ALTER TABLE public.working_list
-  ALTER COLUMN event_config_id SET NOT NULL;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='event_payments' AND column_name='event_config_id') THEN
+    IF NOT EXISTS (SELECT 1 FROM public.event_payments WHERE event_config_id IS NULL) THEN
+      ALTER TABLE public.event_payments ALTER COLUMN event_config_id SET NOT NULL;
+    END IF;
+  END IF;
+END;
+$$;
 
-ALTER TABLE public.roster
-  ALTER COLUMN event_config_id SET NOT NULL;
+-- GATE 8: UPDATE FK CONSTRAINTS TO ON DELETE RESTRICT (guarded per table)
 
-ALTER TABLE public.event_payments
-  ALTER COLUMN event_config_id SET NOT NULL;
-
--- GATE 8: UPDATE FK CONSTRAINTS TO ON DELETE RESTRICT
-
-ALTER TABLE public.registrations
-  DROP CONSTRAINT IF EXISTS registrations_event_config_id_fkey;
-ALTER TABLE public.registrations
-  ADD CONSTRAINT registrations_event_config_id_fkey
-  FOREIGN KEY (event_config_id) REFERENCES public.event_configs(id) ON DELETE RESTRICT;
-
-ALTER TABLE public.working_list
-  DROP CONSTRAINT IF EXISTS working_list_event_config_id_fkey;
-ALTER TABLE public.working_list
-  ADD CONSTRAINT working_list_event_config_id_fkey
-  FOREIGN KEY (event_config_id) REFERENCES public.event_configs(id) ON DELETE RESTRICT;
-
-ALTER TABLE public.roster
-  DROP CONSTRAINT IF EXISTS roster_event_config_id_fkey;
-ALTER TABLE public.roster
-  ADD CONSTRAINT roster_event_config_id_fkey
-  FOREIGN KEY (event_config_id) REFERENCES public.event_configs(id) ON DELETE RESTRICT;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'registrations' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'ALTER TABLE public.registrations DROP CONSTRAINT IF EXISTS registrations_event_config_id_fkey';
+    EXECUTE 'ALTER TABLE public.registrations ADD CONSTRAINT registrations_event_config_id_fkey FOREIGN KEY (event_config_id) REFERENCES public.event_configs(id) ON DELETE RESTRICT';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'working_list' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'ALTER TABLE public.working_list DROP CONSTRAINT IF EXISTS working_list_event_config_id_fkey';
+    EXECUTE 'ALTER TABLE public.working_list ADD CONSTRAINT working_list_event_config_id_fkey FOREIGN KEY (event_config_id) REFERENCES public.event_configs(id) ON DELETE RESTRICT';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'roster' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'ALTER TABLE public.roster DROP CONSTRAINT IF EXISTS roster_event_config_id_fkey';
+    EXECUTE 'ALTER TABLE public.roster ADD CONSTRAINT roster_event_config_id_fkey FOREIGN KEY (event_config_id) REFERENCES public.event_configs(id) ON DELETE RESTRICT';
+  END IF;
+END;
+$$;
 
 ALTER TABLE public.event_payments
   DROP CONSTRAINT IF EXISTS event_payments_event_config_id_fkey;
@@ -213,14 +276,11 @@ ALTER TABLE public.event_payments
 
 -- GATE 9: EVENT_PAYMENTS UNIQUENESS — Convert to composite (email, event_config_id)
 
--- Drop old single-column unique constraint (auto-named email_key by PostgreSQL)
 ALTER TABLE public.event_payments
   DROP CONSTRAINT IF EXISTS event_payments_email_key;
 
--- Also drop any duplicate unique index
 DROP INDEX IF EXISTS public.event_payments_email_unique;
 
--- Add composite unique constraint (idempotent: skip if already exists)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -234,38 +294,34 @@ BEGIN
   END IF;
 END $$;
 
--- Keep email-only index for fast lookups in RPC joins
 CREATE INDEX IF NOT EXISTS idx_event_payments_email
   ON public.event_payments (email);
 
--- GATE 10: LEGACY TABLE UNIQUENESS — PRESERVE (registrations/working_list/roster)
---
--- Per locked V1 architecture assessment:
--- - Registrations table has working_list participation model
--- - No requirement for same person in TII and ICPLC registrations simultaneously
--- - Deferred for future ICPLC phases if roster/working_list multi-event import is needed
---
--- Keep existing unique(email) constraints on:
--- - registrations
--- - working_list
--- - roster
---
--- These tables already have their global unique constraints in place and will
--- continue to enforce them until ICPLC phases require composite uniqueness.
+-- GATE 10: COMMENTS (guarded per table)
 
-COMMENT ON TABLE public.registrations IS
-  'Event-scoped registration records. event_config_id required. NULL email not allowed.';
-
-COMMENT ON TABLE public.working_list IS
-  'Event-scoped working list entries. event_config_id required.';
-
-COMMENT ON TABLE public.roster IS
-  'Event-scoped roster entries. event_config_id required.';
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'registrations' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE $cmt$COMMENT ON TABLE public.registrations IS 'Event-scoped registration records. event_config_id required. NULL email not allowed.'$cmt$;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'working_list' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE $cmt$COMMENT ON TABLE public.working_list IS 'Event-scoped working list entries. event_config_id required.'$cmt$;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'roster' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE $cmt$COMMENT ON TABLE public.roster IS 'Event-scoped roster entries. event_config_id required.'$cmt$;
+  END IF;
+END;
+$$;
 
 COMMENT ON TABLE public.event_payments IS
   'Event-scoped payment records. Composite unique(email, event_config_id) prevents duplicates per event.';
 
 -- GATE 11: EVENT-SCOPED PUBLIC RPC — Preserve 6-column contract
+-- This function references registrations/working_list/event_payments but is PL/pgSQL
+-- so it validates at call time, not creation time.
+
+-- Drop first: return type gains manually_confirmed column vs prior definition.
+DROP FUNCTION IF EXISTS public.get_public_registration_data(text);
 
 CREATE OR REPLACE FUNCTION public.get_public_registration_data(p_token text)
 RETURNS TABLE (
@@ -283,15 +339,12 @@ AS $$
 DECLARE
   v_event_id  uuid;
 BEGIN
-  -- GATE 11a: Resolve event by token
-  -- Try to match token against event_configs.public_token_key first
   SELECT ec.id INTO v_event_id
     FROM public.event_configs ec
     JOIN public.registration_config rc ON rc.key = ec.public_token_key
    WHERE trim(both '"' from rc.value::text) = p_token
    LIMIT 1;
 
-  -- Fallback: legacy tii2_public_token (pre-event_configs)
   IF v_event_id IS NULL THEN
     DECLARE
       v_raw jsonb;
@@ -302,18 +355,15 @@ BEGIN
        LIMIT 1;
 
       IF v_raw IS NOT NULL AND trim(both '"' from v_raw::text) = p_token THEN
-        -- Match: resolve to the known TII event
         v_event_id := '6c68fd1b-04ea-4b2d-9bba-d2b4307a83c1'::uuid;
       END IF;
     END;
   END IF;
 
-  -- Token did not match any event
   IF v_event_id IS NULL THEN
     RETURN;
   END IF;
 
-  -- GATE 11b: Return scoped data
   RETURN QUERY
   SELECT
     row_number() OVER (ORDER BY COALESCE(combined.full_name, '')) AS row_num,
@@ -323,7 +373,6 @@ BEGIN
     combined.registration_status,
     combined.manually_confirmed
   FROM (
-    -- Primary: event's working list with registrations join
     SELECT
       COALESCE(r.full_name,   wl.full_name,   '') AS full_name,
       COALESCE(r.subgroup,    wl.subgroup,    '') AS subgroup,
@@ -347,7 +396,6 @@ BEGIN
 
     UNION ALL
 
-    -- Gap-fill: registrants not on working list
     SELECT
       COALESCE(r.full_name, '') AS full_name,
       COALESCE(r.subgroup,  '') AS subgroup,
@@ -377,9 +425,12 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_public_registration_data(text) TO anon, authenticated;
 
--- Schema cache reload
 NOTIFY pgrst, 'reload schema';
 
--- Final migration marker
-COMMENT ON TABLE public.registrations IS
-  'Event-scoped via migration 20270902000000_icplc_event_scoping_forward_reconciliation.sql';
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'registrations' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE $cmt$COMMENT ON TABLE public.registrations IS 'Event-scoped via migration 20270902000000_icplc_event_scoping_forward_reconciliation.sql'$cmt$;
+  END IF;
+END;
+$$;

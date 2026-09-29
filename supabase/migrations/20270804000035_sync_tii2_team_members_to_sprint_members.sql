@@ -10,7 +10,8 @@ begin
   insert into public.sprint_members (sprint_id, user_id, role)
   select distinct v_sprint, stm.user_id, 'contributor'
   from public.sprint_team_members stm
-  where stm.sprint_id = v_sprint
+  join public.sprint_teams st on st.id = stm.team_id
+  where st.sprint_id = v_sprint
   on conflict (sprint_id, user_id) do nothing;
 
   select count(*) into v_inserted from public.sprint_members where sprint_id = v_sprint;

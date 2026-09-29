@@ -95,6 +95,7 @@ function useBreadcrumbs(pathname, search) {
     return crumbs
   }
   if (pathname.startsWith('/sprints/')) return [['Sprints', '/sprints'], [sprintName || 'Sprint', pathname]]
+  if (pathname === '/icplc' || pathname.startsWith('/icplc/')) return [['ICPLC', '/icplc']]
   return [['BLW CAN NEXUS', '/dashboard']]
 }
 

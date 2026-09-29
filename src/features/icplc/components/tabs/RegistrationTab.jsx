@@ -1,4 +1,10 @@
 import React, { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../../../../lib/supabase'
+import { REGISTRATION_LINK_SOURCE_TYPES } from '../../lib/reconciliation.js'
+import { ClipboardCheck, Link2 } from 'lucide-react'
+import { Card, EditButton } from './tabUi.jsx'
+import Badge from '../../../../components/ui/Badge.jsx'
 import { useAuth } from '../../../../hooks/useAuth'
 import { useUpdateProfile, useClearFieldOverride } from '../../hooks/useICPLCProfile.js'
 import { getOverrideMeta } from '../../lib/fieldAuthority.js'
@@ -14,8 +20,21 @@ export default function RegistrationTab({ participant, canWrite }) {
   const [form, setForm] = useState({
     participation_status: participant.participation_status,
     registration_status: participant.registration_status,
-    notes: participant.notes || '',
   })
+  const { data: linkedMaps = [] } = useQuery({
+    queryKey: ['icplc_participant_registration_links', participant.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('icplc_identity_maps')
+        .select('source_key')
+        .eq('participant_id', participant.id)
+        .in('source_type', REGISTRATION_LINK_SOURCE_TYPES)
+      if (error) throw error
+      return data || []
+    },
+    staleTime: 30_000,
+  })
+  const isLinked = linkedMaps.length > 0
 
   const registrationOverride = getOverrideMeta(participant, 'registration_status')
   const registrationSource = participant.source_values?.registration_source
@@ -27,8 +46,6 @@ export default function RegistrationTab({ participant, canWrite }) {
       changed.participation_status = form.participation_status
     if (form.registration_status !== participant.registration_status)
       changed.registration_status = form.registration_status
-    if (form.notes !== (participant.notes || ''))
-      changed.notes = form.notes
 
     if (Object.keys(changed).length === 0) { setEditing(false); return }
 
@@ -49,11 +66,14 @@ export default function RegistrationTab({ participant, canWrite }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Participation — staff-managed, never from import */}
+      <Card icon={ClipboardCheck} title="Participation & Status" action={canWrite && !editing ? <EditButton onClick={() => setEditing(true)} /> : null}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Field label="Participation Status" staffManaged>
         {editing && canWrite ? (
           <select
+            aria-label="Participation status"
             value={form.participation_status}
             onChange={(e) => setForm((f) => ({ ...f, participation_status: e.target.value }))}
             style={selectStyle}
@@ -69,14 +89,26 @@ export default function RegistrationTab({ participant, canWrite }) {
           Staff-managed — never modified by imports
         </div>
       </Field>
+      </div>
+      </Card>
 
-      {/* Registration status — source-backed with override */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      {/* Registration link — derived from the identity map, never from participation */}
+      <Card icon={Link2} title="Registration">
+      <div>
+        <Badge tone={isLinked ? 'done' : 'at_risk'} label={isLinked ? 'Registered' : 'Not registered'} />
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+          {isLinked
+            ? `Linked to ${linkedMaps.length} registration${linkedMaps.length === 1 ? '' : 's'}. Linking never changes participation status.`
+            : 'No registration is linked to this participant.'}
+        </div>
+      </div>
+      <div className="icplc-field-grid" style={{ marginTop: 14 }}>
         <Info label="Registration Source" value={registrationStatusSource?.source || registrationSource?.source || 'None linked'} />
         <Info label="Received" value={formatDate(registrationSource?.submitted_at || registrationStatusSource?.observed_at)} />
         <Info label="Source Identifier" value={registrationSource?.registration_id || registrationStatusSource?.registration_id || '-'} />
         <Info label="Source Email" value={registrationSource?.email || '-'} />
       </div>
+      <div style={{ marginTop: 14 }}>
 
       <Field
         label="Registration Status"
@@ -86,6 +118,7 @@ export default function RegistrationTab({ participant, canWrite }) {
       >
         {editing && canWrite ? (
           <select
+            aria-label="Registration status"
             value={form.registration_status}
             onChange={(e) => setForm((f) => ({ ...f, registration_status: e.target.value }))}
             style={selectStyle}
@@ -98,39 +131,15 @@ export default function RegistrationTab({ participant, canWrite }) {
           <span style={{ fontSize: 13 }}>{participant.registration_status}</span>
         )}
       </Field>
+      </div>
+      </Card>
 
-      {/* Notes */}
-      <Field label="Notes">
-        {editing && canWrite ? (
-          <textarea
-            value={form.notes}
-            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            rows={4}
-            style={{ ...inputStyle, resize: 'vertical' }}
-          />
-        ) : (
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
-            {participant.notes || <span style={{ color: 'var(--text-secondary)' }}>—</span>}
-          </p>
-        )}
-      </Field>
-
-      {canWrite && (
-        <div style={{ display: 'flex', gap: 8 }}>
-          {editing ? (
-            <>
-              <button
-                onClick={handleSave}
-                disabled={updateProfile.isPending}
-                style={primaryBtn}
-              >
-                {updateProfile.isPending ? 'Saving…' : 'Save'}
-              </button>
-              <button onClick={() => setEditing(false)} style={ghostBtn}>Cancel</button>
-            </>
-          ) : (
-            <button onClick={() => setEditing(true)} style={primaryBtn}>Edit</button>
-          )}
+      {canWrite && editing && (
+        <div className="icplc-actions">
+          <button type="button" onClick={handleSave} disabled={updateProfile.isPending} className="icplc-btn icplc-btn-primary">
+            {updateProfile.isPending ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" onClick={() => setEditing(false)} className="icplc-btn">Cancel</button>
         </div>
       )}
     </div>
@@ -165,8 +174,10 @@ function Field({ label, staffManaged, sourceValue, override, onResumeSync, child
           <div style={{ marginTop: 2 }}>Staff override by {override.by?.slice(0, 8)} on {new Date(override.at).toLocaleDateString()}</div>
           {onResumeSync && (
             <button
+              type="button"
               onClick={onResumeSync}
-              style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0, fontSize: 12 }}
+              className="icplc-btn"
+              style={{ marginTop: 6, border: 'none', color: 'var(--accent)', padding: 0, minHeight: 32, justifyContent: 'flex-start' }}
             >
               Resume source sync →
             </button>
@@ -179,7 +190,7 @@ function Field({ label, staffManaged, sourceValue, override, onResumeSync, child
 
 function Info({ label, value }) {
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10 }}>
+    <div style={{ background: '#F7F8FA', borderRadius: 8, padding: 10 }}>
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 13 }}>{value || '-'}</div>
     </div>
@@ -194,16 +205,4 @@ function formatDate(value) {
 const selectStyle = {
   padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 4,
   fontSize: 13, background: 'white', width: '100%',
-}
-const inputStyle = {
-  padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 4,
-  fontSize: 13, width: '100%', boxSizing: 'border-box',
-}
-const primaryBtn = {
-  padding: '6px 14px', background: 'var(--accent)', color: 'white',
-  border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13,
-}
-const ghostBtn = {
-  padding: '6px 14px', background: 'transparent', color: 'var(--text-primary)',
-  border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontSize: 13,
 }

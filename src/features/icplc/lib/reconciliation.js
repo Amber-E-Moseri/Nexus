@@ -1,5 +1,17 @@
 export const REGISTRATION_SOURCE_TYPE = 'registration'
+// Identity maps written by the Registration CSV import: the registration ID in the export is the link.
+export const REGISTRATION_CSV_SOURCE_TYPE = 'registration_csv'
+export const REGISTRATION_LINK_SOURCE_TYPES = [REGISTRATION_SOURCE_TYPE, REGISTRATION_CSV_SOURCE_TYPE]
 export const POOL_SOURCE_TYPE = 'mi_member'
+export const OWNERSHIP_CONFLICT_CODE = '23505'
+export const EMAIL_CLAIMS_CONSTRAINT = 'icplc_email_claims_event_id_normalized_email_key'
+
+// Canonical email normalization: must match database normalize_email() function
+// LOWER(TRIM(email)) with NULL for empty/whitespace
+export function normalizeEmail(email) {
+  const trimmed = String(email || '').trim().toLowerCase()
+  return trimmed === '' ? null : trimmed
+}
 
 export function normalizeIdentity(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
@@ -101,6 +113,12 @@ export function registrationLinkedParticipantIds(registrations = [], maps = [], 
       .map((map) => map.participant_id)
       .filter(Boolean),
   )
+  // Anyone with a Registration CSV link is registered (the export is the source of truth).
+  for (const map of maps) {
+    if (map.source_type === REGISTRATION_CSV_SOURCE_TYPE && map.participant_id) {
+      linkedParticipantIds.add(map.participant_id)
+    }
+  }
   return linkedParticipantIds
 }
 
@@ -118,7 +136,11 @@ export function filterParticipantsByWorkingListView(
   return participants.filter((participant) => {
     if (view === 'registered') return linkedParticipantIds.has(participant.id)
     if (view === 'not_registered') return !linkedParticipantIds.has(participant.id)
-    if (view === 'confirmed') return participant.participation_status === 'confirmed'
+    if (view === 'confirmed') {
+      // A Ready person counts as Confirmed (derived, never persisted).
+      return participant.participation_status === 'confirmed'
+        || (isActiveParticipant(participant) && !!getReadiness && getReadiness(participant) === 'ready')
+    }
     if (view === 'needs_attention') {
       const readiness = getReadiness ? getReadiness(participant) : null
       return readiness === 'action_required' || readiness === 'blocked'
@@ -129,13 +151,16 @@ export function filterParticipantsByWorkingListView(
 
 export function candidateMatches(registration, participants = [], confirmedParticipantId = null) {
   if (confirmedParticipantId) return []
-  const regEmail = normalizeIdentity(registration?.email)
+  const regEmail = normalizeEmail(registration?.email)
   const regName = normalizeName(registrationDisplayName(registration))
   if (!regEmail && !regName) return []
 
   return participants
     .map((participant) => {
-      const exactEmail = regEmail && normalizeIdentity(participant.email) === regEmail
+      // Check both primary and alternate email fields
+      const primaryEmailMatch = regEmail && normalizeEmail(participant.email) === regEmail
+      const alternateEmailMatch = regEmail && normalizeEmail(participant.alternate_email) === regEmail
+      const exactEmail = primaryEmailMatch || alternateEmailMatch
       const exactName = regName && normalizeName(participant.full_name) === regName
       if (!exactEmail && !exactName) return null
       return {
@@ -167,4 +192,65 @@ export function reconciliationState(registration, participants, identityMap) {
     return { state: 'POSSIBLE_MATCH', participant: null, candidates }
   }
   return { state: 'UNMATCHED', participant: null, candidates: [] }
+}
+
+// Make Primary: atomically swap primary and alternate emails.
+// Provenance travels with the VALUES, not the slot labels.
+// After the swap: source_values.email and override_fields.email describe the new
+// primary value; source_values.alternate_email describes the new alternate value.
+export function makePrimaryPayload(participant) {
+  const newEmail = participant.alternate_email || null
+  const newAlternate = participant.email || null
+
+  // Swap source_values entries keyed 'email' ↔ 'alternate_email'
+  const sv = { ...(participant.source_values || {}) }
+  const svEmail = sv.email
+  const svAlt = sv.alternate_email
+  if (svEmail !== undefined) sv.alternate_email = svEmail; else delete sv.alternate_email
+  if (svAlt !== undefined) sv.email = svAlt; else delete sv.email
+
+  // Swap override_fields entries keyed 'email' ↔ 'alternate_email'
+  const of_ = { ...(participant.override_fields || {}) }
+  const ofEmail = of_.email
+  const ofAlt = of_.alternate_email
+  if (ofEmail !== undefined) of_.alternate_email = ofEmail; else delete of_.alternate_email
+  if (ofAlt !== undefined) of_.email = ofAlt; else delete of_.email
+
+  return {
+    email: newEmail,
+    alternate_email: newAlternate,
+    source_values: sv,
+    override_fields: of_,
+  }
+}
+
+// lookupEmailClaim: canonical exact-match lookup via icplc_email_claims table.
+// Returns the participant_id that owns the normalized email, or null if unclaimed.
+// This is the authoritative resolution path (step 2 in the resolution order).
+// Resolution order for registrations:
+//   1. durable identity_map (by registration.id)
+//   2. exact claim lookup (this function)
+//   3. candidateMatches() — display candidates for staff review
+//   4. no match → create new participant
+export async function lookupEmailClaim(supabase, eventId, email) {
+  const norm = normalizeEmail(email)
+  if (!norm) return null
+  const { data } = await supabase
+    .from('icplc_email_claims')
+    .select('participant_id')
+    .eq('event_id', eventId)
+    .eq('normalized_email', norm)
+    .maybeSingle()
+  return data?.participant_id || null
+}
+
+// isOwnershipConflict: returns true if the error is a 23505 on the email claims
+// uniqueness constraint (indicating concurrent email ownership collision).
+export function isOwnershipConflict(error) {
+  return (
+    error?.code === OWNERSHIP_CONFLICT_CODE &&
+    (error?.message?.includes('icplc_email_claims') ||
+     error?.message?.includes('normalized_email') ||
+     error?.message?.includes('icplc_participants_event_email_idx'))
+  )
 }

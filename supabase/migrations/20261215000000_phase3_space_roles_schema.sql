@@ -37,6 +37,26 @@ create table if not exists public.role_permissions (
   unique (role, role_scope, permission_key)
 );
 
+-- If role_permissions existed from an earlier migration without role_scope, add it
+-- and replace the old unique constraint with the new 3-column one.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'role_permissions' AND column_name = 'role_scope'
+  ) THEN
+    ALTER TABLE public.role_permissions ADD COLUMN role_scope text NOT NULL DEFAULT 'base'
+      CHECK (role_scope IN ('base', 'space'));
+    -- Replace unique(role, permission_key) with unique(role, role_scope, permission_key)
+    ALTER TABLE public.role_permissions DROP CONSTRAINT IF EXISTS role_permissions_role_permission_key_key;
+    ALTER TABLE public.role_permissions ADD CONSTRAINT role_permissions_role_role_scope_permission_key_key
+      UNIQUE (role, role_scope, permission_key);
+  END IF;
+END;
+$$;
+
+-- Drop old single-column index if present so the composite one can be created
+DROP INDEX IF EXISTS public.idx_role_permissions_role;
 create index if not exists idx_role_permissions_role on public.role_permissions(role, role_scope);
 create index if not exists idx_role_permissions_permission_key on public.role_permissions(permission_key);
 create index if not exists idx_role_permissions_category on public.role_permissions(category);

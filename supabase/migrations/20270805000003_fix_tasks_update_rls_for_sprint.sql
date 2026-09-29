@@ -18,7 +18,8 @@ create policy "tasks_update" on public.tasks
     or public.has_space_role(auth.uid(), department_id, 'dept_lead')
     or (sprint_id is not null and exists(
       select 1 from public.sprint_team_members stm
-      where stm.sprint_id = sprint_id
+      join public.sprint_teams st on st.id = stm.team_id
+      where st.sprint_id = tasks.sprint_id
         and stm.user_id = auth.uid()
     ))
   )
@@ -28,7 +29,8 @@ create policy "tasks_update" on public.tasks
     or public.has_space_role(auth.uid(), department_id, 'dept_lead')
     or (sprint_id is not null and exists(
       select 1 from public.sprint_team_members stm
-      where stm.sprint_id = sprint_id
+      join public.sprint_teams st on st.id = stm.team_id
+      where st.sprint_id = tasks.sprint_id
         and stm.user_id = auth.uid()
     ))
   );

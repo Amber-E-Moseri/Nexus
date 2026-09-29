@@ -19,7 +19,17 @@ create table if not exists public.calendar_permissions (
 );
 
 create index if not exists calendar_permissions_user_id_idx on public.calendar_permissions(user_id);
-create index if not exists calendar_permissions_permission_idx on public.calendar_permissions(permission);
+-- GUARD: permission column only exists if CREATE TABLE above ran (not if table existed from 20260625000000).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'calendar_permissions' AND column_name = 'permission'
+  ) THEN
+    EXECUTE 'create index if not exists calendar_permissions_permission_idx on public.calendar_permissions(permission)';
+  END IF;
+END;
+$$;
 
 alter table public.calendar_permissions enable row level security;
 

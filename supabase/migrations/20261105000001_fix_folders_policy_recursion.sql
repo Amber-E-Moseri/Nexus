@@ -19,7 +19,7 @@ USING (
   ))
   OR (visibility = 'private' AND (
     created_by = auth.uid()
-    OR folder_id IN (
+    OR id IN (
       SELECT folder_id FROM public.folder_shares
       WHERE user_id = auth.uid()
     )
@@ -44,7 +44,7 @@ USING (
   ))
   OR (visibility = 'private' AND (
     created_by = auth.uid()
-    OR list_id IN (
+    OR id IN (
       SELECT list_id FROM public.list_shares
       WHERE user_id = auth.uid()
     )

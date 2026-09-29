@@ -72,9 +72,26 @@ begin
         end if;
       end if;
 
+      -- 2b. Email fuzzy match (if exact match failed; trigram similarity > 0.7)
+      if v_match_id is null
+         and (v_row.raw_payload->>'email') is not null
+         and trim(v_row.raw_payload->>'email') <> ''
+      then
+        select id into v_match_id
+        from public.icplc_participants
+        where event_id = v_event_id
+          and email is not null
+          and similarity(lower(trim(email)), lower(trim(v_row.raw_payload->>'email'))) > 0.7
+        order by similarity(lower(trim(email)), lower(trim(v_row.raw_payload->>'email'))) desc
+        limit 1;
+
+        if v_match_id is not null then
+          v_match_status := 'auto_fuzzy_email';
+        end if;
+      end if;
+
       -- 3. Normalized full-name match — only auto-match when EXACTLY one candidate
       -- Multiple same-normalized-name candidates require manual resolution.
-      -- Fuzzy (Levenshtein) suggestions are deferred to V2.
       if v_match_id is null
          and (v_row.raw_payload->>'full_name') is not null
          and trim(v_row.raw_payload->>'full_name') <> ''
@@ -93,7 +110,25 @@ begin
               = regexp_replace(lower(trim(v_row.raw_payload->>'full_name')), '[^a-z0-9]', '', 'g');
           v_match_status := 'auto';
         end if;
-        -- v_name_candidates > 1: leave as 'unmatched'; staff resolves manually
+        -- v_name_candidates > 1: try fuzzy match instead of leaving unmatched
+      end if;
+
+      -- 3b. Name fuzzy match (if exact match failed; trigram similarity > 0.7)
+      if v_match_id is null
+         and (v_row.raw_payload->>'full_name') is not null
+         and trim(v_row.raw_payload->>'full_name') <> ''
+      then
+        select id into v_match_id
+        from public.icplc_participants
+        where event_id = v_event_id
+          and full_name is not null
+          and similarity(lower(trim(full_name)), lower(trim(v_row.raw_payload->>'full_name'))) > 0.7
+        order by similarity(lower(trim(full_name)), lower(trim(v_row.raw_payload->>'full_name'))) desc
+        limit 1;
+
+        if v_match_id is not null then
+          v_match_status := 'auto_fuzzy_name';
+        end if;
       end if;
     end if;
 

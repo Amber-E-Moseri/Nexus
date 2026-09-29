@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions."task-api"]
 verify_jwt = false
+
+[functions."cmp-documentation-discovery"]
+verify_jwt = false

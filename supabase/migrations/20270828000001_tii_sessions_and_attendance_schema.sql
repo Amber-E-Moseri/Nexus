@@ -22,7 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_tii_sessions_active ON public.tii_sessions(active
 CREATE TABLE IF NOT EXISTS public.tii_attendance (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id uuid NOT NULL REFERENCES public.tii_sessions(id) ON DELETE CASCADE,
-  registration_id uuid REFERENCES public.registrations(id) ON DELETE SET NULL,
+  registration_id uuid, -- FK to registrations deferred; table managed by external sync
   full_name text NOT NULL,
   email text,
   status text NOT NULL DEFAULT 'present'

@@ -14,7 +14,7 @@ import MeetingDocsTab from '../../features/meetings/components/MeetingDocsTab'
 import MeetingSummaryEditor from '../../features/meetings/components/MeetingSummaryEditor'
 import GenerateMeetingDocButton from '../../features/meetings/components/GenerateMeetingDocButton'
 import MeetingShareModal from '../../features/meetings/components/MeetingShareModal'
-import MeetingMinutesViewer from '../../features/meetings/components/MeetingMinutesViewer'
+const MeetingMinutesViewer = lazy(() => import('../../features/meetings/components/MeetingMinutesViewer'))
 import TaskModal from '../../features/tasks/components/TaskModal'
 import { getTaskById } from '../../features/tasks/lib/tasks'
 import { createTasksFromActionItems, setNotesSharedWithAttendee, editRecurringMeeting, getMeetingSpaces, addMeetingSpace, removeMeetingSpace } from '../../features/meetings/lib/meetings'
@@ -26,9 +26,9 @@ import { useExtractionFeedback } from '../../features/meetings/hooks/useExtracti
 import { autoSelectOpenItems } from '../../features/meetings/lib/applyExtraction'
 import { syncFlockInteractionForMeeting } from '../../features/meetings/lib/flockLink'
 import FlockContactPicker from '../../features/meetings/components/FlockContactPicker'
-import MeetingAgendaEditor from '../../features/meetings/components/MeetingAgendaEditor'
+const MeetingAgendaEditor = lazy(() => import('../../features/meetings/components/MeetingAgendaEditor'))
 import { saveAgendaItemsForMeeting } from '../../features/meetings/lib/agendaSync'
-import RichMinutesEditor from '../../features/meetings/components/RichMinutesEditor'
+const RichMinutesEditor = lazy(() => import('../../features/meetings/components/RichMinutesEditor'))
 import { textToBlocks } from '../../features/meetings/lib/minutesBlocks'
 
 // exact colors from the HTML reference
@@ -1414,10 +1414,12 @@ function MeetingDetailViewInner() {
 
             {editingAgenda ? (
               <div style={{ marginBottom:14 }}>
-                <MeetingAgendaEditor
-                  items={agenda.map((item) => ({ segment: item.title, duration: item.mins || 15 }))}
-                  onChange={handleAgendaItemsChange}
-                />
+                <Suspense fallback={<div style={{ height: 80 }} />}>
+                  <MeetingAgendaEditor
+                    items={agenda.map((item) => ({ segment: item.title, duration: item.mins || 15 }))}
+                    onChange={handleAgendaItemsChange}
+                  />
+                </Suspense>
               </div>
             ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:14 }}>
@@ -1654,6 +1656,7 @@ function MeetingDetailViewInner() {
                     {/* 📝 Discussion — rich block editor (Tiptap / ProseMirror) */}
                     <div style={{ flexShrink:0 }}>
                       <div style={{ fontSize:10.5, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase', color: FS.muted, marginBottom:6 }}>📝 Discussion</div>
+                      <Suspense fallback={<div style={{ height: 120, background: 'var(--surface-secondary, #f5f5f5)', borderRadius: 6 }} />}>
                       <RichMinutesEditor
                         ref={editorRef}
                         meetingId={meetingId}
@@ -1670,6 +1673,7 @@ function MeetingDetailViewInner() {
                         injectContent={pendingMinutesInject}
                         onInjectConsumed={() => setPendingMinutesInject(null)}
                       />
+                      </Suspense>
                     </div>
 
                     {/* ✅ Decisions Made */}
@@ -2492,14 +2496,16 @@ function MeetingDetailViewInner() {
       )}
 
       {showMinutesViewer && meeting && (
-        <MeetingMinutesViewer
-          meetingId={meeting.id}
-          initialMeeting={meeting}
-          currentUser={profile}
-          exportPdf={exportPdf}
-          onViewMeetingLog={() => setShowMinutesViewer(false)}
-          onClose={() => setShowMinutesViewer(false)}
-        />
+        <Suspense fallback={null}>
+          <MeetingMinutesViewer
+            meetingId={meeting.id}
+            initialMeeting={meeting}
+            currentUser={profile}
+            exportPdf={exportPdf}
+            onViewMeetingLog={() => setShowMinutesViewer(false)}
+            onClose={() => setShowMinutesViewer(false)}
+          />
+        </Suspense>
       )}
     </div>
   )

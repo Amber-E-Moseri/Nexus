@@ -117,6 +117,7 @@ const EmailAdminPage = lazy(() => import('./pages/admin/EmailAdminPage'))
 const EventConfigsPage = lazy(() => import('./pages/admin/EventConfigsPage'))
 const NovaReview = lazy(() => import('./pages/admin/NovaReview'))
 const RSVPPage = lazy(() => import('./pages/communications/RSVPPage'))
+const ICPLC26Page = lazy(() => import('./pages/events/ICPLC26Page'))
 const RegistrationPublicPage = lazy(() => import('./pages/events/RegistrationPublicPage'))
 const SubscribePage = lazy(() => import('./pages/communications/SubscribePage'))
 const ConfirmSubscriptionPage = lazy(() => import('./pages/communications/ConfirmSubscriptionPage'))
@@ -176,6 +177,8 @@ export default function App() {
       <Route path="/reports/:share_token" element={<MeetingReportPublicPage />} />
       <Route path="/tii-report/:shareToken" element={<TiiReportPublicPage />} />
       <Route path="/registration/public/:token" element={<RegistrationPublicPage />} />
+      <Route path="/icplc26" element={<ICPLC26Page />} />
+      <Route path="/icplc26-admin" element={<Navigate to="/icplc26" replace />} />
       <Route path="/rsvp" element={<RSVPPage />} />
       <Route path="/subscribe" element={<SubscribePage />} />
       <Route path="/confirm-subscription/:token" element={<ConfirmSubscriptionPage />} />

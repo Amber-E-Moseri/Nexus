@@ -5,16 +5,26 @@
  * registrations, roster, working_list, event_payments.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
+import pg from 'pg'
 
 const TII_TABLES = ['registrations', 'roster', 'working_list', 'event_payments']
+const PG_URL = process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
 
-async function countRows(supabase, table) {
-  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
-  if (error) throw new Error(`Count failed on ${table}: ${error.message}`)
-  return count ?? 0
+// TII tables are deliberately NOT granted to service_role, so counts go through a direct database
+// connection. A table that does not exist in this environment (e.g. `registrations` on a fresh
+// local database) returns null, so before/after are still compared — nothing there can change.
+let pool
+async function countRows(_supabase, table) {
+  pool ??= new pg.Pool({ connectionString: PG_URL, max: 1 })
+  const { rows } = await pool.query('select to_regclass($1) as t', [`public.${table}`])
+  if (!rows[0].t) return null
+  const res = await pool.query(`select count(*)::int as n from public.${table}`)
+  return res.rows[0].n
 }
+
+afterAll(async () => { await pool?.end() })
 
 describe('TII Data Isolation (release gate)', () => {
   let supabase

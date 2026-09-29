@@ -1,11 +1,17 @@
 -- Communication Campaign Attachments: Storage & Metadata
 
 -- 1. Add attachments column to communication_campaigns
-alter table public.communication_campaigns
-  add column if not exists attachments jsonb not null default '[]'::jsonb;
-
-comment on column public.communication_campaigns.attachments is
-  'Array of attachment objects: {filename: string, storage_path: string, size: integer, mime_type: string, public_url: string}';
+-- GUARD: table created later by 20260721000001_communication_infrastructure.sql.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'communication_campaigns' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE 'alter table public.communication_campaigns add column if not exists attachments jsonb not null default ''[]''::jsonb';
+    EXECUTE $cmt$comment on column public.communication_campaigns.attachments is
+      'Array of attachment objects: {filename: string, storage_path: string, size: integer, mime_type: string, public_url: string}'$cmt$;
+  END IF;
+END;
+$$;
 
 -- 2. Create communication-attachments storage bucket
 insert into storage.buckets (id, name, public)

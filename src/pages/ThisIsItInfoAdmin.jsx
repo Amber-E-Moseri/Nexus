@@ -15,10 +15,6 @@ export default function ThisIsItInfoAdmin() {
   // Check permission
   const canEdit = profile?.role === 'super_admin' || profile?.role === 'regional_secretary';
 
-  if (!canEdit) {
-    return <div style={{ padding: '20px' }}>Access denied. Only admins can edit.</div>;
-  }
-
   // Fetch content
   const { data: content, isLoading } = useQuery({
     queryKey: ['this_is_it_event_content', 2026],
@@ -29,7 +25,8 @@ export default function ThisIsItInfoAdmin() {
         .eq('event_year', 2026)
         .single();
       return data;
-    }
+    },
+    enabled: canEdit
   });
 
   const { data: scheduleItems = [] } = useQuery({
@@ -44,8 +41,12 @@ export default function ThisIsItInfoAdmin() {
         .order('order_num');
       return data || [];
     },
-    enabled: !!content?.id
+    enabled: canEdit && !!content?.id
   });
+
+  if (!canEdit) {
+    return <div style={{ padding: '20px' }}>Access denied. Only admins can edit.</div>;
+  }
 
   const handleSaveContent = async () => {
     if (!content?.id) return;

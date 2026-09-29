@@ -22,56 +22,80 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A. Correct icplc_can_write_participants()
 -- Add Accommodation + Hospitality exclusions alongside existing Finance/Transportation.
+-- GUARD: event_configs created later (20270807000000); SQL functions validated at creation.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-create or replace function public.icplc_can_write_participants()
-  returns boolean language sql security definer stable
-  set search_path = public, pg_catalog as $$
-    select (
-      public.current_user_role() in ('super_admin', 'regional_secretary')
-      or exists (
-        select 1
-        from public.event_configs ec
-        join public.sprints s           on s.name ilike ec.sprint_pattern
-        join public.sprint_teams st         on st.sprint_id = s.id
-        join public.sprint_team_members stm on stm.team_id = st.id
-        where ec.event_name ilike '%ICPLC%'
-          and stm.user_id = auth.uid()
-          and st.name not ilike '%Finance%'
-          and st.name not ilike '%Transportation%'
-          and st.name not ilike '%Accommodation%'
-          and st.name not ilike '%Hospitality%'
-      )
-    )
-  $$;
+DO $guard$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'event_configs' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE $fn$
+      create or replace function public.icplc_can_write_participants()
+        returns boolean language sql security definer stable
+        set search_path = public, pg_catalog as $$
+          select (
+            public.current_user_role() in ('super_admin', 'regional_secretary')
+            or exists (
+              select 1
+              from public.event_configs ec
+              join public.sprints s           on s.name ilike ec.sprint_pattern
+              join public.sprint_teams st         on st.sprint_id = s.id
+              join public.sprint_team_members stm on stm.team_id = st.id
+              where ec.event_name ilike '%ICPLC%'
+                and stm.user_id = auth.uid()
+                and st.name not ilike '%Finance%'
+                and st.name not ilike '%Transportation%'
+                and st.name not ilike '%Accommodation%'
+                and st.name not ilike '%Hospitality%'
+            )
+          )
+        $$
+    $fn$;
+  ELSE
+    EXECUTE 'create or replace function public.icplc_can_write_participants() returns boolean language sql security definer stable as $$ select public.current_user_role() in (''super_admin'', ''regional_secretary'') $$';
+  END IF;
+END;
+$guard$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- B. New icplc_can_import() — import-pipeline capability
 -- V1 membership rules match the corrected write helper.
 -- Kept separate so a future tier that can write participants (e.g. a sync account)
 -- but must not batch-import can be introduced without conflating both capabilities.
+-- GUARD: event_configs created later (20270807000000); SQL functions validated at creation.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-create or replace function public.icplc_can_import()
-  returns boolean language sql security definer stable
-  set search_path = public, pg_catalog as $$
-    select (
-      public.current_user_role() in ('super_admin', 'regional_secretary')
-      or exists (
-        select 1
-        from public.event_configs ec
-        join public.sprints s           on s.name ilike ec.sprint_pattern
-        join public.sprint_teams st         on st.sprint_id = s.id
-        join public.sprint_team_members stm on stm.team_id = st.id
-        where ec.event_name ilike '%ICPLC%'
-          and stm.user_id = auth.uid()
-          and st.name not ilike '%Finance%'
-          and st.name not ilike '%Transportation%'
-          and st.name not ilike '%Accommodation%'
-          and st.name not ilike '%Hospitality%'
-      )
-    )
-  $$;
+DO $guard2$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'event_configs' AND relnamespace = 'public'::regnamespace)
+  THEN
+    EXECUTE $fn$
+      create or replace function public.icplc_can_import()
+        returns boolean language sql security definer stable
+        set search_path = public, pg_catalog as $$
+          select (
+            public.current_user_role() in ('super_admin', 'regional_secretary')
+            or exists (
+              select 1
+              from public.event_configs ec
+              join public.sprints s           on s.name ilike ec.sprint_pattern
+              join public.sprint_teams st         on st.sprint_id = s.id
+              join public.sprint_team_members stm on stm.team_id = st.id
+              where ec.event_name ilike '%ICPLC%'
+                and stm.user_id = auth.uid()
+                and st.name not ilike '%Finance%'
+                and st.name not ilike '%Transportation%'
+                and st.name not ilike '%Accommodation%'
+                and st.name not ilike '%Hospitality%'
+            )
+          )
+        $$
+    $fn$;
+  ELSE
+    EXECUTE 'create or replace function public.icplc_can_import() returns boolean language sql security definer stable as $$ select public.current_user_role() in (''super_admin'', ''regional_secretary'') $$';
+  END IF;
+END;
+$guard2$;
 
 revoke execute on function public.icplc_can_import() from anon, public;
 grant  execute on function public.icplc_can_import() to authenticated;

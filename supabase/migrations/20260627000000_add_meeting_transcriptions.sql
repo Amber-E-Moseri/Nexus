@@ -42,30 +42,20 @@ ALTER TABLE meeting_transcriptions ENABLE ROW LEVEL SECURITY;
 -- RLS Policies
 -- ============================================================================
 
--- Users can view their own transcriptions
+-- GUARD: org_members table never exists. Simplified policies using users.role.
 CREATE POLICY "users_view_own_transcriptions" ON meeting_transcriptions
   FOR SELECT
   USING (
     created_by = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM org_members
-      WHERE org_members.user_id = auth.uid()
-        AND org_members.role = 'organizational_rep_secretary'
-    )
+    OR (SELECT role FROM public.users WHERE id = auth.uid()) IN ('super_admin', 'ors')
   );
 
--- ORS can view all transcriptions
 CREATE POLICY "ors_view_all_transcriptions" ON meeting_transcriptions
   FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM org_members
-      WHERE org_members.user_id = auth.uid()
-        AND org_members.role = 'organizational_rep_secretary'
-    )
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('super_admin', 'ors')
   );
 
--- Users can create transcriptions for their own meetings
 CREATE POLICY "users_create_transcriptions" ON meeting_transcriptions
   FOR INSERT
   WITH CHECK (
@@ -75,11 +65,7 @@ CREATE POLICY "users_create_transcriptions" ON meeting_transcriptions
       WHERE meetings.id = meeting_id
         AND (
           meetings.created_by = auth.uid()
-          OR EXISTS (
-            SELECT 1 FROM org_members
-            WHERE org_members.user_id = auth.uid()
-              AND org_members.role = 'organizational_rep_secretary'
-          )
+          OR (SELECT role FROM public.users WHERE id = auth.uid()) IN ('super_admin', 'ors')
         )
     )
   );

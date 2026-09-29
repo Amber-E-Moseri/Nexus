@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Copy, Plus, Save } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
 import { getMySprints } from '../sprints/lib/sprints'
@@ -89,9 +89,7 @@ export default function SettingsTab({ config, onSaved }) {
       .order('template_name').then(({ data }) => setTemplates(data || []))
   }, [config])
 
-  const sidebarTeams = useMemo(() => parseLines(draft.sidebar_teams), [draft.sidebar_teams])
   const set = (key, value) => setDraft((current) => ({ ...current, [key]: value }))
-  const setTab = (collection, key, value) => setDraft((current) => ({ ...current, [collection]: { ...current[collection], [key]: value } }))
 
   async function save(create = false) {
     if (saving) return
@@ -138,13 +136,78 @@ export default function SettingsTab({ config, onSaved }) {
     </div>
     <Section title="Event identity"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}><Field label="Event name" value={draft.event_name} onChange={(v) => set('event_name', v)} /><Field label="Sprint pattern" value={draft.sprint_pattern} mono onChange={(v) => set('sprint_pattern', v)} /><label style={{ fontSize: 12, fontWeight: 600 }}>Sprint picker<select style={fieldStyle} value="" onChange={(e) => e.target.value && set('sprint_pattern', buildPattern(e.target.value))}><option value="">Select to auto-fill pattern</option>{sprints.map((sprint) => <option key={sprint.id} value={sprint.name}>{sprint.name}</option>)}</select></label></div></Section>
     <Section title="Fees and dates"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}><label style={{ fontSize: 12, fontWeight: 600 }}>Early bird cutoff<input type="datetime-local" style={fieldStyle} value={draft.early_cutoff_at} onChange={(e) => set('early_cutoff_at', e.target.value)} /></label><Field label="Early fee ($)" type="number" value={draft.early_fee} onChange={(v) => set('early_fee', v)} /><Field label="Standard fee ($)" type="number" value={draft.standard_fee} onChange={(v) => set('standard_fee', v)} /></div><p style={{ margin: '12px 0 0', fontSize: 13, color: '#8A7F99' }}>Current fee: ${(!draft.early_cutoff_at || new Date() < new Date(draft.early_cutoff_at)) ? draft.early_fee : draft.standard_fee}</p></Section>
-    <Section title="Local detection"><Field label="Fellowship regex" mono value={draft.local_detection_regex} onChange={(v) => set('local_detection_regex', v)} /><Text label="Exempt fellowships (one per line)" value={draft.exempt_fellowships} onChange={(v) => set('exempt_fellowships', v)} /></Section>
-    <Section title="Tab visibility"><div style={{ overflowX: 'auto' }}><table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}><thead><tr><th align="left">Tab</th><th>Hidden</th><th align="left">Label override</th><th align="left">Team whitelist</th></tr></thead><tbody>{ALL_TABS_DEFAULT.map((tab) => <tr key={tab.key}><td>{tab.label}</td><td align="center"><input type="checkbox" checked={draft.tabHidden[tab.key] || false} onChange={(e) => setTab('tabHidden', tab.key, e.target.checked)} /></td><td><input style={fieldStyle} value={draft.tabLabel[tab.key] || ''} onChange={(e) => setTab('tabLabel', tab.key, e.target.value)} /></td><td><select multiple style={{ ...fieldStyle, minWidth: 190, height: 62 }} value={draft.tabWhitelist[tab.key] || []} onChange={(e) => setTab('tabWhitelist', tab.key, [...e.target.selectedOptions].map((option) => option.value))}>{sidebarTeams.map((team) => <option key={team} value={team}>{team}</option>)}</select></td></tr>)}</tbody></table></div></Section>
-    <Section title="Team permissions">{TIERS.map(([key, label]) => <Text key={key} label={`${label} (one team substring per line)`} value={draft[key]} onChange={(v) => set(key, v)} />)}</Section>
+    <Section title="Team permissions"><TeamPermissions draft={draft} set={set} /></Section>
     <Section title="Sidebar access"><Text label="Team name substrings that can see Registration (one per line)" value={draft.sidebar_teams} onChange={(v) => set('sidebar_teams', v)} /></Section>
     <Section title="Public token key"><Field label="Registration config key" value={draft.public_token_key} onChange={(v) => set('public_token_key', v)} /><p style={{ margin: '8px 0 0', fontSize: 12, color: '#8A7F99' }}>Also update the public RPC if this key changes.</p></Section>
     <Section title="Template actions"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>{config && <div><Field label="Template name" value={templateName} onChange={setTemplateName} /><Text label="Description (optional)" value={templateDescription} onChange={setTemplateDescription} /><button onClick={saveTemplate} disabled={saving || !templateName.trim()} style={secondaryButton}><Copy size={15} /> Save as template</button></div>}<div><label style={{ fontSize: 12, fontWeight: 600 }}>Activate a template<select style={fieldStyle} value={activateId} onChange={(e) => setActivateId(e.target.value)}><option value="">Select template</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.template_name || item.event_name}</option>)}</select></label><Field label="New event name (optional)" value={activateName} onChange={setActivateName} /><button onClick={activateTemplate} disabled={saving || !activateId} style={secondaryButton}><Plus size={15} /> Activate template</button></div></div></Section>
   </div>
+}
+
+// Access tier a team resolves to. Same rule the event pages use: the first tier (in TIERS order)
+// with a substring contained in the team name, case-insensitive.
+const tierForTeam = (draft, teamName) => {
+  const name = teamName.toLowerCase()
+  const hit = TIERS.find(([key]) => parseLines(draft[key]).some((line) => name.includes(line.toLowerCase())))
+  return hit ? hit[0] : ''
+}
+
+// Pick a tier per team from the event's real sprint teams. Writes the same substring lists the
+// access checks already read (ICPLCPage / RegistrationPage), so no permission logic changes.
+function TeamPermissions({ draft, set }) {
+  const [teams, setTeams] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const pattern = draft.sprint_pattern?.trim()
+
+  useEffect(() => {
+    if (!pattern) { setTeams([]); return undefined }
+    let cancelled = false
+    ;(async () => {
+      const { data: sprint } = await supabase.from('sprints').select('id, name').ilike('name', pattern).limit(1).maybeSingle()
+      if (!sprint?.id) { if (!cancelled) setTeams([]); return }
+      const { data } = await supabase.from('sprint_teams').select('id, name').eq('sprint_id', sprint.id).order('name')
+      if (!cancelled) setTeams((data || []).filter((t) => t.name))
+    })().catch(() => { if (!cancelled) setTeams([]) })
+    return () => { cancelled = true }
+  }, [pattern, reloadKey])
+
+  function assign(teamName, tierKey) {
+    const lower = teamName.toLowerCase()
+    const others = (teams || []).filter((t) => t.name !== teamName).map((t) => t.name.toLowerCase())
+    for (const [key] of TIERS) {
+      // Drop this team's own entries, but keep substrings other teams still rely on.
+      const kept = parseLines(draft[key]).filter((line) => {
+        const l = line.toLowerCase()
+        return !(lower.includes(l) && !others.some((o) => o.includes(l)))
+      })
+      if (key === tierKey && !kept.some((line) => line.toLowerCase() === lower)) kept.push(teamName)
+      set(key, kept.join('\n'))
+    }
+  }
+
+  return <>
+    <p style={{ margin: '0 0 12px', fontSize: 12, color: '#8A7F99' }}>
+      Teams come from the sprint matching "{pattern || '…'}". Choose what each team can do in this event.
+    </p>
+    {teams === null && <p style={{ fontSize: 13, color: '#8A7F99' }}>Loading sprint teams…</p>}
+    {teams?.length === 0 && <p style={{ fontSize: 13, color: '#8A7F99' }}>
+      No teams on this sprint yet. They'll appear here as teams are added to the sprint.{' '}
+      <button type="button" onClick={() => setReloadKey((k) => k + 1)} style={{ background: 'none', border: 0, padding: 0, color: '#4C2A92', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Refresh</button>
+    </p>}
+    {teams?.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
+      {teams.map((team) => <label key={team.id} style={{ fontSize: 12, fontWeight: 600, display: 'block' }}>{team.name}
+        <select style={{ ...fieldStyle, marginTop: 5 }} value={tierForTeam(draft, team.name)} onChange={(e) => assign(team.name, e.target.value)}>
+          <option value="">No specific access</option>
+          {TIERS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+      </label>)}
+    </div>}
+    <details style={{ marginTop: 14 }}>
+      <summary style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Advanced: raw team-name rules</summary>
+      <div style={{ marginTop: 10 }}>
+        {TIERS.map(([key, label]) => <Text key={key} label={`${label} (one team substring per line)`} value={draft[key]} onChange={(v) => set(key, v)} />)}
+      </div>
+    </details>
+  </>
 }
 
 function Section({ title, children }) { return <section style={sectionStyle}><h3 style={{ margin: '0 0 14px', fontSize: 15 }}>{title}</h3>{children}</section> }

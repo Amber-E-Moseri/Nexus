@@ -6,7 +6,7 @@
 -- Create regional_calendar_syncs table
 CREATE TABLE IF NOT EXISTS public.regional_calendar_syncs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID, -- FIX: removed FK to public.organizations (table never exists; single-tenant)
 
   -- Regional calendar details
   regional_calendar_name TEXT NOT NULL,
@@ -49,8 +49,10 @@ ALTER TABLE public.calendar_events
   ADD COLUMN IF NOT EXISTS is_admin_created BOOLEAN DEFAULT FALSE;
 
 -- Add indexes for regional events
+-- FIX: is_active does not exist on calendar_events (it's on regional_calendar_syncs).
+-- Feature reverted outside migration history per 20261107000002 notes.
 CREATE INDEX IF NOT EXISTS calendar_events_is_regional_idx
-  ON public.calendar_events(is_regional, is_active);
+  ON public.calendar_events(is_regional);
 
 CREATE INDEX IF NOT EXISTS calendar_events_regional_sync_id_idx
   ON public.calendar_events(regional_sync_id);
@@ -84,14 +86,25 @@ CREATE POLICY "programs_manager_regional_sync"
   );
 
 -- Everyone can read active regional events
-CREATE POLICY "everyone_regional_events"
-  ON public.calendar_events
-  FOR SELECT
-  USING (
-    auth.role() = 'authenticated'
-    AND is_regional = TRUE
-    AND status = 'approved'
-  );
+-- GUARD: status column added by 20260726000001.
+-- Policy dropped by 20261107000002 (feature reverted outside migration history).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'calendar_events' AND column_name = 'status')
+  THEN
+    EXECUTE $pol$
+      CREATE POLICY "everyone_regional_events"
+        ON public.calendar_events
+        FOR SELECT
+        USING (
+          auth.role() = 'authenticated'
+          AND is_regional = TRUE
+          AND status = 'approved'
+        )
+    $pol$;
+  END IF;
+END;
+$$;
 
 -- Update trigger for regional_calendar_syncs
 CREATE OR REPLACE FUNCTION public.update_regional_sync_timestamp()

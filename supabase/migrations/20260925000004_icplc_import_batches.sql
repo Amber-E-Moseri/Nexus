@@ -5,7 +5,7 @@
 
 create table public.icplc_import_batches (
   id                  uuid primary key default gen_random_uuid(),
-  event_id            uuid not null references public.event_configs(id) on delete restrict,
+  event_id            uuid not null, -- FK to event_configs deferred; added by forward convergence 20270807000012
   source              text not null
     check (source in ('csv', 'cmp_registrations', 'cmp_flights')),
   source_identifier   text,           -- original filename or CMP batch ID

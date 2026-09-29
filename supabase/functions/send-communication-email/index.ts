@@ -7,6 +7,7 @@ interface Recipient {
   email: string
   subgroup?: string
   leadership_category?: string
+  participant_id?: string  // ICPLC only — used to populate source_participant_id on communication_sends
 }
 
 interface CampaignRow {
@@ -24,6 +25,8 @@ interface CampaignRow {
   status: string
   attachments: CampaignAttachment[] | null
   created_by?: string | null
+  recipient_type: string
+  event_config_id: string | null
 }
 
 interface RecipientPill {
@@ -358,6 +361,13 @@ function buildRecipientData({
   }
 }
 
+// Phase 1 stub — returns empty array. Phase 2 implements full resolution via
+// icplc_get_registered_participant_ids / icplc_get_needs_attention_participant_ids RPCs.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function resolveIcplcRecipients(_eventConfigId: string, _segmentFilter: unknown): Promise<Recipient[]> {
+  return []
+}
+
 async function fetchCampaignRecipients(campaign: CampaignRow, supabase: ReturnType<typeof createClient>) {
   if (Array.isArray(campaign.recipient_filters) && campaign.recipient_filters.length > 0) {
     const [usersRes, rosterRes, contactsRes, linksRes, spaceRolesRes] = await Promise.all([
@@ -520,7 +530,7 @@ Deno.serve(async (request) => {
   if (campaignId) {
     const { data: campaign, error: campaignError } = await supabase
       .from('communication_campaigns')
-      .select('id, name, subject, preview_text, body, body_html, body_text, from_name, reply_to_email, segment_id, recipient_filters, status, attachments, created_by')
+      .select('id, name, subject, preview_text, body, body_html, body_text, from_name, reply_to_email, segment_id, recipient_filters, status, attachments, created_by, recipient_type, event_config_id')
       .eq('id', campaignId)
       .single()
 
@@ -534,13 +544,32 @@ Deno.serve(async (request) => {
     if (!canSendAnyCampaign && typedCampaign.created_by !== callerUserId) {
       return respond(403, { error: 'You can only send campaigns you created.' })
     }
+
+    // ICPLC campaigns require write access to ICPLC participants.
+    // Use authClient so auth.uid() and JWT claims flow through to icplc_can_write_participants().
+    if (typedCampaign.recipient_type === 'icplc' && !isInternalServiceCall) {
+      const authClient = createClient(supabaseUrl, serviceRoleKey, {
+        global: { headers: { Authorization: authHeader } },
+      })
+      const { data: canWrite } = await authClient.rpc('icplc_can_write_participants')
+      if (!canWrite) {
+        return respond(403, { error: 'Not authorized for ICPLC campaigns.' })
+      }
+    }
+
     subject = subject || typedCampaign.subject
     body = body || typedCampaign.body || typedCampaign.body_text || ''
     bodyHtml = bodyHtml || typedCampaign.body_html || typedCampaign.body || ''
     bodyText = bodyText || typedCampaign.body_text || typedCampaign.body || stripHtmlToText(bodyHtml)
     previewText = previewText || typedCampaign.preview_text || ''
     replyTo = replyTo || typedCampaign.reply_to_email || callerEmail || 'info@lwcanada.org'
-    to = await fetchCampaignRecipients(typedCampaign, supabase)
+
+    if (typedCampaign.recipient_type === 'icplc' && typedCampaign.event_config_id) {
+      to = await resolveIcplcRecipients(typedCampaign.event_config_id, typedCampaign.recipient_filters)
+    } else {
+      to = await fetchCampaignRecipients(typedCampaign, supabase)
+    }
+
     campaignAttachments = typedCampaign.attachments ?? null
   }
 
@@ -771,20 +800,6 @@ Deno.serve(async (request) => {
         errors.push({ name: recipient.name ?? '', email: recipient.email, error: errorMessage })
       }
 
-      const logPayload = {
-        report_id: null,
-        recipient_name: recipient.name ?? '',
-        recipient_email: recipient.email,
-        subject: personalizedSubject,
-        body: personalizedText,
-        status,
-        error_message: errorMessage,
-        sent_by: callerUserId,
-      }
-
-      const { error: logError } = await supabase.from('absence_email_log').insert(logPayload)
-      if (logError) console.error('Failed to write absence_email_log', logError)
-
       if (campaignId) {
         const { error: sendError } = await supabase.from('communication_sends').insert({
           campaign_id: campaignId,
@@ -795,6 +810,7 @@ Deno.serve(async (request) => {
           error_message: errorMessage,
           sent_at: status === 'sent' ? new Date().toISOString() : null,
           subject_variant: subjectVariant,
+          source_participant_id: recipient.participant_id ?? null,
         })
         if (sendError) console.error('Failed to write communication_sends', sendError)
       }

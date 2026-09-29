@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { TrendingUp, Trash2, ToggleLeft, ToggleRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -42,7 +42,13 @@ const STATUS_META = {
 
 function Card({ children, style, className }) {
   return (
-    <div className={className} style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 14, ...style }}>
+    <div className={className} style={{
+      background: C.paper,
+      border: `1px solid ${C.line}`,
+      borderRadius: 14,
+      boxShadow: '0 1px 3px rgba(26, 18, 32, 0.08)',
+      ...style
+    }}>
       {children}
     </div>
   )
@@ -76,10 +82,14 @@ function Btn({ children, onClick, tone = 'primary', small, disabled }) {
       fontFamily: 'Inter', fontWeight: 600,
       fontSize: small ? 12 : 13.5,
       padding: small ? '5px 11px' : '8px 16px',
-      borderRadius: 9, cursor: disabled ? 'not-allowed' : 'pointer',
+      borderRadius: 9,
+      cursor: disabled ? 'not-allowed' : 'pointer',
       opacity: disabled ? 0.55 : 1,
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      transition: 'opacity .15s',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      transition: 'all 0.15s ease',
+      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
     }}>
       {children}
     </button>
@@ -306,11 +316,80 @@ function downloadReport(activeWeek, activeRows, growthData) {
   setTimeout(() => win.print(), 400)
 }
 
+async function exportProfessionalPDF(activeWeek, activeRows, growthData, networkTotal, networkFT, reportingCount, totalCenters) {
+  try {
+    // Collect trend data for chart
+    const allWeeks = [...new Set(growthData.map(r => r.week_start_date))].sort()
+    const trendData = allWeeks.slice(-12).map(week => {
+      const weekRows = growthData.filter(r => r.week_start_date === week && r.status === 'reported')
+      return {
+        week,
+        attendance: weekRows.reduce((s, r) => s + r.total_attendance, 0),
+        firstTimers: weekRows.reduce((s, r) => s + r.first_timers, 0),
+      }
+    })
+
+    // Build report object matching GrowthReport type
+    const reported = activeRows.filter(r => r.status === 'reported')
+    const attendanceDelta = reported.reduce((s, r) => s + (r.wow_delta ?? 0), 0)
+
+    const reportData = {
+      reportingWeek: formatWeekFull(activeWeek),
+      networkAttendance: networkTotal,
+      attendanceDelta: attendanceDelta !== 0 ? attendanceDelta : null,
+      firstTimers: networkFT,
+      reportingCenters: reportingCount,
+      totalCenters,
+      reportingPercentage: Math.round((reportingCount / totalCenters) * 100),
+      trend: trendData,
+      centers: activeRows.map(r => ({
+        church_name: r.church_name,
+        total_attendance: r.total_attendance,
+        first_timers: r.first_timers,
+        status: r.status,
+        wow_delta: r.wow_delta,
+        rolling_avg_4wk: r.rolling_avg_4wk,
+      })),
+    }
+
+    // Call the Puppeteer PDF renderer
+    const response = await fetch('/api/growth-report-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reportData),
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      let message = `HTTP ${response.status}`
+      try { message = JSON.parse(text)?.error || message } catch {}
+      alert(`Failed to generate PDF: ${message}`)
+      return
+    }
+
+    // Download the PDF
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `growth-report-${formatWeekFull(activeWeek).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+  } catch (err) {
+    console.error('PDF export error:', err)
+    alert('Failed to export PDF: ' + err.message)
+  }
+}
+
 // ── Dashboard tab ──────────────────────────────────────────────────────────────
 
 function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
   const [selectedCenter, setSelectedCenter] = useState('all')
   const [weekCount, setWeekCount] = useState(12)
+  const [isExporting, setIsExporting] = useState(false)
+  const exportInFlightRef = useRef(false)
 
   if (loading) return (
     <div style={{ padding: 64, textAlign: 'center', color: C.mute, fontFamily: 'Inter' }}>
@@ -411,23 +490,27 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
             Back to current
           </button>
         )}
-        {/* Download PDF — opens browser print dialog for save-as-PDF */}
-        <button
-          className="gt-pdf-btn"
-          onClick={() => downloadReport(activeWeek, activeRows, growthData)}
-          title="Open print dialog to save as PDF"
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            padding: '6px 12px', borderRadius: 8,
-            border: `1px solid ${C.line}`, background: C.paper, color: C.mute,
-            fontSize: 12, fontWeight: 600, fontFamily: 'Inter', cursor: 'pointer',
+        {/* Export Professional PDF via Puppeteer renderer */}
+        <Btn
+          tone="primary"
+          disabled={isExporting}
+          onClick={async () => {
+            if (exportInFlightRef.current) return
+            exportInFlightRef.current = true
+            setIsExporting(true)
+            try {
+              await exportProfessionalPDF(activeWeek, activeRows, growthData, networkTotal, networkFT, reportingCount, allWeeks.length)
+            } finally {
+              exportInFlightRef.current = false
+              setIsExporting(false)
+            }
           }}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Download PDF
-        </button>
+          {isExporting ? 'Generating PDF…' : 'Export PDF'}
+        </Btn>
       </div>
 
       {/* Network stat cards */}
@@ -602,7 +685,7 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
 
 // ── Settings tab ───────────────────────────────────────────────────────────────
 
-function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, syncing }) {
+function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, syncing, isAdmin }) {
   const { profile } = useAuth()
   const [newEmail, setNewEmail] = useState('')
   const [flagCenter, setFlagCenter] = useState('')
@@ -621,31 +704,53 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
   }, [])
 
   async function toggleActive(id, current) {
-    await supabase.from('service_center_schedule').update({ active: !current }).eq('id', id)
+    const { data, error } = await supabase
+      .from('service_center_schedule')
+      .update({ active: !current })
+      .eq('id', id)
+      .select('id, active')
+      .single()
+    if (error || !data || data.active !== !current) {
+      alert(error?.message ?? 'Toggle failed — the row may not have updated.')
+      return
+    }
     onRefresh()
   }
 
   async function addRecipient() {
     if (!newEmail.trim()) return
-    await supabase.from('report_recipients').insert({ email: newEmail.trim().toLowerCase() })
+    const { error } = await supabase
+      .from('report_recipients')
+      .insert({ email: newEmail.trim().toLowerCase() })
+    if (error) { alert('Failed to add recipient: ' + error.message); return }
     setNewEmail('')
     onRefresh()
   }
 
   async function toggleRecipient(id, current) {
-    await supabase.from('report_recipients').update({ active: !current }).eq('id', id)
+    const { data, error } = await supabase
+      .from('report_recipients')
+      .update({ active: !current })
+      .eq('id', id)
+      .select('id, active')
+      .single()
+    if (error || !data || data.active !== !current) {
+      alert(error?.message ?? 'Toggle failed.')
+      return
+    }
     onRefresh()
   }
 
   async function removeRecipient(id) {
-    await supabase.from('report_recipients').delete().eq('id', id)
+    const { error } = await supabase.from('report_recipients').delete().eq('id', id)
+    if (error) { alert('Failed to remove recipient: ' + error.message); return }
     onRefresh()
   }
 
   async function saveFlag() {
     if (!flagCenter || !flagWeek) return
     setFlagSaving(true)
-    await supabase.from('service_center_week_status').upsert({
+    const { error } = await supabase.from('service_center_week_status').upsert({
       schedule_id:     flagCenter,
       week_start_date: flagWeek,
       status:          flagStatus,
@@ -653,8 +758,9 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
       set_by:          profile?.id ?? null,
       set_at:          new Date().toISOString(),
     }, { onConflict: 'schedule_id,week_start_date' })
-    setFlagNote('')
     setFlagSaving(false)
+    if (error) { alert('Failed to save flag: ' + error.message); return }
+    setFlagNote('')
     onRefresh()
   }
 
@@ -672,7 +778,8 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
   }
 
   async function removeFlag(id) {
-    await supabase.from('service_center_week_status').delete().eq('id', id)
+    const { error } = await supabase.from('service_center_week_status').delete().eq('id', id)
+    if (error) { alert('Failed to remove flag: ' + error.message); return }
     onRefresh()
   }
 
@@ -846,18 +953,31 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
         <Card style={{ padding: 22 }}>
           <p style={{ margin: '0 0 16px', fontSize: 13, color: C.mute, fontFamily: 'Inter', lineHeight: 1.6 }}>
             These addresses receive the automated Sunday 7:45 PM ET growth report.
+            {!isAdmin && <span style={{ color: C.amber }}> (read-only — contact your admin to make changes)</span>}
           </p>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-            <Input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@example.com" style={{ flex: 1 }} onKeyDown={e => e.key === 'Enter' && addRecipient()} />
-            <Btn onClick={addRecipient} disabled={!newEmail.trim()}>Add</Btn>
-          </div>
+          {isAdmin && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+              <Input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@example.com" style={{ flex: 1 }} onKeyDown={e => e.key === 'Enter' && addRecipient()} />
+              <Btn onClick={addRecipient} disabled={!newEmail.trim()}>Add</Btn>
+            </div>
+          )}
+          {recipients.length === 0 && (
+            <div style={{ fontSize: 13, color: C.mute, fontFamily: 'Inter' }}>No recipients configured.</div>
+          )}
           {recipients.map(r => (
             <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: `1px solid ${C.line}`, fontSize: 13, fontFamily: 'Inter' }}>
               <span style={{ flex: 1, color: r.active ? C.ink : C.mute, textDecoration: r.active ? 'none' : 'line-through' }}>{r.email}</span>
-              <Btn tone="ghost" small onClick={() => toggleRecipient(r.id, r.active)}>{r.active ? 'Pause' : 'Resume'}</Btn>
-              <button onClick={() => removeRecipient(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, display: 'inline-flex', padding: 4 }}>
-                <Trash2 size={14} />
-              </button>
+              {r.active
+                ? <span style={{ fontSize: 11, color: C.green, fontWeight: 600 }}>Active</span>
+                : <span style={{ fontSize: 11, color: C.mute, fontWeight: 600 }}>Paused</span>}
+              {isAdmin && (
+                <>
+                  <Btn tone="ghost" small onClick={() => toggleRecipient(r.id, r.active)}>{r.active ? 'Pause' : 'Resume'}</Btn>
+                  <button onClick={() => removeRecipient(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, display: 'inline-flex', padding: 4 }}>
+                    <Trash2 size={14} />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </Card>
@@ -1085,6 +1205,8 @@ const TABS = [
 ]
 
 export default function GrowthTrackingPage({ embedded = false }) {
+  const { profile } = useAuth()
+  const isAdmin = profile?.role === 'super_admin'
   const [tab, setTab] = useState('dashboard')
   const [growthData, setGrowthData] = useState([])
   const [schedule, setSchedule] = useState([])
@@ -1271,7 +1393,38 @@ export default function GrowthTrackingPage({ embedded = false }) {
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .growth-row:hover td { background: ${C.cream} !important; }
+
+        /* Polish: smooth transitions */
+        * { transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; }
+
+        /* Table row hover with smooth effect */
+        .growth-row { cursor: pointer; }
+        .growth-row:hover td { background: ${C.cream} !important; box-shadow: inset 0 0 8px rgba(76, 42, 146, 0.05); }
+
+        /* Card shadows and depth */
+        .gt-stat-card {
+          box-shadow: 0 1px 3px rgba(26, 18, 32, 0.08) !important;
+          transition: box-shadow 0.2s ease, transform 0.2s ease !important;
+        }
+        .gt-stat-card:hover { box-shadow: 0 2px 8px rgba(76, 42, 146, 0.1) !important; }
+
+        /* Button polish */
+        button {
+          transition: all 0.2s ease;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+        button:hover { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+        button:active { transform: translateY(1px); }
+
+        /* Chart container refinement */
+        .gt-chart { border-radius: 14px; overflow: hidden; }
+
+        /* Status badge polish */
+        span[style*="display: inline-flex"] {
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Responsive polish */
         @media (max-width: 640px) {
           .gt-header { padding: 16px 14px 0 !important; }
           .gt-actions { width: 100%; justify-content: flex-end; }
@@ -1297,6 +1450,7 @@ export default function GrowthTrackingPage({ embedded = false }) {
             onRefresh={load}
             onSync={handleSync}
             syncing={syncing}
+            isAdmin={isAdmin}
           />
         )}
       </div>
