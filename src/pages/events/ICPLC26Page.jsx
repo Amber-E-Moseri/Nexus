@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-// Public marketing page for ICPLC 2026 (no auth). Update these when the
-// registration / status-tracker destinations are finalised.
-const REGISTER_URL = '/icplc'
+// Public marketing page for ICPLC 2026 (no auth).
+const REGISTER_URL = 'https://icplcwithpastorchris.org/register'
 const STATUS_URL = '/icplc'
 
 const EVENT_DATES = 'Thursday, November 19, 2026 – Sunday, November 22, 2026'
@@ -14,8 +13,8 @@ const BLUE = '#0a4fd6'
 const INK = '#151412'
 
 const FAQS = [
-  { q: 'Who can attend ICPLC?', a: 'Campus pastors, youth leaders, student ministers, and campus fellowship leaders in the Believers’ Loveworld Nation.' },
-  { q: 'What does ICPLC stand for?', a: 'International Campus Pastors’ and Leaders’ Conference.' },
+  { q: 'Who can attend ICPLC?', a: 'Campus pastors, youth leaders, student ministers, and campus fellowship leaders in the Believers\' Loveworld Nation.' },
+  { q: 'What does ICPLC stand for?', a: 'International Campus Pastors\' and Leaders\' Conference.' },
   { q: 'Is there a registration fee?', a: 'Details on registration fees will be shared through official channels. Use the Status Tracker to follow your registration.' },
   { q: 'Will transportation be provided?', a: 'Transportation arrangements will be communicated to registered participants ahead of the conference.' },
   { q: 'Will there be meals provided?', a: 'Meal arrangements will be communicated to registered participants ahead of the conference.' },
@@ -39,7 +38,7 @@ const pill = {
 
 function Wordmark({ color = '#fff', size = 34 }) {
   return (
-    <span style={{ fontFamily: "'Barlow', 'Inter', sans-serif", fontWeight: 800, fontSize: size, letterSpacing: '-0.06em', color, lineHeight: 1 }}>
+    <span style={{ fontFamily: 'Barlow, sans-serif', fontWeight: 800, fontSize: size, letterSpacing: '-0.06em', color, lineHeight: 1 }}>
       icplc
     </span>
   )
@@ -83,7 +82,7 @@ export default function ICPLC26Page() {
   useEffect(() => {
     const link = document.createElement('link')
     link.rel = 'stylesheet'
-    link.href = 'https://fonts.googleapis.com/css2?family=Barlow:wght@700;800&family=Barlow+Condensed:wght@700&family=Inter:wght@400;500;600&display=swap'
+    link.href = 'https://fonts.googleapis.com/css2?family=Barlow:wght@700;800;900&family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500;600&display=swap'
     document.head.appendChild(link)
     const prevTitle = document.title
     document.title = 'ICPLC 2026'
@@ -118,16 +117,17 @@ export default function ICPLC26Page() {
       <section
         className="i26-section"
         style={{
-          background: `radial-gradient(circle at 12% 20%, ${ORANGE} 0, transparent 38%), radial-gradient(circle at 92% 85%, ${ORANGE} 0, transparent 30%), ${BLUE}`,
+          background: `radial-gradient(circle at 8% 15%, ${ORANGE} 0, transparent 42%), radial-gradient(circle at 96% 88%, ${ORANGE} 0, transparent 35%), ${BLUE}`,
+          padding: '80px 24px',
         }}
       >
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(rgba(0,0,0,0.28) 1.4px, transparent 1.6px)', backgroundSize: '7px 7px', opacity: 0.55, pointerEvents: 'none' }} />
-        <div style={{ position: 'relative', textAlign: 'left' }}>
-          <div style={{ fontFamily: "'Barlow', sans-serif", fontWeight: 800, fontSize: 'clamp(140px, 30vw, 440px)', letterSpacing: '-0.07em', lineHeight: 0.8, color: '#f5f5f3' }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(rgba(0,0,0,0.32) 1.5px, transparent 1.7px)', backgroundSize: '6px 6px', opacity: 0.6, pointerEvents: 'none' }} />
+        <div style={{ position: 'relative', maxWidth: '100%', margin: '0 auto' }}>
+          <div style={{ fontFamily: 'Barlow, sans-serif', fontWeight: 900, fontSize: 'clamp(180px, 35vw, 520px)', letterSpacing: '-0.08em', lineHeight: 0.75, color: '#f5f5f3', marginBottom: '-20px' }}>
             icplc
           </div>
-          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 'clamp(18px, 3vw, 34px)', lineHeight: 1.05, textTransform: 'uppercase', color: '#f5f5f3', marginTop: 12, maxWidth: 560, marginLeft: 'auto' }}>
-            International Campus Pastors’<br />and Leaders’ Conference
+          <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, fontSize: 'clamp(16px, 2.8vw, 32px)', lineHeight: 1.1, textTransform: 'uppercase', color: '#f5f5f3', letterSpacing: '0.02em' }}>
+            International Campus Pastors&apos;<br />and Leaders&apos; Conference
           </div>
         </div>
       </section>
@@ -137,7 +137,7 @@ export default function ICPLC26Page() {
         <div style={{ textAlign: 'center', maxWidth: 900 }}>
           <div style={{ ...pill, display: 'inline-block', padding: '16px 40px', fontSize: 28, marginBottom: 36 }}>What is ICPLC?</div>
           <p style={{ margin: 0, fontSize: 'clamp(20px, 2.4vw, 30px)', lineHeight: 1.35 }}>
-            ICPLC <span style={{ color: ORANGE }}>(International Campus Pastors’ and Leaders’ Conference)</span> is a global gathering of passionate, purpose-driven youth leaders, student ministers, and campus fellowship pastors in the Believers’ Loveworld Nation.
+            ICPLC <span style={{ color: ORANGE }}>(International Campus Pastors&apos; and Leaders&apos; Conference)</span> is a global gathering of passionate, purpose-driven youth leaders, student ministers, and campus fellowship pastors in the Believers&apos; Loveworld Nation.
           </p>
         </div>
       </section>
@@ -148,7 +148,7 @@ export default function ICPLC26Page() {
           <div style={{ paddingLeft: 'clamp(0px, 8vw, 150px)' }}>
             <div style={{ ...pill, display: 'inline-block', padding: '16px 40px', fontSize: 28, marginBottom: 28 }}>FAQ?</div>
             <h2 style={{ margin: 0, fontSize: 'clamp(32px, 4vw, 52px)', fontWeight: 500, lineHeight: 1.1, letterSpacing: '-0.02em' }}>
-              Got Questions?<br /><span style={{ color: 'rgba(255,255,255,0.75)' }}>We’ve Got Answers</span>
+              Got Questions?<br /><span style={{ color: 'rgba(255,255,255,0.75)' }}>We&apos;ve Got Answers</span>
             </h2>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 705 }}>
