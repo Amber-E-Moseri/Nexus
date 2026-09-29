@@ -155,18 +155,25 @@ async function invoke(token, action = 'apply', extra = {}, eventId = EVENT_ID) {
   })
 }
 
-async function waitForFunction(token) {
-  // `functions serve` replaces the previous run's edge container. The old container can answer the first
-  // probes and then vanish, so require an unbroken window of good responses, not a single one.
-  const deadline = Date.now() + 60_000
-  const STABLE_MS = 6_000
+// `functions serve` replaces the previous run's edge container, and that container bakes
+// CMP_DOCUMENTATION_FORM_URL (this run's random mock port) into its env. A stale container can still answer
+// requests, so readiness means: a super_admin preview succeeds, i.e. the function reached THIS run's mock
+// server, and it keeps succeeding for a short window (the old container may vanish right after answering).
+async function waitForFunction(token, getLogs = () => '') {
+  const deadline = Date.now() + 90_000
+  const STABLE_MS = 3_000
   let stableSince = null
+  let last = 'no response'
   while (Date.now() < deadline) {
     let ok = false
     try {
       const res = await invoke(token, 'preview')
-      ok = res.status === 403
-    } catch {}
+      const text = await res.text()
+      ok = res.status === 200
+      last = `${res.status} ${text.slice(0, 300)}`
+    } catch (err) {
+      last = String(err).slice(0, 300)
+    }
     if (ok) {
       stableSince ??= Date.now()
       if (Date.now() - stableSince >= STABLE_MS) return
@@ -175,7 +182,7 @@ async function waitForFunction(token) {
     }
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
-  throw new Error('cmp-documentation-sync local function did not become ready')
+  throw new Error(`cmp-documentation-sync local function did not become ready. Last response: ${last}\n${getLogs().slice(-2000)}`)
 }
 
 describe('CMP documentation sync edge authorization', () => {
@@ -246,10 +253,10 @@ describe('CMP documentation sync edge authorization', () => {
         pagination: { total: (mockSubmissions ?? [1]).length, page: 1, pageSize: 1000 },
       }))
     })
-    // Fixed port: the edge runtime bakes CMP_DOCUMENTATION_FORM_URL into its container env, and the readiness
-    // probe can be answered by the previous run's still-running container. A random port would leave that
-    // container pointing at a dead mock server.
-    await new Promise((resolve) => mockServer.listen(54398, '0.0.0.0', resolve))
+    await new Promise((resolve, reject) => {
+      mockServer.once('error', reject)
+      mockServer.listen(0, '0.0.0.0', resolve)
+    })
     mockUrl = `http://host.docker.internal:${mockServer.address().port}/submissions`
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmp-doc-auth-'))
@@ -272,7 +279,7 @@ describe('CMP documentation sync edge authorization', () => {
     })
     functionProcess.stdout?.on('data', (chunk) => { functionLogs += chunk.toString() })
     functionProcess.stderr?.on('data', (chunk) => { functionLogs += chunk.toString() })
-    await waitForFunction(tokens.member)
+    await waitForFunction(tokens.superAdmin, () => functionLogs)
   }, 120_000)
 
   afterAll(async () => {
