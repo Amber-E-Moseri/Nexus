@@ -1258,13 +1258,15 @@ export default function App({ limitedToSubgroups = null, sprintEditAccess = fals
       if (t.key === 'rooms' && !hasRoomsAccess && !onAccomTeam) return false;
       // Import Data: super admin only
       if (t.key === 'import' && role !== 'super_admin') return false;
+      // Embedded in ICPLC: flights live in the dedicated Travel tab, so hide Transportation.
+      if (t.key === 'transport' && embedded) return false;
       if (isGloballyScoped && ['import', 'finance'].includes(t.key)) return false;
       // Documentation tab is ICPLC-specific — hide for any non-ICPLC event
       if (t.key === 'documentation' && !eventConfig?.event_name?.toLowerCase().includes('icplc')) return false;
       return true;
     });
     return allowed;
-  }, [config, eventConfig, hasFinanceAccess, hasRoomsAccess, isGloballyScoped, role, userTeamNames]);
+  }, [config, embedded, eventConfig, hasFinanceAccess, hasRoomsAccess, isGloballyScoped, role, userTeamNames]);
 
   // ---------- persistence actions ----------
   const setTarget = useCallback((sg, field, val) => {
