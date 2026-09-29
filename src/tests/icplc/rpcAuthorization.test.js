@@ -58,6 +58,22 @@ describe('RPC Authorization (release gate)', () => {
     expect(msg).toMatch(/permission denied|not allowed|42501|anon|expected 3 parts in jwt/)
   })
 
+  // The inline icplc_can_write_participants() guard is NULL (not false) for anon, so these Registration RPCs
+  // must be closed to anon at the grant level.
+  const REG_ANON_CASES = [
+    ['icplc_parse_registration_csv', { p_event_id: '00000000-0000-0000-0000-000000000005', p_csv_text: 'x', p_imported_by: null }],
+    ['icplc_preview_registration_import', { p_batch_id: '00000000-0000-0000-0000-000000000006' }],
+    ['icplc_apply_registration_import', { p_batch_id: '00000000-0000-0000-0000-000000000007', p_applied_by: null }],
+    ['icplc_match_registration_identity', { p_event_id: '00000000-0000-0000-0000-000000000008', p_raw_payload: {} }],
+  ]
+  it.each(REG_ANON_CASES)('RPC-5. %s rejects anon caller with permission denied', async (fn, args) => {
+    if (!supabaseAvailable) return
+    const { error } = await anonSupabase.rpc(fn, args)
+    expect(error).not.toBeNull()
+    const msg = (error?.message ?? error?.code ?? '').toLowerCase()
+    expect(msg).toMatch(/permission denied|not allowed|42501|expected 3 parts in jwt/)
+  })
+
   it('RPC-4. Service role can call icplc_match_import_rows (permission granted)', async () => {
     if (!supabaseAvailable) return
     // Service role bypasses RLS but security definer checks icplc_can_write_participants().
