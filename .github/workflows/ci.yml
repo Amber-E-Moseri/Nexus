@@ -159,6 +159,11 @@ jobs:
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
+    # Repo default token is read-only; this job only needs to post the summary comment on PRs.
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     needs: [ security, build, test ]
     if: always()
     steps:
@@ -190,7 +195,7 @@ jobs:
               ? `❌ Some checks failed\n${failed.map(f => `- ${f}`).join('\n')}`
               : '✅ All checks passed!';
 
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
