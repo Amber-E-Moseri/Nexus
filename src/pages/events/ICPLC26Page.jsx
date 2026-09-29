@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase'
 
 // Public marketing page for ICPLC 2026 (no auth).
-const REGISTER_URL = 'https://icplcwithpastorchris.org/register'
 const STATUS_URL = '/icplc'
 
-const EVENT_DATES = 'Thursday, November 19, 2026 – Sunday, November 22, 2026'
-const EVENT_LOCATION = 'Loveworld City, Asese, Nigeria'
+// Fallback values (used if database not yet populated)
+const FALLBACK_DATES = 'Thursday, November 19, 2026 – Sunday, November 22, 2026'
+const FALLBACK_LOCATION = 'Loveworld City, Asese, Nigeria'
+const FALLBACK_REGISTER_URL = 'https://icplcwithpastorchris.org/register'
 
 const ORANGE = '#f5821f'
 const BLUE = '#0a4fd6'
@@ -79,6 +82,23 @@ function FaqItem({ q, a }) {
 }
 
 export default function ICPLC26Page() {
+  // Fetch editable content from database
+  const { data: content } = useQuery({
+    queryKey: ['icplc26_content'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('icplc26_content')
+        .select('*')
+        .single()
+      if (error && error.code !== 'PGRST116') throw error
+      return data || null
+    }
+  })
+
+  const eventDates = content?.event_dates || FALLBACK_DATES
+  const eventLocation = content?.event_location || FALLBACK_LOCATION
+  const registerUrl = content?.register_url || FALLBACK_REGISTER_URL
+
   useEffect(() => {
     const link = document.createElement('link')
     link.rel = 'stylesheet'
@@ -109,7 +129,7 @@ export default function ICPLC26Page() {
         <Link to="/icplc26" aria-label="ICPLC home" style={{ textDecoration: 'none' }}><Wordmark /></Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 22, fontSize: 17, fontWeight: 500 }}>
           <Link to={STATUS_URL} style={{ color: '#fff', textDecoration: 'none' }}>Status Tracker</Link>
-          <Link to={REGISTER_URL} style={{ ...pill, padding: '12px 24px', textDecoration: 'none', fontWeight: 500 }}>Register Now</Link>
+          <a href={registerUrl} target="_blank" rel="noopener noreferrer" style={{ ...pill, padding: '12px 24px', textDecoration: 'none', fontWeight: 500, color: '#fff' }}>Register Now</a>
         </div>
       </nav>
 
@@ -158,9 +178,9 @@ export default function ICPLC26Page() {
       </section>
 
       <div className="i26-foot" style={pill}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 16 }}><CalendarIcon />{EVENT_DATES}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 16 }}><CalendarIcon />{eventDates}</span>
         <span className="i26-sep" aria-hidden="true">•</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 16 }}><PinIcon />{EVENT_LOCATION}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 16 }}><PinIcon />{eventLocation}</span>
       </div>
     </div>
   )
