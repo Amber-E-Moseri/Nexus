@@ -24,8 +24,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run security audit
-        run: npm audit --audit-level=moderate
+      # Fails on any moderate+ advisory that is not in .github/audit-baseline.json (inherited debt stays
+      # listed in the log; new or escalated findings fail the PR). See scripts/audit-gate.mjs.
+      - name: Run security audit (regression gate)
+        run: node scripts/audit-gate.mjs
 
   # Job 2: Build Verification
   build:
@@ -82,14 +84,48 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # DB-backed suites run against an isolated local Supabase built from THIS commit's migrations.
+      # They must never use the repository's remote Supabase secrets: those are production credentials
+      # (the same secrets drive deactivate-temp-sprint-members.yml) and the suites write fixtures.
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.98.2
+
+      - name: Start local Supabase (applies every migration from zero)
+        run: supabase start -x studio,imgproxy,mailpit,logflare,vector,postgres-meta,supavisor
+
+      - name: Verify migration chain reconstructed
+        run: |
+          DB=$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -n1)
+          q() { docker exec "$DB" psql -U postgres -At -c "$1"; }
+          for v in 20260929000010 20270930000030 20270930000031; do
+            [ "$(q "select count(*) from supabase_migrations.schema_migrations where version = '$v'")" = "1" ] \
+              || { echo "::error::migration $v missing from the reconstructed ledger"; exit 1; }
+          done
+          files=$(ls supabase/migrations/*.sql | xargs -n1 basename | grep -cE '^[0-9]{14}_')
+          applied=$(q "select count(*) from supabase_migrations.schema_migrations")
+          echo "migration files: $files, applied: $applied"
+          [ "$files" = "$applied" ] || { echo "::error::ledger ($applied) does not match migration files ($files)"; exit 1; }
+
       - name: Run tests
-        run: npm run test
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          eval "$(supabase status -o env | grep -E '^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)=')"
+          export SUPABASE_URL="$API_URL" VITE_SUPABASE_URL="$API_URL"
+          export SUPABASE_ANON_KEY="$ANON_KEY" VITE_SUPABASE_ANON_KEY="$ANON_KEY"
+          export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          npm run test
+
+      - name: Local Supabase logs (on failure)
+        if: failure()
+        run: |
+          for c in $(docker ps -a --format '{{.Names}}' | grep '^supabase_'); do
+            echo "::group::$c"; docker logs --tail 60 "$c" 2>&1 || true; echo "::endgroup::"
+          done
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup || true
 
       - name: Upload coverage
         if: always()
