@@ -33,6 +33,16 @@ export const SUPPORTING_DOC = {
 
 const COMMITTED = ['confirmed', 'likely']
 
+/**
+ * Registration is universally mandatory and only a positive `registered` satisfies it: unknown, null, not_registered,
+ * issue and any unrecognised value all count as NOT registered. The registration-link status (derived from the
+ * registrations table) wins when the caller provides it; otherwise the stored registration_status is used.
+ * There is no waiver.
+ */
+export function isRegistered(p) {
+  return (p?.registration_link_status || p?.registration_status) === 'registered'
+}
+
 /** Participants staff are actively counting on (used to gate "missing data" blockers). */
 export function isCommitted(p) {
   return COMMITTED.includes(p?.participation_status)
@@ -81,11 +91,7 @@ export function documentationMissingInfo(p) {
   }
   if (!p.canada_residency_status) {
     missing.push({ key: 'canadian_status', label: 'Canadian status unknown' })
-  } else if (
-    p.canada_residency_status !== 'CANADIAN_CITIZEN'
-    && canadianDocSelfReport(p).answer === null
-    && (!effectiveCanadaDocReadiness(p) || effectiveCanadaDocReadiness(p) === 'UNKNOWN')
-  ) {
+  } else if (isDocumentValidityUnknown(p)) {
     missing.push({ key: 'canadian_doc_validity', label: 'Canadian-document validity unknown' })
   }
   if ((p.passport_readiness || 'unknown') === 'unknown') {
@@ -98,6 +104,12 @@ export function documentationMissingInfo(p) {
     missing.push({ key: 'visa_requirement', label: 'Visa requirement unresolved (information missing)' })
   }
   return missing
+}
+
+/** Status is set and needs a document (PR card, study permit, PGWP, work permit), but nobody knows whether it is ready. */
+function isDocumentValidityUnknown(p) {
+  if (!p.canada_residency_status || p.canada_residency_status === 'CANADIAN_CITIZEN') return false
+  return isMissingInfoReason(canadianDocAttention(p))
 }
 
 export const CANADIAN_DOCS_REVIEW_REASON = 'Canadian immigration/residency documents require review'
@@ -234,15 +246,15 @@ export function attentionCategoryKeys(p) {
   const reviewed = isDocumentationReviewAcknowledged(p)
 
   // Registration is the one universally mandatory item: there is no "not required", and nothing clears it but a registration.
-  const registration = p.registration_link_status || p.registration_status
-  if (registration !== 'registered') keys.push('not_registered')
+  if (!isRegistered(p)) keys.push('not_registered')
 
   const canadian = deriveCanadianDocumentation(p)
   if (!canadian.status) { if (!reviewed) keys.push('canadian_status_unknown') }
   else if (canadian.docType === DOCUMENT_TYPE.REVIEW) keys.push('canadian_status_review')
   else if (canadian.selfReport.concern) keys.push('canadian_docs_review')
   else if (canadian.attention && DOC_TYPE_TO_CATEGORY[canadian.docType]) {
-    keys.push(DOC_TYPE_TO_CATEGORY[canadian.docType])
+    // "Readiness unknown" is missing information a review can cover; an explicit issue / renewal needed is a known problem.
+    if (!(reviewed && isMissingInfoReason(canadian.attention))) keys.push(DOC_TYPE_TO_CATEGORY[canadian.docType])
   }
 
   const passport = derivePassportDocumentation(p)

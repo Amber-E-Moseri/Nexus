@@ -5,7 +5,7 @@
 
 import { DOCUMENT_READINESS } from '../../registration/icplcDocReadiness.js'
 import { effectiveCanadaDocReadiness } from './cmpDocumentation.js'
-import { isCommitted, effectiveVisaRequirement, canadianDocAttention } from './documentationRules.js'
+import { isCommitted, isRegistered, effectiveVisaRequirement, canadianDocAttention } from './documentationRules.js'
 import { flightNotRequired } from './flightRequirement.js'
 
 /**
@@ -84,7 +84,8 @@ export function deriveReadiness(p) {
   if (p.visa_process_status === 'issue') {
     reasons.push('Visa issue')
   }
-  if (['issue', 'not_registered'].includes(p.registration_status)) {
+  // Registration is mandatory: only a positive `registered` satisfies it, so unknown/missing blocks Ready too.
+  if (p.participation_status !== 'not_attending' && !isRegistered(p)) {
     reasons.push('Registration outstanding')
   }
   const canadianDocReason = canadianDocAttention(p)

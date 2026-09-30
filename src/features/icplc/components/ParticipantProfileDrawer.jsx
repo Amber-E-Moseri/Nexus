@@ -10,6 +10,7 @@ import DocumentationTab from './tabs/DocumentationTab.jsx'
 import TravelTab from './tabs/TravelTab.jsx'
 import ActivityTab from './tabs/ActivityTab.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
+import { isRegistered } from '../lib/documentationRules.js'
 import { deriveReadiness, readinessTone, readinessLabel } from '../lib/readinessEngine.js'
 
 const PARTICIPATION_TONES = {
@@ -23,7 +24,7 @@ const PARTICIPATION_LABELS = {
 
 function DrawerStatusBadges({ participant }) {
   const { readiness } = deriveReadiness(participant)
-  const registered = participant.registration_link_status === 'registered' || participant.registration_status === 'registered'
+  const registered = isRegistered(participant) // same precedence as attention: the registration link wins over the stored status
   // Registration is mandatory and can't be waived: a missing one is always urgent, even for a confirmed participant.
   const urgent = !registered && participant.participation_status !== 'not_attending'
   const regTone = registered ? 'done' : urgent ? 'blocked' : 'at_risk'

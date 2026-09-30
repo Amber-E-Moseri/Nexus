@@ -219,17 +219,15 @@ describe('ICPLC reconciliation model', () => {
       .toEqual([workingList[0], workingList[2]])
   })
 
-  it('filters the Working List needs-attention view from derived readiness', () => {
-    const workingList = [{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }]
-
-    expect(filterParticipantsByWorkingListView(
-      workingList,
-      [],
-      [],
-      eventId,
-      'needs_attention',
-      (participant) => (participant.id === 'p1' ? 'blocked' : participant.id === 'p2' ? 'action_required' : 'ready'),
-    )).toEqual([workingList[0], workingList[1]])
+  it('filters the Working List needs-attention view with the one canonical attention predicate', () => {
+    const ok = { participation_status: 'confirmed', registration_link_status: 'registered', canada_residency_status: 'CANADIAN_CITIZEN', passport_readiness: 'ready', passport_region: 'ECOWAS', visa_requirement: 'not_required', arrival_flight: 'A', departure_flight: 'B', arrival_date: 'd', departure_date: 'd', source_values: { cmp_documentation: { submission_id: 's' } } }
+    const workingList = [
+      { id: 'p1', ...ok, passport_readiness: 'no_passport' },
+      { id: 'p2', ...ok, registration_link_status: 'not_registered' },
+      { id: 'p3', ...ok },
+    ]
+    expect(filterParticipantsByWorkingListView(workingList, [], [], eventId, 'needs_attention'))
+      .toEqual([workingList[0], workingList[1]])
   })
 
   it('is idempotent when the same registration link is processed repeatedly', () => {

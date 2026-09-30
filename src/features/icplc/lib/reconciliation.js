@@ -1,3 +1,5 @@
+import { needsAttentionNow } from './attentionModel.js'
+
 export const REGISTRATION_SOURCE_TYPE = 'registration'
 // Identity maps written by the Registration CSV import: the registration ID in the export is the link.
 export const REGISTRATION_CSV_SOURCE_TYPE = 'registration_csv'
@@ -129,7 +131,7 @@ export function filterParticipantsByWorkingListView(
   eventId = null,
   view = 'all',
   getReadiness = null,
-  getNeedsAttention = null,
+  getNeedsAttention = needsAttentionNow,
 ) {
   if (!view || view === 'all') return participants
   const linkedParticipantIds = registrationLinkedParticipantIds(registrations, maps, eventId)
@@ -143,10 +145,8 @@ export function filterParticipantsByWorkingListView(
         || (isActiveParticipant(participant) && !!getReadiness && getReadiness(participant) === 'ready')
     }
     if (view === 'needs_attention') {
-      // Callers can pass a stricter test (readiness plus whether staff already reviewed the missing information).
-      if (getNeedsAttention) return getNeedsAttention(participant)
-      const readiness = getReadiness ? getReadiness(participant) : null
-      return readiness === 'action_required' || readiness === 'blocked'
+      // One canonical definition (attentionModel.needsAttentionNow); callers may inject a test but should not.
+      return getNeedsAttention(participant)
     }
     return true
   })
