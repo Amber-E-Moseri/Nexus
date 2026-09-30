@@ -34,7 +34,7 @@ import { filterParticipantsByWorkingListView } from '../../features/icplc/lib/re
 import { participantsToCsv, EXPORT_COLUMNS } from '../../features/icplc/lib/exportParticipants.js'
 import WorkingListTable from '../../features/icplc/components/WorkingListTable.jsx'
 import ParticipantTable from '../../features/icplc/components/ParticipantTable.jsx'
-import { DrawerStatusBadges } from '../../features/icplc/components/ParticipantProfileDrawer.jsx'
+import { DrawerOperationalSummary } from '../../features/icplc/components/ParticipantProfileDrawer.jsx'
 
 // Confirmed, registered, everything else complete (Immigration form received, documents settled, flight submitted).
 const complete = (over = {}) => ({
@@ -269,10 +269,10 @@ describe('every view agrees on the same participant', () => {
     }
   })
 
-  it('profile drawer badge shows the canonical state (urgent wording for people staff are counting on)', () => {
+  it('profile drawer header shows the canonical registration state (urgent wording for people staff are counting on)', () => {
     for (const p of people) {
       cleanup()
-      render(<DrawerStatusBadges participant={p} />)
+      render(<DrawerOperationalSummary participant={p} />)
       const label = expected[p.id] === 'registered' ? 'Registered' : REGISTRATION_URGENT_LABELS[expected[p.id]]
       expect(screen.getByText(label)).toBeTruthy()
     }
