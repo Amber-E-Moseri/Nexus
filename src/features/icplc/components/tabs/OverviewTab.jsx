@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { AlertTriangle, User, Mail, FileText, Plane, Tag, Pencil } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { attentionReasons } from '../../lib/attentionModel.js'
+import { attentionItems } from '../../lib/attentionModel.js'
 import { deriveReadiness, readinessTone, readinessLabel, deriveTravelStatus, deriveItineraryStatus } from '../../lib/readinessEngine.js'
 import Badge from '../../../../components/ui/Badge.jsx'
 import { supabase } from '../../../../lib/supabase.js'
@@ -60,7 +60,7 @@ function visaSummary(requirement, process) {
 
 export default function OverviewTab({ participant, canWrite }) {
   const { readiness } = deriveReadiness(participant)
-  const reasons = attentionReasons(participant) // readiness is untouched by a review; only the reasons staff must act on are listed
+  const reasons = attentionItems(participant) // same canonical attention as the Overview and Working List; readiness itself is untouched by a review
   const travelStatus = deriveTravelStatus(participant)
   const itinerary = deriveItineraryStatus(participant)
   const documentation = deriveDocumentation(participant)

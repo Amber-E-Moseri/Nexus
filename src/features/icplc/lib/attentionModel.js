@@ -13,6 +13,8 @@ import {
   isDocumentationReviewAcknowledged,
   isDocumentationReviewStale,
   isMissingInfoReason,
+  isRegistered,
+  attentionCategoryDef,
 } from './documentationRules.js'
 
 const INFORMATIONAL = new Set(ATTENTION_CATEGORIES.filter((c) => c.informational).map((c) => c.key))
@@ -27,16 +29,31 @@ export function attentionReasons(p) {
   return isDocumentationReviewAcknowledged(p) ? reasons.filter((r) => !isMissingInfoReason(r)) : reasons
 }
 
-/** Needs Attention (as opposed to readiness): blocked, or action required for a reason staff haven't already reviewed. */
+/**
+ * THE canonical Needs Attention predicate. Every consumer (Overview headline, People / Board views, the
+ * "Confirmed + needs attention" filter, tiles, profile) derives from the actionable attention categories, so it
+ * means the same thing everywhere. Missing registration, known passport / visa / Canadian-document / travel
+ * problems and unreviewed missing information count; a reviewed missing-information state and informational
+ * items do not.
+ */
+export function hasActionableAttention(keys) {
+  return keys.some((k) => !INFORMATIONAL.has(k))
+}
+
 export function needsAttentionNow(p) {
-  const { readiness } = deriveReadiness(p)
-  if (readiness === 'blocked') return true
-  return readiness === 'action_required' && attentionReasons(p).length > 0
+  return hasActionableAttention(attentionCategoryKeys(p))
+}
+
+/** Human-readable actionable attention for one participant, highest priority first (registration is always first). */
+export function attentionItems(p) {
+  return attentionCategoryKeys(p)
+    .filter((k) => !INFORMATIONAL.has(k))
+    .map((k) => (k === 'not_registered' ? 'URGENT — Registration Required' : attentionCategoryDef(k)?.label || k))
 }
 
 export function isRegistrationMissing(p) {
   if (!p || p.participation_status === 'not_attending') return false
-  return (p.registration_link_status || p.registration_status) !== 'registered'
+  return !isRegistered(p)
 }
 
 /**
@@ -59,7 +76,7 @@ export function operationalSummary(p) {
     confirmed: isConfirmedOrReady(p),
     urgent: isRegistrationMissing(p),
     attention,
-    needsAttention: actionable.length > 0,
+    needsAttention: hasActionableAttention(attention),
     topTier: actionable.length ? attentionTier(actionable[0]) : null,
     docsIncomplete: missing.length > 0 && !reviewed,
     docsReviewed: reviewed,
