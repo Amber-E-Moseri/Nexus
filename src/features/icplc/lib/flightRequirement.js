@@ -113,3 +113,31 @@ export function isTravelRelevant(p) {
   if (flightNotRequired(p)) return false
   return true
 }
+
+/**
+ * Partition a set of participant IDs into eligible (for bulk FNR) vs skipped.
+ *
+ * A participant is eligible only if:
+ *   - no existing flight/travel data (hasFlightData = false), AND
+ *   - persisted participation_status is not 'not_attending'
+ *
+ * Used by both BulkActionBar (client pre-filter) and useBulkFlightNotRequired (server re-check)
+ * to guarantee one canonical eligibility rule across both layers.
+ *
+ * @param {string[]} ids - IDs to evaluate
+ * @param {Map<string, object>} existingRows - id → participant row (must include all hasFlightData fields + participation_status)
+ * @returns {{ eligible: string[], skippedFlight: number, skippedNotAttending: number }}
+ */
+export function partitionFNREligibility(ids, existingRows) {
+  let skippedFlight = 0
+  let skippedNotAttending = 0
+  const eligible = []
+  for (const id of ids) {
+    const row = existingRows.get(id)
+    if (!row) continue
+    if (hasFlightData(row)) { skippedFlight += 1; continue }
+    if (row.participation_status === 'not_attending') { skippedNotAttending += 1; continue }
+    eligible.push(id)
+  }
+  return { eligible, skippedFlight, skippedNotAttending }
+}
