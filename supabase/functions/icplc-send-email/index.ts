@@ -35,18 +35,30 @@ function personalize(text: string, vars: Record<string, string>): string {
   return text.replace(/\{\{\s*(name|first_name|subgroup|email)\s*\}\}/gi, (_m, key: string) => vars[key.toLowerCase()] ?? '')
 }
 
+function inline(escaped: string): string {
+  return escaped
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)"'])/g, '<a href="$1" style="color:#4C2A92;font-weight:600;text-decoration:underline">$1</a>')
+}
+
 function renderHtml(bodyText: string): string {
   const paragraphs = escapeHtml(bodyText)
     .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 14px">${p.replaceAll('\n', '<br>')}</p>`)
+    .map((p) => `<p style="margin:0 0 16px">${inline(p).replaceAll('\n', '<br>')}</p>`)
     .join('')
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#F5F3F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1C1610">
-  <div style="max-width:600px;margin:0 auto;padding:20px">
-    <div style="background:#fff;border-radius:12px;padding:32px;line-height:1.6;font-size:15px">${paragraphs}</div>
-    <div style="padding:16px;font-size:12px;color:#9E9488;text-align:center">BLW Canada Sub-Region · ICPLC 2026</div>
+<body style="margin:0;padding:0;background:#F4F1EA;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#2D2A22">
+  <div style="max-width:600px;margin:0 auto;padding:24px 16px">
+    <div style="background:#fff;border-radius:14px;overflow:hidden;border:1px solid #EDE8DC">
+      <div style="background:#4C2A92;padding:22px 32px">
+        <div style="color:#fff;font-size:20px;font-weight:800;letter-spacing:-0.01em">ICPLC 2026</div>
+        <div style="color:#D9CCF2;font-size:12px;margin-top:2px;letter-spacing:0.04em;text-transform:uppercase">BLW Canada Sub-Region</div>
+      </div>
+      <div style="padding:32px;line-height:1.65;font-size:15px">${paragraphs}</div>
+    </div>
+    <div style="padding:18px 8px 0;font-size:12px;color:#9E9488;text-align:center">BLW Canada Sub-Region · ICPLC 2026</div>
   </div>
 </body>
 </html>`

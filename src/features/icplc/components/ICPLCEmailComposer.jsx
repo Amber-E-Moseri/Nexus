@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabase'
 import { isProgramsMember } from '../../../lib/permissions.js'
 import { SUBGROUP_OPTIONS } from '../lib/subgroups.js'
 import { deriveFlightStatus } from '../lib/readinessEngine.js'
+import { renderEmailHtml } from '../lib/emailTemplate.js'
 
 // Mass email for ICPLC participants. Sends through the icplc-send-email edge function, which
 // re-checks the caller and loads addresses itself from the participant IDs sent here.
@@ -54,6 +55,17 @@ function personalize(text, p) {
   return text.replace(/\{\{\s*(name|first_name|subgroup|email)\s*\}\}/gi, (_m, k) => vars[k.toLowerCase()] ?? '')
 }
 
+function EmailPreview({ html, height = 420 }) {
+  return (
+    <iframe
+      title="Email preview"
+      sandbox=""
+      srcDoc={html}
+      style={{ width: '100%', height, border: '1px solid var(--icplc-border)', borderRadius: 8, background: '#F4F1EA' }}
+    />
+  )
+}
+
 function ChipGroup({ title, options, selected, onToggle, counts }) {
   return (
     <div style={{ display: 'grid', gap: 6 }}>
@@ -85,7 +97,7 @@ function ChipGroup({ title, options, selected, onToggle, counts }) {
   )
 }
 
-export default function ICPLCEmailComposer({ eventId, participants, onClose }) {
+export default function ICPLCEmailComposer({ eventId, participants, selectionOnly = false, onClose }) {
   const [step, setStep] = useState('compose') // compose | confirm | done
   const [registration, setRegistration] = useState([])
   const [documentation, setDocumentation] = useState([])
@@ -100,6 +112,7 @@ export default function ICPLCEmailComposer({ eventId, participants, onClose }) {
   const [testNote, setTestNote] = useState(null)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
+  const [previewing, setPreviewing] = useState(false)
   const bodyRef = useRef(null)
 
   const toggle = (setter) => (value) => setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
@@ -196,7 +209,9 @@ export default function ICPLCEmailComposer({ eventId, participants, onClose }) {
           {step === 'compose' && (
             <div style={{ display: 'grid', gap: 14 }}>
               <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)' }}>
-                Starting from the {participants.length} {participants.length === 1 ? 'person' : 'people'} in your current Working List view. Clear the Working List filters first to reach everyone.
+                {selectionOnly
+                  ? `Emailing the ${participants.length} ${participants.length === 1 ? 'person' : 'people'} you selected.`
+                  : `Starting from the ${participants.length} ${participants.length === 1 ? 'person' : 'people'} in your current People view. Clear the People filters first to reach everyone.`}
               </div>
               <div style={{ display: 'grid', gap: 12, padding: 12, background: 'var(--icplc-bg)', border: '1px solid var(--icplc-border)', borderRadius: 8 }}>
                 <ChipGroup title="Registration" options={REGISTRATION} selected={registration} onToggle={toggle(setRegistration)} counts={counts.registration} />
@@ -222,13 +237,28 @@ export default function ICPLCEmailComposer({ eventId, participants, onClose }) {
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                   <span style={label}>Message</span>
                   <span style={{ flex: 1 }} />
-                  {MERGE_TAGS.map((m) => (
+                  {!previewing && MERGE_TAGS.map((m) => (
                     <button key={m.tag} type="button" className="icplc-btn" style={{ minHeight: 26, padding: '2px 8px', fontSize: 11.5 }} onClick={() => insertTag(m.tag)}>
                       + {m.label}
                     </button>
                   ))}
                 </div>
+                <div role="tablist" style={{ display: 'flex', gap: 6 }}>
+                  {[['Write', false], ['Preview', true]].map(([t, v]) => (
+                    <button key={t} type="button" role="tab" aria-selected={previewing === v} className="icplc-btn" onClick={() => setPreviewing(v)}
+                      style={{ minHeight: 26, padding: '2px 12px', fontSize: 12, fontWeight: previewing === v ? 700 : 400, borderColor: previewing === v ? 'var(--icplc-purple)' : undefined, color: previewing === v ? 'var(--icplc-purple)' : undefined }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                {previewing && (
+                  <>
+                    <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)' }}>Previewing for {sample.full_name}. Merge tags are filled in per person.</div>
+                    <EmailPreview html={renderEmailHtml(personalize(body || '(Nothing written yet)', sample))} />
+                  </>
+                )}
                 <textarea
+                  hidden={previewing}
                   ref={bodyRef}
                   aria-label="Message"
                   className="icplc-input"
@@ -254,13 +284,11 @@ export default function ICPLCEmailComposer({ eventId, participants, onClose }) {
               <div style={{ fontSize: 13, color: 'var(--icplc-text-soft)' }}>
                 Preview for {sample.full_name}. Merge tags are filled in per person.
               </div>
-              <div style={{ border: '1px solid var(--icplc-border)', borderRadius: 8, overflow: 'hidden' }}>
-                <div style={{ padding: '10px 14px', background: 'var(--icplc-bg)', borderBottom: '1px solid var(--icplc-border)', fontSize: 13 }}>
-                  <div style={{ color: 'var(--icplc-text-soft)', fontSize: 12 }}>To: {sample.email}</div>
-                  <div style={{ fontWeight: 700 }}>{personalize(subject, sample)}</div>
-                </div>
-                <div style={{ padding: 14, fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{personalize(body, sample)}</div>
+              <div style={{ padding: '10px 14px', background: 'var(--icplc-bg)', border: '1px solid var(--icplc-border)', borderRadius: 8, fontSize: 13 }}>
+                <div style={{ color: 'var(--icplc-text-soft)', fontSize: 12 }}>To: {sample.email}</div>
+                <div style={{ fontWeight: 700 }}>{personalize(subject, sample)}</div>
               </div>
+              <EmailPreview html={renderEmailHtml(personalize(body, sample))} />
 
               <div>
                 <div style={{ ...label, marginBottom: 6 }}>
