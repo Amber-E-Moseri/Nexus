@@ -7,7 +7,7 @@ import { attentionCategoryKeys } from '../lib/documentationRules.js'
 import { isActiveParticipant } from '../lib/reconciliation.js'
 
 /** Subgroup label; hover / focus / tap shows who is in it (click a name to open their profile). */
-function SubgroupMembers({ row, onOpen }) {
+function SubgroupMembers({ row, onOpen, onFilter }) {
   const [open, setOpen] = useState(false)
   // Registered first, then not registered; alphabetical within each.
   const members = [...row.members].sort((a, b) => (b.registered - a.registered) || (a.name || '').localeCompare(b.name || ''))
@@ -20,8 +20,9 @@ function SubgroupMembers({ row, onOpen }) {
       <button
         type="button"
         aria-expanded={open}
-        aria-label={`${row.subgroup || 'Unassigned'}: show ${row.total} member${row.total === 1 ? '' : 's'}`}
-        onClick={() => setOpen(true)}
+        aria-label={`${row.subgroup || 'Unassigned'}: show ${row.total} member${row.total === 1 ? '' : 's'} in People`}
+        title="Open in People"
+        onClick={() => { setOpen(false); onFilter(row) }}
         onFocus={() => setOpen(true)}
         onBlur={(e) => { if (!e.currentTarget.parentElement.contains(e.relatedTarget)) setOpen(false) }}
         style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 600, color: 'inherit', cursor: 'pointer', textAlign: 'left', textDecoration: 'underline dotted', textUnderlineOffset: 3 }}
@@ -92,6 +93,18 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
     }
   }, [participants])
 
+  // The Working List's subgroup filter is an exclusion list, so "only this subgroup" means hiding every other one.
+  function showSubgroupInWorkingList(row) {
+    const others = subgroupRows.map((r) => r.subgroup).filter((sg) => sg && sg !== row.subgroup)
+    setFilters((prev) => ({ ...prev, search: '', working_list_view: 'all', subgroup: others }))
+    onShowPeople?.()
+  }
+
+  function showReadinessInWorkingList(key) {
+    setFilters((prev) => ({ ...prev, search: '', working_list_view: 'all', subgroup: [], readiness: [key] }))
+    onShowPeople?.()
+  }
+
   const subgroupRows = useMemo(() => {
     const groups = new Map()
     for (const p of stats.active) {
@@ -159,7 +172,7 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
 
       {/* Readiness Distribution */}
       <div className="icplc-overview-section">
-        <ReadinessBar counts={stats.readinessCounts} total={stats.total} />
+        <ReadinessBar counts={stats.readinessCounts} total={stats.total} onSelect={showReadinessInWorkingList} />
       </div>
 
       {/* Ambiguous registrations */}
@@ -195,7 +208,7 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
               {subgroupRows.map((row) => (
                 <tr key={row.subgroup || 'unassigned'}>
                   <td style={{ fontWeight: 600 }}>
-                    <SubgroupMembers row={row} onOpen={openProfile} />
+                    <SubgroupMembers row={row} onOpen={openProfile} onFilter={showSubgroupInWorkingList} />
                   </td>
                   <td className="icplc-mono">
                     {row.registered} <span style={{ color: 'var(--icplc-text-soft)' }}>/ {row.total}</span>
@@ -232,7 +245,7 @@ const READINESS_SEGMENTS = [
   { key: 'unknown',         label: 'Unknown',         color: '#9CA3AF' },
 ]
 
-function ReadinessBar({ counts, total }) {
+function ReadinessBar({ counts, total, onSelect }) {
   if (!total) return null
   return (
     <div>
@@ -243,10 +256,20 @@ function ReadinessBar({ counts, total }) {
         <span style={{ fontSize: 12, color: 'var(--icplc-text-muted)' }}>{total} participants</span>
       </div>
       <div className="icplc-readiness-bar">
-        {READINESS_SEGMENTS.map(({ key, color }) => {
+        {READINESS_SEGMENTS.map(({ key, label, color }) => {
           const pct = total ? (counts[key] || 0) / total * 100 : 0
           if (!pct) return null
-          return <div key={key} className="icplc-readiness-segment" style={{ width: `${pct}%`, background: color }} />
+          return (
+            <button
+              key={key}
+              type="button"
+              className="icplc-readiness-segment"
+              title={`Show ${label} in People`}
+              aria-label={`Show ${label} in People`}
+              onClick={() => onSelect(key)}
+              style={{ width: `${pct}%`, background: color, border: 'none', padding: 0, cursor: 'pointer' }}
+            />
+          )
         })}
       </div>
       <div className="icplc-readiness-legend">
@@ -254,11 +277,18 @@ function ReadinessBar({ counts, total }) {
           const n = counts[key] || 0
           if (!n) return null
           return (
-            <div key={key} className="icplc-legend-item">
+            <button
+              key={key}
+              type="button"
+              className="icplc-legend-item"
+              title={`Show ${label} in People`}
+              onClick={() => onSelect(key)}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+            >
               <span className="icplc-legend-dot" style={{ background: color }} />
               <span>{label}</span>
               <strong style={{ color: 'var(--icplc-text)' }}>{n}</strong>
-            </div>
+            </button>
           )
         })}
       </div>

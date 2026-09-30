@@ -347,6 +347,16 @@ export default function ParticipantFilters({ resultCount, attentionCounts, searc
       {availableSubgroups.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 4, alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin', paddingBottom: 4 }}>
           <span style={{ ...sectionTitle, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>Subgroups</span>
+          <button
+            type="button"
+            className="icplc-chip"
+            aria-pressed={excludedSubgroups.length === 0}
+            title="Show all subgroups"
+            onClick={() => clearField('subgroup')}
+            style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+          >
+            All
+          </button>
           {availableSubgroups.map((sg) => {
             const isOff = excludedSubgroups.includes(sg)
             return (

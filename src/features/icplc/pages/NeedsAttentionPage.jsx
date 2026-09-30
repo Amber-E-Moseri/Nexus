@@ -67,7 +67,7 @@ export default function NeedsAttentionPage({ canWrite }) {
             Ambiguous Registration Match <span style={countStyle}>{ambiguousRegistrations.length}</span>
           </h3>
           <div style={descStyle}>
-            These registrations could belong to an existing participant. They are not linked and no duplicate was created — review them in the Working List's Registration Sources segment.
+            These registrations could belong to an existing participant. They are not linked and no duplicate was created — review them in the People tab's Registration Sources segment.
           </div>
           <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
             {ambiguousRegistrations.slice(0, 20).map((r) => (

@@ -12,7 +12,7 @@ import SettingsPage from './pages/SettingsPage.jsx'
 // maturity: undefined = READY (no tag), 'beta' = BETA tag, 'coming_soon' = COMING SOON tag
 const NEW_TABS = [
   { key: 'overview',      label: 'Overview',        short: 'Overview' },
-  { key: 'people',        label: 'Working List',    short: 'List' },
+  { key: 'people',        label: 'People',          short: 'People' },
   { key: 'board',         label: 'Board',           short: 'Board' },
   { key: 'documentation', label: 'Documentation',   short: 'Docs' },
   { key: 'travel',        label: 'Travel',          short: 'Travel',   maturity: 'beta' },

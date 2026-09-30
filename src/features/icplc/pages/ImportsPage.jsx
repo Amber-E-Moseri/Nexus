@@ -257,7 +257,7 @@ function CMPSyncAction() {
       if (action === 'add_unmatched') {
         const added = (data.results || []).filter((r) => r.participant_id).length
         const failed = (data.results || []).length - added
-        setAddedNote(`Added ${added} to the Working List as not registered${failed ? `; ${failed} could not be added` : ''}.`)
+        setAddedNote(`Added ${added} to People as not registered${failed ? `; ${failed} could not be added` : ''}.`)
         qc.invalidateQueries({ queryKey: ['icplc_participants'] })
         qc.invalidateQueries({ queryKey: ['icplc_wl_registrations'] })
         await run('preview')
@@ -410,11 +410,11 @@ function CMPSyncAction() {
               <div style={{ marginTop: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                   <div style={{ fontSize: 12, fontWeight: 600 }}>
-                    {unmatchedRows.length} submission{unmatchedRows.length === 1 ? '' : 's'} not on the Working List
+                    {unmatchedRows.length} submission{unmatchedRows.length === 1 ? '' : 's'} not in People
                   </div>
                   <button type="button" className="icplc-btn" disabled={busy}
                     onClick={() => run('add_unmatched', { submission_ids: unmatchedRows.map((r) => r.submission_id) })}>
-                    Add all to Working List
+                    Add all to People
                   </button>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
@@ -429,7 +429,7 @@ function CMPSyncAction() {
                       </span>
                       <button type="button" className="icplc-btn" disabled={busy || !r.submitter?.name}
                         onClick={() => run('add_unmatched', { submission_ids: [r.submission_id] })}>
-                        Add to Working List
+                        Add to People
                       </button>
                     </li>
                   ))}
@@ -452,10 +452,191 @@ function CMPSyncAction() {
         )}
 
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
-          Matching is by durable submission ID or exact email. Unmatched submissions are never added automatically — staff can add them to the Working List as not registered.
+          Matching is by durable submission ID or exact email. Unmatched submissions are never added automatically — staff can add them to People as not registered.
         </div>
       </div>
     </section>
+  )
+}
+
+const FLIGHT_FIELDS = ['arrival_date', 'arrival_time', 'arrival_flight', 'departure_date', 'departure_time', 'departure_flight']
+
+const FLIGHT_STATUS_LABELS = {
+  matched_applied: 'Will update flights',
+  matched_source_only: 'Already up to date',
+  unmatched: 'No matching participant',
+  ambiguous: 'Name matches several people',
+  unknown_value: 'Unrecognised answer',
+  superseded: 'Older submission',
+  error: 'Error',
+}
+
+function flightLine(p, m, kind) {
+  const pick = (f) => (m?.[`${kind}_${f}`] !== undefined ? m[`${kind}_${f}`] : p?.[`${kind}_${f}`])
+  const parts = [pick('date'), pick('time'), pick('flight')].filter(Boolean)
+  const changed = ['date', 'time', 'flight'].some((f) => m?.[`${kind}_${f}`] !== undefined && m[`${kind}_${f}`] !== p?.[`${kind}_${f}`])
+  return { text: parts.length ? parts.join(' · ') : 'Not set', changed }
+}
+
+function CMPFlightSyncPanel() {
+  const { config } = useICPLC()
+  const eventId = config?.id
+  const qc = useQueryClient()
+  const [phase, setPhase] = useState('idle') // idle | previewing | previewed | applying | applied
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
+  const [confirming, setConfirming] = useState(false)
+
+  async function run(action) {
+    setError(null)
+    setPhase(action === 'preview' ? 'previewing' : 'applying')
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('cmp-flight-sync', { body: { action, event_id: eventId } })
+      if (invokeError) {
+        let message = invokeError.message
+        if (invokeError.name === 'FunctionsFetchError') message = 'Could not reach the cmp-flight-sync function. It may not be deployed to this project yet.'
+        try { message = (await invokeError.context?.json?.())?.error || message } catch { /* keep default */ }
+        throw new Error(message)
+      }
+      setResult({ ...data, action })
+      setPhase(action === 'preview' ? 'previewed' : 'applied')
+      if (action === 'apply') {
+        qc.invalidateQueries({ queryKey: ['icplc_flight_preview_participants'] })
+        qc.invalidateQueries({ queryKey: ['icplc_participants'] })
+        qc.invalidateQueries({ queryKey: ['icplc_wl_registrations'] })
+      }
+    } catch (err) {
+      setError(err.message || 'Flight sync failed.')
+      setPhase(action === 'apply' ? 'previewed' : 'idle')
+    }
+  }
+
+  const rows = (result?.results || []).filter((r) => r.participant_id && r.status !== 'superseded')
+  const ids = rows.map((r) => r.participant_id)
+  const { data: current = [] } = useQuery({
+    queryKey: ['icplc_flight_preview_participants', eventId, ids.join(',')],
+    enabled: !!eventId && ids.length > 0,
+    queryFn: async () => {
+      const { data, error: qError } = await supabase.from('icplc_participants').select(`id, full_name, ${FLIGHT_FIELDS.join(', ')}`).in('id', ids)
+      if (qError) throw qError
+      return data || []
+    },
+  })
+  const byId = new Map(current.map((p) => [p.id, p]))
+
+  const busy = phase === 'previewing' || phase === 'applying'
+  const counts = result?.counts || {}
+  const toUpdate = counts.matched_applied || 0
+  const attention = (result?.results || []).filter((r) => ['unmatched', 'ambiguous', 'unknown_value', 'error'].includes(r.status))
+
+  return (
+    <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ border: '1px solid #BFDBFE', borderRadius: 8, padding: '14px 18px', background: '#EFF6FF', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <span className="icplc-maturity-tag icplc-maturity-tag--beta" style={{ marginTop: 2 }}>BETA</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#1E3A5F', marginBottom: 4 }}>CMP Flight Sync — Beta</div>
+          <div style={{ fontSize: 12, color: '#2563EB', lineHeight: 1.55 }}>
+            Pulls arrival and departure details from the Leaders Platform Flight Form into Travel. Preview writes nothing; Apply updates only after you confirm.
+          </div>
+        </div>
+      </div>
+
+      <section>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          The flight form has no email field, so people are matched by <strong>exact full name</strong> (first + last).
+          A name shared by two participants, or one that matches nobody, is listed for staff and never written. If someone
+          submits twice, the latest submission wins. Staff-overridden fields and empty answers are left alone.
+        </p>
+      </section>
+
+      <section>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '14px 18px', background: 'var(--surface-1)' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="icplc-btn" disabled={busy || !eventId} onClick={() => run('preview')}>
+              {phase === 'previewing' ? 'Fetching preview…' : result ? 'Refresh preview' : 'Preview flight sync'}
+            </button>
+            <button type="button" className="icplc-btn icplc-btn-primary" disabled={busy || phase !== 'previewed' || toUpdate === 0} onClick={() => setConfirming(true)}>
+              {phase === 'applying' ? 'Applying…' : 'Apply to participants'}
+            </button>
+          </div>
+
+          {confirming && (
+            <div role="alertdialog" aria-label="Confirm apply" style={{ marginTop: 12, border: '1px solid #FDE68A', background: '#FFFBEB', borderRadius: 8, padding: '12px 14px' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Update flights for {toUpdate} participant{toUpdate === 1 ? '' : 's'}?</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>Fields with a staff override are left alone.</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="icplc-btn icplc-btn-primary" onClick={() => { setConfirming(false); run('apply') }}>Yes, apply</button>
+                <button type="button" className="icplc-btn" onClick={() => setConfirming(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div role="alert" style={{ marginTop: 12, fontSize: 12, color: '#991B1B', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, padding: '8px 12px' }}>{error}</div>
+          )}
+
+          {phase === 'applied' && (
+            <div role="status" style={{ marginTop: 12, fontSize: 13, color: '#166534', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '8px 12px' }}>
+              Applied. {toUpdate} participant{toUpdate === 1 ? '' : 's'} updated.{(counts.error || 0) > 0 ? ` ${counts.error} failed — see the list below.` : ''}
+            </div>
+          )}
+
+          {result && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                {result.action === 'apply' ? 'Applied' : 'Preview'} · {result.submission_count} submission{result.submission_count === 1 ? '' : 's'} fetched
+                {result.submission_count === 0 ? ' — the form has no responses yet.' : ''}
+              </div>
+              {result.submission_count > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
+                  {Object.entries(FLIGHT_STATUS_LABELS).filter(([k]) => (counts[k] || 0) > 0).map(([k, label]) => (
+                    <div key={k} style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 18, fontWeight: 700 }}>{counts[k]}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {rows.length > 0 && (
+                <div style={{ marginTop: 14, overflowX: 'auto' }}>
+                  <table className="icplc-subgroup-table" style={{ fontSize: 12, width: '100%' }}>
+                    <thead><tr><th>Participant</th><th>Arrival</th><th>Departure</th><th>Result</th></tr></thead>
+                    <tbody>
+                      {rows.map((r) => {
+                        const p = byId.get(r.participant_id)
+                        const m = r.canonical_mutations || {}
+                        return (
+                          <tr key={r.submission_id}>
+                            <td style={{ fontWeight: 600 }}>{p?.full_name || '…'}</td>
+                            {['arrival', 'departure'].map((kind) => {
+                              const line = flightLine(p, m, kind)
+                              return <td key={kind} style={line.changed ? { color: 'var(--icplc-green)', fontWeight: 600 } : { color: 'var(--text-secondary)' }}>{line.text}</td>
+                            })}
+                            <td>{FLIGHT_STATUS_LABELS[r.status] || r.status}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {attention.length > 0 && (
+                <details style={{ marginTop: 12 }} open>
+                  <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>{attention.length} submission{attention.length === 1 ? '' : 's'} need attention</summary>
+                  <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    {attention.slice(0, 100).map((r) => (
+                      <li key={r.submission_id}>
+                        <strong>{r.submitter?.name || 'Unnamed'}</strong> — {FLIGHT_STATUS_LABELS[r.status] || r.status}{r.issues?.length ? ` (${r.issues.join('; ')})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -545,6 +726,7 @@ export default function ImportsPage() {
           { key: 'working-list', label: 'Working List CSV' },
           { key: 'csv', label: 'Registration CSV' },
           { key: 'cmp', label: 'CMP Documentation Sync', maturity: 'beta' },
+          { key: 'cmp-flights', label: 'CMP Flight Sync', maturity: 'beta' },
         ].map((s) => (
           <button
             key={s.key}
@@ -570,6 +752,8 @@ export default function ImportsPage() {
       {source === 'working-list' && <WorkingListPanel fileRef={fileRef} config={config} onReset={() => {}} />}
 
       {source === 'cmp' && <CMPSyncPanel />}
+
+      {source === 'cmp-flights' && <CMPFlightSyncPanel />}
 
       {source === 'csv' && (<>
       {/* Step indicator */}
@@ -815,7 +999,7 @@ function UnmatchedResolver({ rows, eventId, onResolve, disabled }) {
       </h4>
       {unresolved.length > 0 && (
         <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 10px' }}>
-          Link each to an existing participant, or add them to the Working List as a new entry. Rows you skip are left out of this import.
+          Link each to an existing participant, or add them to People as a new entry. Rows you skip are left out of this import.
         </p>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

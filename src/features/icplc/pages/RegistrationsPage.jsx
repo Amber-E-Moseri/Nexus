@@ -247,7 +247,7 @@ export default function RegistrationsPage({ canWrite }) {
         <Stat label="Source Records" value={summary.registered} />
         <Stat label="Matched" value={summary.matched} tone="success" />
         <Stat label="Needs Review" value={summary.review} tone="warn" />
-        <Stat label="Adding to Working List" value={summary.unmatched} />
+        <Stat label="Adding to People" value={summary.unmatched} />
       </div>
 
       {rows.length === 0 ? (
@@ -312,7 +312,7 @@ export default function RegistrationsPage({ canWrite }) {
                       </>
                     )}
                     {row.state === 'UNMATCHED' && canWrite && (
-                        <button onClick={() => createFromRegistration.mutate({ registration: row.registration })} disabled={createFromRegistration.isPending} style={smallBtn}><UserPlus size={13} /> Add to Working List</button>
+                        <button onClick={() => createFromRegistration.mutate({ registration: row.registration })} disabled={createFromRegistration.isPending} style={smallBtn}><UserPlus size={13} /> Add to People</button>
                     )}
                   </div>
                 </td>
@@ -455,7 +455,7 @@ function Stat({ label, value, tone }) {
 function stateLabel(state) {
   if (state === 'MATCHED') return 'Matched'
   if (state === 'POSSIBLE_MATCH') return 'Possible match / needs review'
-  return 'Adding to Working List'
+  return 'Adding to People'
 }
 
 function formatDate(value) {
