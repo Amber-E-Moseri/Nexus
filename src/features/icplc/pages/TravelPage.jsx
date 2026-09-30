@@ -129,9 +129,9 @@ export default function TravelPage({ canWrite }) {
         </div>
       </div>
 
-      <div role="group" aria-label="Subgroup filter" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div role="group" aria-label="Subgroup filter" style={{ display: 'flex', gap: 6, flexWrap: 'nowrap', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 6, marginBottom: 14 }}>
         {['All', ...subgroups].map((sg) => (
-          <button key={sg} type="button" className="icplc-chip" aria-pressed={subgroupFilter === sg} onClick={() => setSubgroupFilter(sg)}>
+          <button key={sg} type="button" className="icplc-chip" style={{ flexShrink: 0, whiteSpace: 'nowrap' }} aria-pressed={subgroupFilter === sg} onClick={() => setSubgroupFilter(sg)}>
             {sg === 'All' ? 'All subgroups' : sg}
           </button>
         ))}

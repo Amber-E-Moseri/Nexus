@@ -359,7 +359,7 @@ Position: 15 commits ahead of origin/main
 Message: "feat(icplc): Prepare safe event-scoping deployment migration"
 
 Files Changed:
-  ✓ New: ICPLC_EVENT_SCOPING_DEPLOYMENT_PLAN.md
+  ✓ New: docs/icplc/ICPLC_EVENT_SCOPING_DEPLOYMENT_PLAN.md
   ✓ New: 20270902000000_icplc_event_scoping_forward_reconciliation.sql
   ✓ Modified: 20260925000006_icplc_identity_maps.sql
   ✓ Modified: RegistrationEcosystem.jsx

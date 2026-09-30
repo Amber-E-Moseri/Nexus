@@ -66,7 +66,7 @@ The hint from PostgreSQL is explicit:
 6. HARNESS INTEGRITY
 ═══════════════════════════════════════════════════════════════════════════════
 
-Prior source located:         YES (REGISTRATION_CSV_PHASE3_REPAIR_CERTIFICATION.md)
+Prior source located:         YES (docs/registration-csv/REGISTRATION_CSV_PHASE3_REPAIR_CERTIFICATION.md)
 11 scenarios preserved:       YES ✅
   - CSV Parsing:            5 tests
   - Identity Matching:      4 tests
