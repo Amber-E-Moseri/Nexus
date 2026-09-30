@@ -98,6 +98,17 @@ function mergeSourceValues(existing: Record<string, unknown> | null, incoming: R
   }
 }
 
+// First + last name concatenated, lowercased, punctuation and honorifics dropped, for name matching.
+function normalizeName(value: unknown): string {
+  return String(value ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\b(pastor|sis|sister|brother|bro|dr|rev|prolific)\b/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function submitterDisplayName(sub: CMPSubmission, answers: Record<string, unknown>): string | null {
   const first = String(answers[FIELD_IDS.firstName] ?? '').trim()
   const last = String(answers[FIELD_IDS.lastName] ?? '').trim()
@@ -126,6 +137,7 @@ interface Lookups {
   identityMaps: Map<string, string> // cmp submission id -> participant id
   emailClaims: Map<string, string> // normalized email -> participant id
   participants: Map<string, any> // participant id -> row
+  byName: Map<string, string[]> // normalized full name -> participant ids
 }
 
 // PostgREST caps a response at 1000 rows by default, so page through the event's rows.
@@ -150,7 +162,13 @@ async function loadLookups(supabase: any, eventId: string): Promise<Lookups> {
     fetchAll((a, b) => supabase.from('icplc_participants').select('*')
       .eq('event_id', eventId).order('id').range(a, b)),
   ])
+  const byName = new Map<string, string[]>()
+  for (const p of parts) {
+    const key = normalizeName(p.full_name)
+    if (key) byName.set(key, [...(byName.get(key) || []), p.id])
+  }
   return {
+    byName,
     identityMaps: new Map(maps.map((m: any) => [m.source_key, m.participant_id])),
     emailClaims: new Map(claims.map((c: any) => [c.normalized_email, c.participant_id])),
     participants: new Map(parts.map((p: any) => [p.id, p])),
@@ -209,6 +227,16 @@ async function processSubmission(
       `durable_map→${existingMap.data.participant_id} vs email_claim→${emailClaimParticipantId}`,
     )
     return result // STOP: do not mutate either participant
+  }
+
+  // 1d. No email match: fall back to the first + last name on the form, only when it names exactly one person.
+  if (!participantId) {
+    const nameKey = normalizeName(submitterDisplayName(sub, answers))
+    const candidates = nameKey ? lookups.byName.get(nameKey) || [] : []
+    if (candidates.length === 1) {
+      participantId = candidates[0]
+      identityMethod = 'exact_name'
+    }
   }
 
   // Step 2: Handle unmatched or conflicted identity
