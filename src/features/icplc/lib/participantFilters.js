@@ -1,7 +1,9 @@
 // Client-side participant filters — everything that depends on DERIVED values (readiness, flight status,
 // effective visa requirement) or on joined data (tags). DB-column filters stay in fetchParticipants().
+// participation_status is applied here too when the server query fetched a broader set (e.g. tracking rows
+// included for effective-Likely promotion); the DB handles other column filters on its own.
 
-import { deriveReadiness, deriveFlightStatus } from './readinessEngine.js'
+import { deriveReadiness, deriveFlightStatus, effectiveParticipationStatus } from './readinessEngine.js'
 import { effectiveVisaRequirement, attentionCategoryKeys, documentationActionRequired } from './documentationRules.js'
 import { effectivePassportRegion } from './passportRegion.js'
 import { effectiveAssistanceRequested } from './cmpDocumentation.js'
@@ -41,6 +43,11 @@ export function countAttentionCategories(participants = []) {
  */
 export function applyClientFilters(participants, filters = {}, ctx = {}) {
   let rows = participants || []
+  // Effective participation status: re-apply when a participation_status filter is active.
+  // The DB query may have broadened the set (e.g. included tracking for derived-Likely promotion).
+  if (has(filters.participation_status)) {
+    rows = rows.filter((p) => filters.participation_status.includes(effectiveParticipationStatus(p)))
+  }
   if (has(filters.attention)) {
     rows = rows.filter((p) => {
       const keys = attentionCategoryKeys(p)

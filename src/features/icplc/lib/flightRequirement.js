@@ -41,3 +41,75 @@ export function flightNotRequiredInfo(p) {
     superseded: hasFlightData(p), // a flight was submitted after all: the normal workflow applies
   }
 }
+
+/**
+ * A meaningful real flight: at least one flight number was recorded (arrival or departure).
+ * Dates alone are not canonical attendance evidence; a flight number is the meaningful signal.
+ */
+export function hasMeaningfulFlight(p) {
+  return !!(p?.arrival_flight || p?.departure_flight)
+}
+
+/**
+ * Derived attendance evidence from flight data or FNR. Never persisted; never mutates participation.
+ *
+ * Attendance evidence: meaningful flight number OR Flight Not Required (FNR).
+ * Conflicts are not auto-resolved; staff must decide.
+ *
+ * Rules:
+ *   confirmed + evidence  -> null (Confirmed is stronger; suppress the derived badge)
+ *   not_attending + flight -> ONE attendance conflict (not separate warnings)
+ *   not_attending + FNR    -> ONE attendance conflict
+ *   any other + evidence   -> positive attendance evidence (likely attending)
+ *   no evidence            -> null
+ *
+ * @param {object} p - icplc_participants row
+ * @returns {{ type: 'evidence' | 'conflict', label: string } | null}
+ */
+export function attendanceEvidence(p) {
+  const hasFlight = hasMeaningfulFlight(p)
+  const hasFNR = flightNotRequired(p)
+  const hasEvidence = hasFlight || hasFNR
+
+  // No attendance evidence of any kind
+  if (!hasEvidence) return null
+
+  // Confirmed outranks any derived evidence
+  if (p?.participation_status === 'confirmed') return null
+
+  // Explicit Absent + evidence = conflict (consolidate into one warning)
+  if (p?.participation_status === 'not_attending') {
+    const evidenceList = []
+    if (hasFlight) evidenceList.push('flight')
+    if (hasFNR) evidenceList.push('FNR')
+    const evidencePhrase = evidenceList.join(' and ')
+    return {
+      type: 'conflict',
+      label: `Attendance conflict — ${evidencePhrase} recorded, but status is Not Attending`,
+    }
+  }
+
+  // Explicit Uncertain: evidence exists but does not promote (staff reviewing)
+  if (p?.participation_status === 'uncertain') {
+    const evidenceLabel = hasFlight ? 'Flight received' : 'Flight not required'
+    return { type: 'evidence', label: evidenceLabel }
+  }
+
+  // Tracking, Likely: positive evidence
+  const evidenceLabel = hasFlight ? 'Flight received' : 'Flight not required'
+  return { type: 'evidence', label: evidenceLabel }
+}
+
+/**
+ * Whether a participant should appear in the default Travel workspace.
+ * FNR with no flight data means no travel action is needed.
+ * Absent participants are never travel-relevant.
+ *
+ * @param {object} p
+ * @returns {boolean}
+ */
+export function isTravelRelevant(p) {
+  if (p?.participation_status === 'not_attending') return false
+  if (flightNotRequired(p)) return false
+  return true
+}

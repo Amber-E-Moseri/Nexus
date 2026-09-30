@@ -3,14 +3,14 @@ import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
 import { useICPLCTargets } from '../hooks/useICPLCTargets.js'
 import DocumentationOverview from '../components/DocumentationOverview.jsx'
-import { deriveReadiness, isConfirmedOrReady } from '../lib/readinessEngine.js'
+import { deriveReadiness, effectiveParticipationStatus } from '../lib/readinessEngine.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
-import { ATTENTION_CATEGORIES, attentionCategoryKeys } from '../lib/documentationRules.js'
+import { attentionCategoryKeys } from '../lib/documentationRules.js'
 import { needsAttentionNow } from '../lib/attentionModel.js'
 import { isActiveParticipant } from '../lib/reconciliation.js'
 
 /** Subgroup label; hover / focus / tap shows who is in it (click a name to open their profile). */
-function SubgroupMembers({ row, onOpen }) {
+function SubgroupMembers({ row, onOpen, onFilter }) {
   const [open, setOpen] = useState(false)
   // Registered first, then not registered; alphabetical within each.
   const members = [...row.members].sort((a, b) => (b.registered - a.registered) || (a.name || '').localeCompare(b.name || ''))
@@ -23,8 +23,9 @@ function SubgroupMembers({ row, onOpen }) {
       <button
         type="button"
         aria-expanded={open}
-        aria-label={`${row.subgroup || 'Unassigned'}: show ${row.total} member${row.total === 1 ? '' : 's'}`}
-        onClick={() => setOpen(true)}
+        aria-label={`${row.subgroup || 'Unassigned'}: show ${row.total} member${row.total === 1 ? '' : 's'} in People`}
+        title="Open in People"
+        onClick={() => { setOpen(false); onFilter(row) }}
         onFocus={() => setOpen(true)}
         onBlur={(e) => { if (!e.currentTarget.parentElement.contains(e.relatedTarget)) setOpen(false) }}
         style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 600, color: 'inherit', cursor: 'pointer', textAlign: 'left', textDecoration: 'underline dotted', textUnderlineOffset: 3 }}
@@ -83,13 +84,17 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
       readinessCounts[r] = (readinessCounts[r] || 0) + 1
     }
     const ready = readinessCounts.ready
-    // A Ready person counts as Confirmed (derived, never persisted).
-    const confirmed = active.filter((p) => isConfirmedOrReady(p)).length
+    // Confirmed: only participation_status === 'confirmed' (independent from readiness)
+    const confirmed = active.filter((p) => p.participation_status === 'confirmed').length
+    // Working On: effective 'likely' or 'uncertain' (includes Tracking + attendance evidence)
+    const workingOnLikely = active.filter((p) => effectiveParticipationStatus(p) === 'likely').length
+    const workingOnUncertain = active.filter((p) => effectiveParticipationStatus(p) === 'uncertain').length
+    const workingOn = workingOnLikely + workingOnUncertain
     // Readiness counts stay data-only; Needs Attention also skips people whose only reasons are missing information staff already reviewed.
     const needsAttention = active.filter(needsAttentionNow).length
     return {
-      total, registered, confirmed, ready, needsAttention,
-      registeredPct: pct(registered), confirmedPct: pct(confirmed), readyPct: pct(ready),
+      total, registered, confirmed, workingOn, workingOnLikely, workingOnUncertain, ready, needsAttention,
+      registeredPct: pct(registered), confirmedPct: pct(confirmed), workingOnPct: pct(workingOn), readyPct: pct(ready),
       needsAttentionPct: pct(needsAttention),
       attention,
       readinessCounts,
@@ -97,20 +102,12 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
     }
   }, [participants])
 
-  const subgroupRows = useMemo(() => {
-    const groups = new Map()
-    for (const p of stats.active) {
-      const key = p.subgroup || ''
-      if (!groups.has(key)) groups.set(key, { subgroup: key, total: 0, registered: 0, confirmed: 0, confirming: 0, members: [] })
-      const g = groups.get(key)
-      g.total += 1
-      g.members.push({ id: p.id, name: p.full_name, registered: p.registration_link_status === 'registered' })
-      if (p.registration_link_status === 'registered') g.registered += 1
-      if (isConfirmedOrReady(p)) g.confirmed += 1
-      else if (p.participation_status === 'likely') g.confirming += 1
-    }
-    return [...groups.values()].sort((x, y) => (!x.subgroup) - (!y.subgroup) || x.subgroup.localeCompare(y.subgroup))
-  }, [stats.active])
+  // The Working List's subgroup filter is an exclusion list, so "only this subgroup" means hiding every other one.
+  function showSubgroupInWorkingList(row) {
+    const others = subgroupRows.map((r) => r.subgroup).filter((sg) => sg && sg !== row.subgroup)
+    setFilters((prev) => ({ ...prev, search: '', working_list_view: 'all', subgroup: others }))
+    onShowPeople?.()
+  }
 
   // Clear every documentation filter, then apply the one that was clicked so the People count matches the tile.
   const DOC_FILTER_FIELDS = ['readiness', 'documentation', 'time_risk', 'passport_readiness', 'passport_region', 'visa_requirement', 'visa_process_status', 'assistance', 'attention_state', 'flight_status']
@@ -123,6 +120,27 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
     onShowPeople?.()
   }
 
+  function showReadinessInWorkingList(key) {
+    setFilters((prev) => ({ ...prev, search: '', working_list_view: 'all', subgroup: [], readiness: [key] }))
+    onShowPeople?.()
+  }
+
+  const subgroupRows = useMemo(() => {
+    const groups = new Map()
+    for (const p of stats.active) {
+      const key = p.subgroup || ''
+      if (!groups.has(key)) groups.set(key, { subgroup: key, total: 0, registered: 0, confirmed: 0, workingOn: 0, members: [] })
+      const g = groups.get(key)
+      g.total += 1
+      g.members.push({ id: p.id, name: p.full_name, registered: p.registration_link_status === 'registered' })
+      if (p.registration_link_status === 'registered') g.registered += 1
+      const eff = effectiveParticipationStatus(p)
+      if (eff === 'confirmed') g.confirmed += 1
+      else if (eff === 'likely' || eff === 'uncertain') g.workingOn += 1
+    }
+    return [...groups.values()].sort((x, y) => (!x.subgroup) - (!y.subgroup) || x.subgroup.localeCompare(y.subgroup))
+  }, [stats.active])
+
   if (isLoading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="icplc-stat-grid">
@@ -133,7 +151,6 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
     </div>
   )
 
-  const attentionCards = ATTENTION_CATEGORIES.filter((c) => stats.attention.get(c.key))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -157,7 +174,18 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
           pct={stats.confirmedPct}
           barColor="var(--icplc-green)"
           onClick={() => {
-            setFilters((prev) => ({ ...prev, working_list_view: 'confirmed' }))
+            setFilters((prev) => ({ ...prev, participation_status: ['confirmed'] }))
+            onShowPeople?.()
+          }}
+        />
+        <StatCard
+          label="Working On"
+          value={stats.workingOn}
+          sub={`Likely ${stats.workingOnLikely} · Uncertain ${stats.workingOnUncertain}`}
+          pct={stats.workingOnPct}
+          barColor="var(--icplc-blue)"
+          onClick={() => {
+            setFilters((prev) => ({ ...prev, participation_status: ['likely', 'uncertain'] }))
             onShowPeople?.()
           }}
         />
@@ -176,7 +204,7 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
 
       {/* Readiness Distribution */}
       <div className="icplc-overview-section">
-        <ReadinessBar counts={stats.readinessCounts} total={stats.total} />
+        <ReadinessBar counts={stats.readinessCounts} total={stats.total} onSelect={showReadinessInWorkingList} />
       </div>
 
       {/* Ambiguous registrations */}
@@ -196,32 +224,6 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
         </div>
       )}
 
-      {/* Needs Attention */}
-      <div className="icplc-overview-section">
-        <h3 className="icplc-overview-section-title">Needs Attention</h3>
-        {attentionCards.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--icplc-text-soft)' }}>Nothing needs attention right now.</div>
-        ) : (
-          <div className="icplc-attn-grid">
-            {attentionCards.map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                onClick={() => {
-                  setFilters((prev) => ({ ...prev, working_list_view: 'needs_attention' }))
-                  onShowPeople?.()
-                }}
-                className="icplc-btn"
-                style={{ justifyContent: 'space-between', textAlign: 'left', padding: '10px 14px', minHeight: 44 }}
-              >
-                <span style={{ fontSize: 13 }}>{c.label}</span>
-                <strong style={{ fontSize: 14, color: 'var(--icplc-orange)' }}>{stats.attention.get(c.key)}</strong>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Documentation */}
       <DocumentationOverview
         participants={stats.active}
@@ -238,21 +240,21 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
               <tr>
                 <th>Subgroup</th>
                 <th>Registrations</th>
-                <th>Confirmed / Confirming</th>
+                <th>Confirmed / Working On</th>
               </tr>
             </thead>
             <tbody>
               {subgroupRows.map((row) => (
                 <tr key={row.subgroup || 'unassigned'}>
                   <td style={{ fontWeight: 600 }}>
-                    <SubgroupMembers row={row} onOpen={openProfile} />
+                    <SubgroupMembers row={row} onOpen={openProfile} onFilter={showSubgroupInWorkingList} />
                   </td>
                   <td className="icplc-mono">
                     {row.registered} <span style={{ color: 'var(--icplc-text-soft)' }}>/ {row.total}</span>
                   </td>
                   <td className="icplc-mono">
                     <span style={{ color: 'var(--icplc-green)' }}>{row.confirmed}</span>
-                    <span style={{ color: 'var(--icplc-text-soft)' }}> / {row.confirmed + row.confirming}</span>
+                    <span style={{ color: 'var(--icplc-text-soft)' }}> / {row.confirmed + row.workingOn}</span>
                   </td>
                 </tr>
               ))}
@@ -282,7 +284,7 @@ const READINESS_SEGMENTS = [
   { key: 'unknown',         label: 'Unknown',         color: '#9CA3AF' },
 ]
 
-function ReadinessBar({ counts, total }) {
+function ReadinessBar({ counts, total, onSelect }) {
   if (!total) return null
   return (
     <div>
@@ -293,10 +295,20 @@ function ReadinessBar({ counts, total }) {
         <span style={{ fontSize: 12, color: 'var(--icplc-text-muted)' }}>{total} participants</span>
       </div>
       <div className="icplc-readiness-bar">
-        {READINESS_SEGMENTS.map(({ key, color }) => {
+        {READINESS_SEGMENTS.map(({ key, label, color }) => {
           const pct = total ? (counts[key] || 0) / total * 100 : 0
           if (!pct) return null
-          return <div key={key} className="icplc-readiness-segment" style={{ width: `${pct}%`, background: color }} />
+          return (
+            <button
+              key={key}
+              type="button"
+              className="icplc-readiness-segment"
+              title={`Show ${label} in People`}
+              aria-label={`Show ${label} in People`}
+              onClick={() => onSelect(key)}
+              style={{ width: `${pct}%`, background: color, border: 'none', padding: 0, cursor: 'pointer' }}
+            />
+          )
         })}
       </div>
       <div className="icplc-readiness-legend">
@@ -304,11 +316,18 @@ function ReadinessBar({ counts, total }) {
           const n = counts[key] || 0
           if (!n) return null
           return (
-            <div key={key} className="icplc-legend-item">
+            <button
+              key={key}
+              type="button"
+              className="icplc-legend-item"
+              title={`Show ${label} in People`}
+              onClick={() => onSelect(key)}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+            >
               <span className="icplc-legend-dot" style={{ background: color }} />
               <span>{label}</span>
               <strong style={{ color: 'var(--icplc-text)' }}>{n}</strong>
-            </div>
+            </button>
           )
         })}
       </div>

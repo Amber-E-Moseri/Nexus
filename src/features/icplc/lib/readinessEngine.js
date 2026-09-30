@@ -6,7 +6,7 @@
 import { DOCUMENT_READINESS } from '../../registration/icplcDocReadiness.js'
 import { effectiveCanadaDocReadiness } from './cmpDocumentation.js'
 import { isCommitted, isRegistered, effectiveVisaRequirement, canadianDocAttention } from './documentationRules.js'
-import { flightNotRequired } from './flightRequirement.js'
+import { flightNotRequired, hasMeaningfulFlight } from './flightRequirement.js'
 
 /**
  * Derives whether a participant has itinerary data.
@@ -26,6 +26,50 @@ export function deriveItineraryStatus(p) {
 export function isConfirmedOrReady(p) {
   if (p.participation_status === 'not_attending') return false
   return p.participation_status === 'confirmed' || deriveReadiness(p).readiness === 'ready'
+}
+
+/**
+ * Effective participation status: derives Likely from Tracking + meaningful attendance evidence.
+ * This is the operational participation status used for Board grouping, Overview counts, and filters.
+ * The persisted participation_status row remains unchanged; this is purely derived.
+ *
+ * Precedence (highest to lowest):
+ * 1. Explicit Not Attending / Absent
+ * 2. Explicit Confirmed
+ * 3. Explicit Uncertain (outranks attendance evidence)
+ * 4. Explicit/persisted Likely
+ * 5. Attendance evidence promoting Tracking -> Likely (flight or FNR)
+ * 6. Tracking (default)
+ *
+ * Attendance evidence is: meaningful flight OR Flight Not Required (FNR).
+ * Nothing derived may produce Confirmed.
+ *
+ * @param {object} p - icplc_participants row
+ * @returns {string} one of: tracking, likely, confirmed, uncertain, not_attending
+ */
+export function effectiveParticipationStatus(p) {
+  const persisted = p?.participation_status
+
+  // Explicit choices outrank everything: Absent, Confirmed, Uncertain never demoted
+  if (persisted === 'not_attending' || persisted === 'confirmed' || persisted === 'uncertain') {
+    return persisted
+  }
+
+  // Likely is already the effective state
+  if (persisted === 'likely') {
+    return 'likely'
+  }
+
+  // Tracking + meaningful attendance evidence => derive as Likely
+  // Attendance evidence: real flight number OR Flight Not Required
+  if (persisted === 'tracking') {
+    if (hasMeaningfulFlight(p) || flightNotRequired(p)) {
+      return 'likely'
+    }
+  }
+
+  // Default: return persisted status (typically 'tracking')
+  return persisted || 'tracking'
 }
 
 /**
