@@ -65,6 +65,16 @@ export default function ICPLCPortal({
               <div className="icplc-subtitle">International Campus Pastors and Leaders Conference</div>
             </div>
           </div>
+          <div className="icplc-header-right">
+            <a
+              className="icplc-header-link"
+              href="/icplc26"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              ICPLC 26 website ↗
+            </a>
+          </div>
         </header>
 
         <div className="icplc-tabbar" role="tablist" aria-label="ICPLC sections">

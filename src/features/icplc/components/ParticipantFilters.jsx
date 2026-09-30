@@ -34,7 +34,7 @@ const sectionTitle = {
   textTransform: 'uppercase', letterSpacing: '0.06em',
 }
 
-export default function ParticipantFilters({ resultCount, attentionCounts }) {
+export default function ParticipantFilters({ resultCount, attentionCounts, searchSlot }) {
   const { config, filters, setFilters } = useICPLC()
   const [open, setOpen] = useState(false)
   const [tagQuery, setTagQuery] = useState('')
@@ -157,7 +157,10 @@ export default function ParticipantFilters({ resultCount, attentionCounts }) {
           })}
         </div>
 
-        <div style={{ position: 'relative' }}>
+        {/* Search (optional) and Filters share one row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 100%', minWidth: 0, order: -1 }}>
+        {searchSlot && <div style={{ flex: '0 1 320px', minWidth: 0, width: '100%' }}>{searchSlot}</div>}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
           <button
             type="button"
             className="icplc-btn"
@@ -311,6 +314,7 @@ export default function ParticipantFilters({ resultCount, attentionCounts }) {
             Reset
           </button>
         )}
+        </div>
       </div>
 
       {/* Active filter summary — each chip removes just that filter */}

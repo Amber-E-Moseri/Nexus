@@ -221,17 +221,20 @@ export default function BoardPage({ canWrite }) {
 
   return (
     <div>
-      <div style={{ marginBottom: 12 }}>
-        <input
-          type="search"
-          aria-label="Search the board by name or email"
-          className="icplc-input icplc-search"
-          placeholder="Search by name or email…"
-          value={filters.search || ''}
-          onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-        />
-      </div>
-      <ParticipantFilters resultCount={participants.length} attentionCounts={attentionCounts} />
+      <ParticipantFilters
+        resultCount={participants.length}
+        attentionCounts={attentionCounts}
+        searchSlot={(
+          <input
+            type="search"
+            aria-label="Search the board by name or email"
+            className="icplc-input icplc-search"
+            placeholder="Search by name or email…"
+            value={filters.search || ''}
+            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+          />
+        )}
+      />
 
       {/* Group by toolbar */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>

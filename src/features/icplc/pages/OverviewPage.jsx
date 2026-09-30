@@ -3,7 +3,7 @@ import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
 import { deriveReadiness, isConfirmedOrReady } from '../lib/readinessEngine.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
-import { ATTENTION_CATEGORIES, attentionCategoryKeys } from '../lib/documentationRules.js'
+import { attentionCategoryKeys } from '../lib/documentationRules.js'
 import { isActiveParticipant } from '../lib/reconciliation.js'
 
 /** Subgroup label; hover / focus / tap shows who is in it (click a name to open their profile). */
@@ -117,7 +117,6 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
     </div>
   )
 
-  const attentionCards = ATTENTION_CATEGORIES.filter((c) => stats.attention.get(c.key))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -179,32 +178,6 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
           <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)' }}>Review in Imports</div>
         </div>
       )}
-
-      {/* Needs Attention */}
-      <div className="icplc-overview-section">
-        <h3 className="icplc-overview-section-title">Needs Attention</h3>
-        {attentionCards.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--icplc-text-soft)' }}>Nothing needs attention right now.</div>
-        ) : (
-          <div className="icplc-attn-grid">
-            {attentionCards.map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                onClick={() => {
-                  setFilters((prev) => ({ ...prev, working_list_view: 'needs_attention' }))
-                  onShowPeople?.()
-                }}
-                className="icplc-btn"
-                style={{ justifyContent: 'space-between', textAlign: 'left', padding: '10px 14px', minHeight: 44 }}
-              >
-                <span style={{ fontSize: 13 }}>{c.label}</span>
-                <strong style={{ fontSize: 14, color: 'var(--icplc-orange)' }}>{stats.attention.get(c.key)}</strong>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
 
       {/* By Subgroup */}
       <div className="icplc-overview-section">

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { UserPlus } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useCreateParticipant } from '../hooks/useICPLCParticipants.js'
@@ -9,6 +10,7 @@ import WorkingListTable from '../components/WorkingListTable.jsx'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import StatusKey from '../components/StatusKey.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
+import ICPLCEmailComposer, { EmailParticipantsButton, canSendICPLCEmail } from '../components/ICPLCEmailComposer.jsx'
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import { applyClientFilters, countAttentionCategories } from '../lib/participantFilters.js'
 import { filterParticipantsByWorkingListView } from '../lib/reconciliation.js'
@@ -17,6 +19,9 @@ export default function PeoplePage({ canWrite }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
+  const [showEmail, setShowEmail] = useState(false)
+  const { profile } = useAuth()
+  const canEmail = canSendICPLCEmail(profile)
   const updateProfile = useUpdateProfile()
 
   // Same hook (and cache keys) as the Overview, so opening the Working List after the Overview
@@ -56,20 +61,18 @@ export default function PeoplePage({ canWrite }) {
         <div>
           <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--icplc-text, var(--text-primary))' }}>Registrations</div>
         </div>
-        {canWrite && (
-          <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary" style={{ flexShrink: 0 }}>
-            <UserPlus size={14} aria-hidden /> Add Participant
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {canEmail && <EmailParticipantsButton onClick={() => setShowEmail(true)} />}
+          {canWrite && (
+            <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary" style={{ flexShrink: 0 }}>
+              <UserPlus size={14} aria-hidden /> Add Participant
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Search bar */}
-      <div style={{ marginBottom: 12 }}>
-        <SearchBar />
-      </div>
-
-      {/* Filters */}
-      <ParticipantFilters resultCount={displayedParticipants.length} attentionCounts={attentionCounts} />
+      {/* Filters (search sits on the same row as the Filters button) */}
+      <ParticipantFilters resultCount={displayedParticipants.length} attentionCounts={attentionCounts} searchSlot={<SearchBar />} />
 
       <StatusKey />
 
@@ -105,6 +108,14 @@ export default function PeoplePage({ canWrite }) {
           initialTab={activeProfileTab}
           onClose={closeProfile}
           canWrite={canWrite}
+        />
+      )}
+
+      {showEmail && canEmail && (
+        <ICPLCEmailComposer
+          eventId={eventId}
+          participants={displayedParticipants}
+          onClose={() => setShowEmail(false)}
         />
       )}
 
