@@ -227,7 +227,6 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
         participants={stats.active}
         targets={targets}
         onOpenPeople={showDocumentationInWorkingList}
-        onOpenProfile={openProfile}
       />
 
       {/* By Subgroup */}

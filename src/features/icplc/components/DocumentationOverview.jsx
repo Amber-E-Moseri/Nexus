@@ -1,148 +1,123 @@
 import React, { useMemo } from 'react'
-import { deriveDocumentationActions, followUpFirst, RISK_LABELS } from '../lib/documentationRisk.js'
+import { deriveDocumentationActions } from '../lib/documentationRisk.js'
 import { effectiveAssistanceRequested } from '../lib/cmpDocumentation.js'
-import { attentionCategoryKeys, effectiveVisaRequirement } from '../lib/documentationRules.js'
-import { operationalSummary } from '../lib/attentionModel.js'
+import { attentionCategoryKeys, documentationActionRequired, effectiveVisaRequirement } from '../lib/documentationRules.js'
 
-// Compact, operational documentation counts for the Overview. Every count opens People with that filter.
-// Passport and Canadian-document counts are readiness indicators only; the visa rows are the active workflow.
+// A compact documentation health summary. It answers: how many people need documentation attention, why, is
+// anything time-critical, and where to work it. The detail lives in the Working List, profiles and Documentation tab.
+//
+// Every number reuses the canonical models: the headline is documentationActionRequired() (documentation categories
+// only, so registration, travel and informational items are never counted); the reasons are attentionCategoryKeys();
+// timing is deriveDocumentationActions(). Nothing here is a second calculation.
 
-const VISA_STEPS = [
-  ['not_started', 'Not started'],
-  ['in_progress', 'In progress'],
-  ['submitted', 'Submitted'],
-  ['processing', 'Processing'],
-  ['approved', 'Approved'],
-  ['issue', 'Issue'],
-]
+const VISA_ACTION_KEYS = ['visa_unknown', 'visa_not_started', 'visa_blocked']
 
-const PASSPORT_NOT_READY = ['renewal_in_progress', 'no_passport', 'renewal_needed']
+const chipStyle = {
+  display: 'inline-flex', alignItems: 'baseline', gap: 8, padding: '5px 12px', minHeight: 32, height: 'auto',
+}
 
-const tileStyle = (hot) => ({
-  justifyContent: 'space-between', textAlign: 'left', padding: '8px 12px', minHeight: 40, gap: 10,
-  ...(hot ? { borderColor: 'var(--icplc-orange)' } : {}),
-})
-
-function Tile({ label, count, hot, onClick }) {
+function Chip({ label, count, hot, onClick }) {
   return (
-    <button type="button" className="icplc-btn" onClick={onClick} disabled={count === 0} style={tileStyle(hot && count > 0)}>
+    <button type="button" className="icplc-btn" onClick={onClick} style={{ ...chipStyle, ...(hot ? { borderColor: 'var(--icplc-orange)' } : {}) }}>
       <span style={{ fontSize: 13 }}>{label}</span>
-      <strong style={{ fontSize: 14, color: count > 0 && hot ? 'var(--icplc-orange)' : 'var(--icplc-text)' }}>{count}</strong>
+      <strong style={{ fontSize: 14, color: hot ? 'var(--icplc-orange)' : 'var(--icplc-text)' }}>{count}</strong>
     </button>
   )
 }
 
-function Group({ title, note, children }) {
-  return (
-    <div style={{ display: 'grid', gap: 6, alignContent: 'start' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--icplc-text-soft)' }}>{title}</div>
-      {note && <div style={{ fontSize: 11, color: 'var(--icplc-text-muted)' }}>{note}</div>}
-      <div style={{ display: 'grid', gap: 6 }}>{children}</div>
-    </div>
-  )
-}
-
-export default function DocumentationOverview({ participants, targets, onOpenPeople, onOpenProfile }) {
+export default function DocumentationOverview({ participants, targets, onOpenPeople }) {
   const ctx = useMemo(() => ({ targets }), [targets])
 
   const data = useMemo(() => {
-    const visa = Object.fromEntries(VISA_STEPS.map(([k]) => [k, 0]))
-    let passportNotReady = 0
-    let canadianReview = 0
-    let assistance = 0
-    let dueSoon = 0
-    let overdue = 0
-    const att = { registrationMissing: 0, confirmedRegistrationMissing: 0, confirmedNeedsAttention: 0, flightMissing: 0, flightNotRequired: 0, docsIncomplete: 0, docsReviewed: 0 }
-    for (const p of participants) {
-      const s = operationalSummary(p)
-      if (s.urgent) att.registrationMissing += 1
-      if (s.confirmed && s.urgent) att.confirmedRegistrationMissing += 1
-      if (s.confirmed && s.needsAttention) att.confirmedNeedsAttention += 1
-      if (s.flight === 'missing') att.flightMissing += 1
-      if (s.flight === 'not_required') att.flightNotRequired += 1
-      if (s.docsIncomplete) att.docsIncomplete += 1
-      if (s.docsReviewed) att.docsReviewed += 1
-      if (PASSPORT_NOT_READY.includes(p.passport_readiness)) passportNotReady += 1
-      if (attentionCategoryKeys(p).includes('canadian_docs_review')) canadianReview += 1
-      if (effectiveAssistanceRequested(p) === true) assistance += 1
-      if (effectiveVisaRequirement(p) === 'required') {
-        const step = p.visa_process_status || 'not_started'
-        if (step in visa) visa[step] += 1
-      }
-      const { worst } = deriveDocumentationActions(p, ctx)
-      if (worst === 'due_soon') dueSoon += 1
-      if (worst === 'overdue') overdue += 1
+    const d = {
+      attention: 0, visaAction: 0, passport: 0, canadian: 0, assistance: 0,
+      dueSoon: 0, overdue: 0, visaCleared: 0, passportReady: 0, visaChasing: 0,
     }
-    return { visa, passportNotReady, canadianReview, assistance, dueSoon, overdue, att, first: followUpFirst(participants, ctx, 5) }
+    for (const p of participants) {
+      if (documentationActionRequired(p)) d.attention += 1
+      const keys = attentionCategoryKeys(p)
+      if (keys.some((k) => VISA_ACTION_KEYS.includes(k))) d.visaAction += 1
+      if (keys.includes('passport_incomplete')) d.passport += 1
+      if (keys.includes('canadian_docs_review')) d.canadian += 1
+      if (effectiveAssistanceRequested(p) === true) d.assistance += 1
+      const { worst } = deriveDocumentationActions(p, ctx)
+      if (worst === 'due_soon') d.dueSoon += 1
+      if (worst === 'overdue') d.overdue += 1
+      if (p.passport_readiness === 'ready') d.passportReady += 1
+      if (effectiveVisaRequirement(p) === 'required') {
+        if (p.visa_process_status === 'approved') d.visaCleared += 1
+        if (['not_started', 'in_progress'].includes(p.visa_process_status || 'not_started')) d.visaChasing += 1
+      }
+    }
+    return d
   }, [participants, ctx])
 
-  const noTargets = !targets.visaTarget && !targets.passportTarget
+  const healthy = data.attention === 0
+  const openAll = () => onOpenPeople(healthy ? {} : { documentation: ['action_required'] })
+  // Only worth mentioning when timing would matter: somebody is still chasing a visa and no target is set.
+  const showTargetHint = !targets?.visaTarget && !targets?.passportTarget && data.visaChasing > 0
+
+  const reasons = [
+    ['Visa action', data.visaAction, { documentation: VISA_ACTION_KEYS }],
+    ['Passport attention', data.passport, { documentation: ['passport_incomplete'] }],
+    ['Canadian documents require review', data.canadian, { documentation: ['canadian_docs_review'] }],
+    ['Assistance requested', data.assistance, { assistance: ['requested'] }],
+  ].filter(([, count]) => count > 0)
+
+  const timing = [
+    ['Due soon', data.dueSoon, { time_risk: ['due_soon'] }],
+    ['Overdue', data.overdue, { time_risk: ['overdue'] }],
+  ].filter(([, count]) => count > 0)
+
+  const positives = [['Visa cleared', data.visaCleared], ['Passport ready', data.passportReady]].filter(([, n]) => n > 0)
 
   return (
-    <div className="icplc-overview-section">
+    <div className="icplc-overview-section" data-testid="documentation-overview">
       <h3 className="icplc-overview-section-title">Documentation</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-        <Group title="Attention" note="Confirmed people can also need attention">
-          <button
-            type="button"
-            className="icplc-btn"
-            disabled={data.att.registrationMissing === 0}
-            onClick={() => onOpenPeople({ attention_state: ['registration_missing'] })}
-            style={{ ...tileStyle(false), background: data.att.registrationMissing ? '#FBE4E2' : undefined, borderColor: data.att.registrationMissing ? '#DC2626' : undefined, color: data.att.registrationMissing ? '#B42318' : undefined }}
-          >
-            <span style={{ fontSize: 13, fontWeight: 700 }}>URGENT · Registration missing</span>
-            <strong style={{ fontSize: 14 }}>{data.att.registrationMissing}</strong>
-          </button>
-          <Tile label="Confirmed + registration missing" count={data.att.confirmedRegistrationMissing} hot onClick={() => onOpenPeople({ attention_state: ['confirmed_registration_missing'] })} />
-          <Tile label="Confirmed + needs attention" count={data.att.confirmedNeedsAttention} hot onClick={() => onOpenPeople({ attention_state: ['confirmed_needs_attention'] })} />
-          <Tile label="Flight missing" count={data.att.flightMissing} hot onClick={() => onOpenPeople({ flight_status: ['missing'] })} />
-          <Tile label="Flight not required" count={data.att.flightNotRequired} onClick={() => onOpenPeople({ flight_status: ['not_required'] })} />
-          <Tile label="Documentation information incomplete" count={data.att.docsIncomplete} hot onClick={() => onOpenPeople({ attention_state: ['docs_incomplete'] })} />
-          <Tile label="Documentation review acknowledged" count={data.att.docsReviewed} onClick={() => onOpenPeople({ attention_state: ['docs_review_acknowledged'] })} />
-        </Group>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 12, rowGap: 2 }}>
+          {healthy ? (
+            <span style={{ fontSize: 15, fontWeight: 600 }}>No documentation issues requiring attention</span>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={openAll}
+                aria-label={`${data.attention} need attention`}
+                style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+              >
+                <span style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1, color: 'var(--icplc-orange)' }}>{data.attention}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, marginLeft: 8 }}>need attention</span>
+              </button>
+              <span style={{ fontSize: 12, color: 'var(--icplc-text-soft)' }}>Passport, visa, or Canadian-document follow-up</span>
+            </>
+          )}
+        </div>
 
-        <Group title="Nigerian visa" note="People who need a visa">
-          {VISA_STEPS.map(([key, label]) => (
-            <Tile
-              key={key}
-              label={label}
-              count={data.visa[key]}
-              hot={key === 'not_started' || key === 'issue'}
-              onClick={() => onOpenPeople({ visa_requirement: ['required'], visa_process_status: [key] })}
-            />
-          ))}
-          <Tile label="Assistance requested" count={data.assistance} hot onClick={() => onOpenPeople({ assistance: ['requested'] })} />
-        </Group>
+        {(reasons.length > 0 || timing.length > 0) && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {reasons.map(([label, count, filter]) => (
+              <Chip key={label} label={label} count={count} onClick={() => onOpenPeople(filter)} />
+            ))}
+            {timing.map(([label, count, filter]) => (
+              <Chip key={label} label={label} count={count} hot onClick={() => onOpenPeople(filter)} />
+            ))}
+          </div>
+        )}
 
-        <Group title="Follow-up timing" note={noTargets ? 'Set the Visa Target Date in Settings' : 'From the visa and passport targets'}>
-          <Tile label="Due soon" count={data.dueSoon} hot onClick={() => onOpenPeople({ time_risk: ['due_soon'] })} />
-          <Tile label="Overdue" count={data.overdue} hot onClick={() => onOpenPeople({ time_risk: ['overdue'] })} />
-        </Group>
+        {positives.length > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)', display: 'flex', flexWrap: 'wrap', gap: '2px 16px' }}>
+            {positives.map(([label, n]) => <span key={label}>{label} <strong style={{ color: 'var(--icplc-text)' }}>{n}</strong></span>)}
+          </div>
+        )}
 
-        <Group title="Readiness risks" note="Indicators only">
-          <Tile label="Passport not ready" count={data.passportNotReady} hot onClick={() => onOpenPeople({ passport_readiness: PASSPORT_NOT_READY })} />
-          <Tile label="Canadian documents require review" count={data.canadianReview} hot onClick={() => onOpenPeople({ documentation: ['canadian_docs_review'] })} />
-        </Group>
+        {showTargetHint && (
+          <div style={{ fontSize: 11, color: 'var(--icplc-text-muted)' }}>Visa target date not set (Settings) — timing is not tracked.</div>
+        )}
 
-        <Group title="Follow up first">
-          {data.first.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--icplc-text-soft)' }}>Nobody needs documentation follow-up right now.</div>
-          ) : data.first.map((r) => (
-            <button
-              key={r.p.id}
-              type="button"
-              className="icplc-btn"
-              onClick={() => onOpenProfile(r.p.id)}
-              style={{ display: 'grid', gap: 2, textAlign: 'left', padding: '8px 12px', height: 'auto' }}
-            >
-              <span style={{ fontSize: 13, fontWeight: 600 }}>
-                {r.p.full_name}
-                {r.worst && r.worst !== 'on_track' && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--icplc-orange)' }}>{RISK_LABELS[r.worst]}</span>}
-              </span>
-              <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--icplc-text-soft)' }}>{(r.items.find((i) => i.level === r.worst) || r.items[0])?.text}</span>
-            </button>
-          ))}
-        </Group>
+        <div>
+          <button type="button" className="icplc-btn" onClick={openAll}>View documentation →</button>
+        </div>
       </div>
     </div>
   )
