@@ -12,6 +12,7 @@ import { Lock, Printer, RefreshCw, Unlock } from 'lucide-react'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import { rowOpenProps } from '../components/ParticipantTable.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
+import FlightSyncBlock from '../components/FlightSyncBlock.jsx'
 
 export default function TravelPage({ canWrite }) {
   const { config, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
@@ -92,6 +93,12 @@ export default function TravelPage({ canWrite }) {
 
   return (
     <div>
+      {canWrite && (
+        <details style={{ marginBottom: 14 }}>
+          <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Sync flight data from the CMP Flight Form</summary>
+          <div style={{ marginTop: 10 }}><FlightSyncBlock /></div>
+        </details>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
         <div role="status" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
           Flight manifest — {participants.length} participants
