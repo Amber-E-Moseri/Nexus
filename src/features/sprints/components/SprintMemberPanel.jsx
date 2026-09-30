@@ -238,7 +238,7 @@ export default function SprintMemberPanel({
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16 }}>
       {/* Access Requests Section */}
       {canEdit && pendingAccessRequests.length > 0 && (
         <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
@@ -405,15 +405,15 @@ export default function SprintMemberPanel({
       )}
 
       {/* Existing Members Section */}
-      <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
-        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, minWidth: 0, maxWidth: '100%', boxSizing: 'border-box', boxShadow: TOKENS.cardShadow }}>
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 600, color: TOKENS.textPrimary, margin: 0 }}>Sprint Members</div>
             <div style={{ fontSize: 14, color: TOKENS.textSecondary, margin: '6px 0 0' }}>
               Cross-functional members assigned to this sprint.
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             {isPastor && isMember && !isArchived && (
               <button
                 onClick={handleAddGroup}
@@ -470,7 +470,7 @@ export default function SprintMemberPanel({
               <div
                 key={member.user?.id}
                 style={{
-                  display: 'flex',
+                  display: 'flex', boxSizing: 'border-box', maxWidth: '100%',
                   flexWrap: 'wrap',
                   alignItems: 'center',
                   gap: 12,
@@ -492,7 +492,7 @@ export default function SprintMemberPanel({
                   e.currentTarget.style.transform = 'translateY(0)'
                 }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: '1 1 180px', minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {member.user?.name ?? member.user?.email ?? '—'}
@@ -538,7 +538,7 @@ export default function SprintMemberPanel({
                 </div>
 
                 {canEdit && !isArchived ? (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
                     {member.sprint_teams?.length
                       ? member.sprint_teams.map((team) => {
                           const teamRole = member.team_member_roles?.[team.id] || 'contributor'
