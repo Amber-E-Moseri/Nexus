@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
+import { trackEvent } from '@/lib/analytics'
 
 // Public ICPLC 2026 Canada help centre (no auth to view). Every string is
 // editable in place by super_admin / regional_secretary; overrides live in
@@ -70,7 +71,7 @@ function EditableText({ k, d, multiline = false }) {
 const btn = (bg) => ({ padding: '4px 10px', background: bg, color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 700 })
 
 // Text + URL link; in edit mode the label is editable and a URL button opens an inline field.
-function EditableLink({ k, label, url = '#', style }) {
+function EditableLink({ k, label, url = '#', style, event }) {
   const { fields, editMode, save } = useContext(EditCtx)
   const href = fields[`${k}.url`] ?? url
   const [editingUrl, setEditingUrl] = useState(false)
@@ -85,7 +86,7 @@ function EditableLink({ k, label, url = '#', style }) {
   const external = /^https?:/.test(href)
   return (
     <>
-      <a href={editMode ? undefined : href} {...(external && !editMode ? { target: '_blank', rel: 'noopener noreferrer' } : {})} style={style}>
+      <a href={editMode ? undefined : href} onClick={event && !editMode ? () => trackEvent(event) : undefined} {...(external && !editMode ? { target: '_blank', rel: 'noopener noreferrer' } : {})} style={style}>
         <EditableText k={`${k}.label`} d={label} />
       </a>
       {editMode && !editingUrl && <button type="button" onClick={() => { setTmp(shown(href)); setEditingUrl(true) }} title={href} style={{ ...btn(BLUE), marginLeft: 8 }}>URL</button>}
@@ -358,7 +359,7 @@ export default function ICPLC26Page() {
                 <a href="#faq" style={navLink}>FAQ</a>
                 <a href="#contact" style={navLink}>Help</a>
               </div>
-              <EditableLink k="nav.register" label="Register Now" url="https://icplcwithpastorchris.org/register" style={{ background: '#fff', color: '#0D0D0C', borderRadius: 999, padding: '12px 22px', fontSize: 14, fontWeight: 700, textDecoration: 'none' }} />
+              <EditableLink event="icplc26_registration_click" k="nav.register" label="Register Now" url="https://icplcwithpastorchris.org/register" style={{ background: '#fff', color: '#0D0D0C', borderRadius: 999, padding: '12px 22px', fontSize: 14, fontWeight: 700, textDecoration: 'none' }} />
             </div>
           </nav>
         </header>
@@ -389,7 +390,7 @@ export default function ICPLC26Page() {
                   <div style={{ width: 32, height: 32, borderRadius: '50%', background: s.c, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, fontFamily: 'Syne, sans-serif' }}>0{i + 1}</div>
                   <h3 style={{ ...h3, margin: '22px 0 9px' }}><T k={`check.${i}.t`} d={s.t} /></h3>
                   <p style={{ fontSize: 14, color: '#5D5851', lineHeight: 1.6, margin: 0 }}><T k={`check.${i}.p`} d={s.p} multiline /></p>
-                  <div style={{ marginTop: 18 }}><EditableLink k={`check.${i}.link`} label={s.l} url={s.h} style={{ fontSize: 13, fontWeight: 700, color: s.c, textDecoration: 'none' }} /></div>
+                  <div style={{ marginTop: 18 }}><EditableLink event={i === 0 ? 'icplc26_registration_click' : undefined} k={`check.${i}.link`} label={s.l} url={s.h} style={{ fontSize: 13, fontWeight: 700, color: s.c, textDecoration: 'none' }} /></div>
                 </div>
               ))}
             </div>

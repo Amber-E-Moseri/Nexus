@@ -28,6 +28,7 @@
     "@tiptap/pm": "^3.29.2",
     "@tiptap/react": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
+    "@vercel/analytics": "^2.0.1",
     "date-fns": "^4.4.0",
     "esbuild": "^0.28.1",
     "framer-motion": "^12.42.2",
