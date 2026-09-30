@@ -130,7 +130,7 @@ const CHECKLIST = [
   { c: BLUE, t: 'Register for ICPLC', p: 'Complete the official conference registration and keep your confirmation email.', l: 'Register now →', h: 'https://icplcwithpastorchris.org/register' },
   { c: BLUE, t: 'Share document status', p: 'Tell the Canada team what passport and Canadian immigration documents you hold.', l: 'Canada form →', h: 'https://leaders.lwcanada.org/f/z95t25p3eqjb' },
   { c: BLUE, t: 'Check travel readiness', p: 'Review passport, Nigeria-entry and Canada-return requirements before booking.', l: 'Status tracker →', h: '#check' },
-  { c: ORANGE, t: 'Submit your itinerary', p: 'Once booked, add your flight details for travel coordination.', l: 'Add itinerary →', h: '#' },
+  { c: ORANGE, t: 'Submit your itinerary', p: 'Once booked, add your flight details for travel coordination.', l: 'Add itinerary →', h: 'https://leaders.lwcanada.org/f/pzyx9bd9nap4' },
 ]
 
 const DOCS = [
