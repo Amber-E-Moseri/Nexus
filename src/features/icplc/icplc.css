@@ -565,3 +565,79 @@
   .icplc-content .icplc-chip { min-height: 30px; padding: 4px 10px; font-size: 12px; }
   .icplc-content .icplc-btn { min-height: 32px; padding: 5px 10px; font-size: 12px; }
 }
+
+/* ── Nav row: tablist + Manage dropdown ─────────────────────────────────── */
+.icplc-nav-row {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--icplc-border);
+  background: var(--icplc-surface);
+  padding-right: 16px;
+  flex-shrink: 0;
+}
+/* Inside icplc-nav-row, the tabbar loses its own border (nav-row owns it) */
+.icplc-nav-row .icplc-tabbar {
+  border-bottom: none;
+  padding-right: 0;
+}
+.icplc-manage-caret { font-size: 10px; margin-left: 2px; }
+.icplc-tab-manage { border-bottom: 2px solid transparent; align-self: stretch; }
+.icplc-tab-manage--active {
+  color: var(--icplc-purple, var(--accent));
+  border-bottom-color: var(--icplc-purple, var(--accent));
+  font-weight: 600;
+}
+@media (max-width: 768px) {
+  .icplc-nav-row { padding-right: 8px; }
+}
+
+/* ── People view toggle: [List | Board] ─────────────────────────────────── */
+.icplc-view-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--icplc-text-soft);
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  min-height: 30px;
+  transition: background 0.12s, color 0.12s;
+}
+.icplc-view-btn:hover { background: var(--icplc-purple-bg); color: var(--icplc-purple); }
+.icplc-view-btn--active {
+  background: var(--icplc-surface);
+  color: var(--icplc-text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.icplc-view-btn:focus-visible {
+  outline: 2px solid var(--icplc-purple, var(--accent));
+  outline-offset: 1px;
+}
+
+/* ── Drawer: 4-dimension grid ──────────────────────────────────────────── */
+.icplc-dim-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 12px;
+  row-gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+.icplc-dim-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--icplc-text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .icplc-dim-grid {
+    grid-template-columns: 1fr;
+    row-gap: 4px;
+  }
+  .icplc-dim-label { margin-top: 4px; }
+}

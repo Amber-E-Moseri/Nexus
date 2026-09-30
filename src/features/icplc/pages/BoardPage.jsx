@@ -16,9 +16,9 @@ import { isParticipationMove, applyParticipationMove } from '../lib/boardMove.js
 import { useMediaQuery } from '../../../hooks/useMediaQuery.js'
 
 const PARTICIPATION_COLUMNS = ['tracking', 'likely', 'confirmed', 'uncertain', 'not_attending']
-// 'unknown' is intentionally absent: participants whose readiness derives 'unknown' are routed
-// into 'action_required' in the board grouping so the column never appears as a phantom.
-const READINESS_COLUMNS = ['waiting_itinerary', 'in_progress', 'action_required', 'blocked', 'ready']
+// 'unknown' is a distinct readiness state (not enough info). It must NOT be merged into
+// 'action_required' — that violates the ICPLC invariant that UNKNOWN ≠ ACTION REQUIRED.
+const READINESS_COLUMNS = ['waiting_itinerary', 'in_progress', 'action_required', 'blocked', 'ready', 'unknown']
 
 const PARTICIPATION_DOTS = {
   tracking: '#6B7280', likely: '#2563EB', confirmed: '#2D8653',
@@ -27,6 +27,7 @@ const PARTICIPATION_DOTS = {
 const READINESS_DOTS = {
   waiting_itinerary: '#0EA5E9', in_progress: '#2563EB',
   action_required: '#C97820', blocked: '#C94830', ready: '#2D8653',
+  unknown: '#9CA3AF',
 }
 
 const PARTICIPATION_LABELS = {
@@ -35,7 +36,11 @@ const PARTICIPATION_LABELS = {
 }
 
 function humanizeReadiness(r) {
-  return { waiting_itinerary: 'Waiting on itinerary', in_progress: 'In Progress', action_required: 'Action Required', blocked: 'Blocked', ready: 'Ready' }[r] || r
+  return {
+    waiting_itinerary: 'Waiting on itinerary', in_progress: 'In Progress',
+    action_required: 'Action Required', blocked: 'Blocked', ready: 'Ready',
+    unknown: 'Insufficient Info',
+  }[r] || r
 }
 
 function BoardCard({ p, canDrag, onOpen, reasons }) {
@@ -198,6 +203,10 @@ export default function BoardPage({ canWrite }) {
     )
     return showAbsent ? base : base.filter(isActiveParticipant)
   }, [allParticipants, registrations, registrationMaps, config?.id, filters, targets, showAbsent])
+  const absentBoardCount = useMemo(
+    () => (allParticipants || []).filter((p) => p.participation_status === 'not_attending').length,
+    [allParticipants],
+  )
   const refetch = () => qc.invalidateQueries({ queryKey: ['icplc_participants', config?.id] })
   const updateProfile = useUpdateProfile()
   const [dragged, setDragged] = useState(null)
@@ -245,12 +254,7 @@ export default function BoardPage({ canWrite }) {
       if (groupBy === 'participation') {
         acc[col] = participants.filter((p) => effectiveParticipationStatus(p) === col)
       } else {
-        acc[col] = participants.filter((p) => {
-          const r = deriveReadiness(p).readiness
-          // 'unknown' participants are routed into 'action_required': insufficient info is actionable.
-          if (col === 'action_required') return r === 'action_required' || r === 'unknown'
-          return r === col
-        })
+        acc[col] = participants.filter((p) => deriveReadiness(p).readiness === col)
       }
       return acc
     }, {})
@@ -326,15 +330,16 @@ export default function BoardPage({ canWrite }) {
           </button>
         ))}
         <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} aria-hidden />
-        <button
-          type="button"
-          className="icplc-chip"
-          aria-pressed={showAbsent}
-          onClick={() => setShowAbsent((v) => !v)}
-          title={showAbsent ? 'Hide participants marked Not Attending' : 'Show participants marked Not Attending'}
-        >
-          {showAbsent ? 'Hiding absent' : 'Include absent'}
-        </button>
+        {absentBoardCount > 0 && (
+          <button
+            type="button"
+            className="icplc-chip"
+            aria-pressed={showAbsent}
+            onClick={() => setShowAbsent((v) => !v)}
+          >
+            {showAbsent ? 'Hiding not attending' : `Include not attending (${absentBoardCount})`}
+          </button>
+        )}
       </div>
 
       {groupBy === 'readiness' && (
