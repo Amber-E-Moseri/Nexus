@@ -30,6 +30,7 @@ export default function DocumentationPage({ canWrite }) {
   const [canadaFilter, setCanadaFilter] = useState('')
   const [passportFilter, setPassportFilter] = useState('')
   const [visaFilter, setVisaFilter] = useState('')
+  const [showAbsent, setShowAbsent] = useState(false)
 
   const subgroups = useMemo(() => {
     if (!participants) return []
@@ -39,6 +40,7 @@ export default function DocumentationPage({ canWrite }) {
   const filtered = useMemo(() => {
     if (!participants) return []
     return participants.filter((p) => {
+      if (!showAbsent && p.participation_status === 'not_attending') return false
       if (search && !p.full_name?.toLowerCase().includes(search.toLowerCase())) return false
       if (subgroupFilter && p.subgroup !== subgroupFilter) return false
       if (canadaFilter && p.canada_residency_status !== canadaFilter) return false
@@ -49,7 +51,7 @@ export default function DocumentationPage({ canWrite }) {
       }
       return true
     })
-  }, [participants, search, subgroupFilter, canadaFilter, passportFilter, visaFilter])
+  }, [participants, search, subgroupFilter, canadaFilter, passportFilter, visaFilter, showAbsent])
 
   if (isLoading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -145,6 +147,15 @@ export default function DocumentationPage({ canWrite }) {
             Clear
           </button>
         )}
+        <button
+          type="button"
+          className="icplc-chip"
+          aria-pressed={showAbsent}
+          onClick={() => setShowAbsent((v) => !v)}
+          title={showAbsent ? 'Hide participants marked Not Attending' : 'Show participants marked Not Attending'}
+        >
+          {showAbsent ? 'Hiding absent' : 'Include absent'}
+        </button>
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-secondary)' }}>
           {filtered.length} of {participants?.length ?? 0}
         </span>
