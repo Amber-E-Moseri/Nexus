@@ -23,10 +23,11 @@ const PARTICIPATION_LABELS = {
 
 function DrawerStatusBadges({ participant }) {
   const { readiness } = deriveReadiness(participant)
-  const regTone = participant.registration_link_status === 'registered' ? 'done'
-    : participant.registration_status === 'registered' ? 'done' : 'at_risk'
-  const regLabel = participant.registration_link_status === 'registered' ? 'Registered'
-    : participant.registration_status === 'registered' ? 'Registered' : 'Not Registered'
+  const registered = participant.registration_link_status === 'registered' || participant.registration_status === 'registered'
+  // Registration is mandatory and can't be waived: a missing one is always urgent, even for a confirmed participant.
+  const urgent = !registered && participant.participation_status !== 'not_attending'
+  const regTone = registered ? 'done' : urgent ? 'blocked' : 'at_risk'
+  const regLabel = registered ? 'Registered' : urgent ? 'URGENT — Registration Required' : 'Not Registered'
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>

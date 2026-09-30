@@ -129,6 +129,7 @@ export function filterParticipantsByWorkingListView(
   eventId = null,
   view = 'all',
   getReadiness = null,
+  getNeedsAttention = null,
 ) {
   if (!view || view === 'all') return participants
   const linkedParticipantIds = registrationLinkedParticipantIds(registrations, maps, eventId)
@@ -142,6 +143,8 @@ export function filterParticipantsByWorkingListView(
         || (isActiveParticipant(participant) && !!getReadiness && getReadiness(participant) === 'ready')
     }
     if (view === 'needs_attention') {
+      // Callers can pass a stricter test (readiness plus whether staff already reviewed the missing information).
+      if (getNeedsAttention) return getNeedsAttention(participant)
       const readiness = getReadiness ? getReadiness(participant) : null
       return readiness === 'action_required' || readiness === 'blocked'
     }

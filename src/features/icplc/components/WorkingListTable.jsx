@@ -171,7 +171,9 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
                     <FilterCell column="registered" value={registered ? 'Registered' : 'Not registered'}>
                       {registered
                         ? <CheckCircle2 size={18} color="#16A34A" aria-label="Registered" />
-                        : <XCircle size={18} color="#DC2626" aria-label="Not registered" />}
+                        : (p.participation_status === 'confirmed' || p.participation_status === 'likely')
+                          ? <span style={{ background: '#FBE4E2', color: '#B42318', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>URGENT · Register</span>
+                          : <XCircle size={18} color="#DC2626" aria-label="Not registered" />}
                     </FilterCell>
                   </td>
                   <td className="icplc-wl-muted">

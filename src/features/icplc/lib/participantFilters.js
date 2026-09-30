@@ -2,7 +2,11 @@
 // effective visa requirement) or on joined data (tags). DB-column filters stay in fetchParticipants().
 
 import { deriveReadiness, deriveFlightStatus } from './readinessEngine.js'
-import { effectiveVisaRequirement, attentionCategoryKeys } from './documentationRules.js'
+import { effectiveVisaRequirement, attentionCategoryKeys, documentationActionRequired } from './documentationRules.js'
+import { effectivePassportRegion } from './passportRegion.js'
+import { effectiveAssistanceRequested } from './cmpDocumentation.js'
+import { deriveDocumentationActions } from './documentationRisk.js'
+import { matchesAttentionState } from './attentionModel.js'
 
 /** Special tags-filter value: participants with no tags at all. */
 export const UNTAGGED = '__untagged__'
@@ -32,7 +36,10 @@ export function countAttentionCategories(participants = []) {
   return counts
 }
 
-export function applyClientFilters(participants, filters = {}) {
+/**
+ * ctx = { targets, now } feeds the time-risk filter (targets come from the event's Settings > Deadlines).
+ */
+export function applyClientFilters(participants, filters = {}, ctx = {}) {
   let rows = participants || []
   if (has(filters.attention)) {
     rows = rows.filter((p) => {
@@ -48,6 +55,23 @@ export function applyClientFilters(participants, filters = {}) {
   }
   if (has(filters.visa_requirement)) {
     rows = rows.filter((p) => filters.visa_requirement.includes(effectiveVisaRequirement(p)))
+  }
+  if (has(filters.attention_state)) {
+    rows = rows.filter((p) => filters.attention_state.some((state) => matchesAttentionState(p, state)))
+  }
+  if (has(filters.passport_region)) {
+    rows = rows.filter((p) => filters.passport_region.includes(effectivePassportRegion(p)))
+  }
+  if (has(filters.assistance)) {
+    rows = rows.filter((p) => effectiveAssistanceRequested(p) === true)
+  }
+  if (has(filters.time_risk)) {
+    rows = rows.filter((p) => filters.time_risk.includes(deriveDocumentationActions(p, ctx).worst))
+  }
+  if (has(filters.documentation)) {
+    rows = rows.filter((p) => filters.documentation.some((k) => (
+      k === 'action_required' ? documentationActionRequired(p) : attentionCategoryKeys(p).includes(k)
+    )))
   }
   if (has(filters.tags)) {
     rows = rows.filter((p) => matchesTags(p, filters.tags, filters.tags_mode))

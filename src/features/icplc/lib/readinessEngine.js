@@ -3,9 +3,10 @@
 // Readiness enum: unknown | waiting_itinerary | in_progress | action_required | blocked | ready
 // CRITICAL is explicitly deferred until deadline configuration exists.
 
-import { DOCUMENT_READINESS, docNeedsAttention } from '../../registration/icplcDocReadiness.js'
+import { DOCUMENT_READINESS } from '../../registration/icplcDocReadiness.js'
 import { effectiveCanadaDocReadiness } from './cmpDocumentation.js'
-import { isCommitted, effectiveVisaRequirement } from './documentationRules.js'
+import { isCommitted, effectiveVisaRequirement, canadianDocAttention } from './documentationRules.js'
+import { flightNotRequired } from './flightRequirement.js'
 
 /**
  * Derives whether a participant has itinerary data.
@@ -33,9 +34,15 @@ export function isConfirmedOrReady(p) {
  * @returns {'ready' | 'outstanding'}
  */
 export function deriveTravelStatus(p) {
+  if (flightNotRequired(p)) return 'ready'
   return deriveItineraryStatus(p) === 'received' && p.arrival_date && p.departure_date
     ? 'ready'
     : 'outstanding'
+}
+
+/** Itinerary is settled when one was received, or staff recorded that no flight is required (nothing is invented). */
+export function isItinerarySettled(p) {
+  return deriveItineraryStatus(p) === 'received' || flightNotRequired(p)
 }
 
 /**
@@ -69,6 +76,8 @@ export function deriveReadiness(p) {
   if (visaRequirement === 'required' && p.visa_process_status === 'not_started') {
     reasons.push('Visa required but not started')
   }
+  // Readiness derives from participant DATA only. A staff "Mark reviewed" never changes it; it only changes
+  // whether staff still need to follow up (see attentionModel.attentionReasons).
   if (visaRequirement === 'review' && isCommitted(p)) {
     reasons.push('Visa requirement unknown')
   }
@@ -78,14 +87,11 @@ export function deriveReadiness(p) {
   if (['issue', 'not_registered'].includes(p.registration_status)) {
     reasons.push('Registration outstanding')
   }
-  const canadianDocReason = docNeedsAttention({
-    canadaResidencyStatus: p.canada_residency_status,
-    canadaStatusDocumentReadiness: effectiveCanadaDocReadiness(p),
-  })
+  const canadianDocReason = canadianDocAttention(p)
   if (canadianDocReason) {
     reasons.push(canadianDocReason)
   }
-  if (deriveItineraryStatus(p) === 'missing' && p.participation_status === 'confirmed') {
+  if (deriveItineraryStatus(p) === 'missing' && p.participation_status === 'confirmed' && !flightNotRequired(p)) {
     reasons.push('Itinerary missing for confirmed participant')
   }
 
@@ -104,7 +110,7 @@ export function deriveReadiness(p) {
     p.passport_readiness === 'ready' &&
     visaRequirement !== 'review' &&
     (visaRequirement !== 'required' || p.visa_process_status === 'approved') &&
-    deriveItineraryStatus(p) === 'received'
+    isItinerarySettled(p)
   ) {
     return { readiness: 'ready', reasons: [] }
   }
@@ -155,22 +161,25 @@ export function readinessLabel(readiness) {
  * Derives flight booking status for Working List and Travel page.
  * Separate from deriveItineraryStatus() — this is the three-state Working List contract.
  * @param {object} p - icplc_participants row
- * @returns {'booked' | 'missing' | 'awaiting'}
+ * @returns {'booked' | 'missing' | 'awaiting' | 'not_required'}
  */
 export function deriveFlightStatus(p) {
   if (p.arrival_flight && p.departure_flight) return 'booked'
+  if (flightNotRequired(p)) return 'not_required'
   if (p.participation_status === 'confirmed') return 'missing'
   return 'awaiting'
 }
 
 export function flightStatusTone(status) {
   if (status === 'booked') return 'done'
+  if (status === 'not_required') return 'mute'
   if (status === 'missing') return 'at_risk'
   return 'mute'
 }
 
 export function flightStatusLabel(status) {
   if (status === 'booked') return 'Booked'
+  if (status === 'not_required') return 'Not required'
   if (status === 'missing') return 'Missing'
   return 'Awaiting'
 }

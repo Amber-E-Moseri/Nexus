@@ -75,7 +75,11 @@ export function setOverridePatch(field, userId) {
 
 // Staff-managed Canadian documentation fields — never written by any import source,
 // but recorded as overrides so the UI can show "staff override active".
-const STAFF_OVERRIDE_FIELDS = new Set(['canada_residency_status', 'canada_status_document_readiness'])
+const STAFF_OVERRIDE_FIELDS = new Set([
+  'canada_residency_status', 'canada_status_document_readiness',
+  // CMP documentation sync writes these, so a staff correction must stick.
+  'passport_region', 'documentation_assistance_requested',
+])
 
 /**
  * Of the fields a staff member just edited, which must be recorded as overrides?

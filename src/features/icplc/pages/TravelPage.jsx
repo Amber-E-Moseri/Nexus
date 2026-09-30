@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import { deriveItineraryStatus, deriveTravelStatus } from '../lib/readinessEngine.js'
+import { flightNotRequired } from '../lib/flightRequirement.js'
 import { fmtTime, groupByDate, groupIntoBands } from '../lib/travelGrouping.js'
 import { printTravelManifest } from '../lib/printTravelManifest.js'
 import { SUBGROUP_OPTIONS } from '../lib/subgroups.js'
@@ -167,7 +168,9 @@ export default function TravelPage({ canWrite }) {
                       {p.subgroup && <div className="icplc-cell-sub">{p.subgroup}</div>}
                     </td>
                     <td data-label="Itinerary">
-                      <Badge tone={itinerary === 'received' ? 'done' : 'warn'} label={itinerary === 'received' ? 'Received' : 'Missing'} />
+                      {flightNotRequired(p)
+                        ? <Badge tone="mute" label="Not required" />
+                        : <Badge tone={itinerary === 'received' ? 'done' : 'warn'} label={itinerary === 'received' ? 'Received' : 'Missing'} />}
                     </td>
                     <td data-label="Travel status">
                       <Badge tone={travel === 'ready' ? 'done' : 'at_risk'} label={travel === 'ready' ? 'Ready' : 'Outstanding'} />

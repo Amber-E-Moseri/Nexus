@@ -4,6 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useCreateParticipant } from '../hooks/useICPLCParticipants.js'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
+import { useICPLCTargets } from '../hooks/useICPLCTargets.js'
 import { useUpdateProfile } from '../hooks/useICPLCProfile.js'
 import WorkingListTable from '../components/WorkingListTable.jsx'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
@@ -12,6 +13,7 @@ import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import { applyClientFilters, countAttentionCategories } from '../lib/participantFilters.js'
 import { filterParticipantsByWorkingListView } from '../lib/reconciliation.js'
+import { needsAttentionNow } from '../lib/attentionModel.js'
 
 export default function PeoplePage({ canWrite }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
@@ -37,6 +39,8 @@ export default function PeoplePage({ canWrite }) {
 
   const attentionCounts = useMemo(() => countAttentionCategories(participantsWithRegistrationCoverage), [participantsWithRegistrationCoverage])
 
+  const targets = useICPLCTargets(eventId)
+
   const displayedParticipants = useMemo(() => applyClientFilters(
     filterParticipantsByWorkingListView(
       participantsWithRegistrationCoverage,
@@ -45,9 +49,11 @@ export default function PeoplePage({ canWrite }) {
       eventId,
       filters.working_list_view || 'all',
       (participant) => deriveReadiness(participant).readiness,
+      needsAttentionNow,
     ),
     filters,
-  ), [eventId, filters, participantsWithRegistrationCoverage, registrationMaps, registrations])
+    { targets },
+  ), [eventId, filters, participantsWithRegistrationCoverage, registrationMaps, registrations, targets])
 
   return (
     <div>
