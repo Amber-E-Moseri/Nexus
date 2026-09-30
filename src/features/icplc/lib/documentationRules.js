@@ -332,7 +332,14 @@ export function attentionCategoryKeys(p) {
   if (!reviewed && documentationMissingInfo(p).length > 0) keys.push('documentation_incomplete')
 
   // Flight expected but absent. A recorded "Flight Not Required" is an exception, not missing data.
-  if (p.participation_status === 'confirmed' && !(p.arrival_flight || p.arrival_date) && !flightNotRequired(p)) {
+  // If FNR context exists (even superseded by a later departure), do NOT create a false arrival warning:
+  // flight_not_required_reason means "arrival is handled" — staff entered that explicitly.
+  if (
+    p.participation_status === 'confirmed' &&
+    !(p.arrival_flight || p.arrival_date) &&
+    !flightNotRequired(p) &&
+    !p.flight_not_required_reason
+  ) {
     keys.push('travel_incomplete')
   }
   return sortAttentionKeys(keys)
