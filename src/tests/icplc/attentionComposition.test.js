@@ -14,6 +14,7 @@ import { deriveAttentionItems } from '../../features/icplc/components/Participan
 // Minimal confirmed participant — all optional fields omitted (null/undefined = not set)
 function confirmed(overrides = {}) {
   return {
+    source_values: { cmp_documentation: { submission_id: 'form-1' } }, // Immigration Form received
     participation_status: 'confirmed',
     registration_status: 'not_registered',
     registration_link_status: 'registered', // registered so not_registered doesn't fire

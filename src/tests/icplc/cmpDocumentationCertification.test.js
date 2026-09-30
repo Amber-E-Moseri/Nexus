@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest'
 import pg from 'pg'
+import { readFileSync } from 'node:fs'
 import {
   CMP_FIELD_IDS,
   buildSourceValues,
@@ -107,7 +108,8 @@ async function applyCmpDocumentation(sub, eventId = TEST_EVENT_ID) {
   const sourceValues = buildSourceValues(sub, answers)
   const mutations = computeMutations(participant, answers, sourceValues)
   if (mutations.unrecognized_passport_value || mutations.unrecognized_canadian_value
-    || mutations.unrecognized_passport_region_value || mutations.unrecognized_doc_validity_value) {
+    || mutations.unrecognized_passport_region_value || mutations.unrecognized_doc_validity_value
+    || mutations.unrecognized_assistance_value) {
     return { status: 'unknown_value', participant_id: participantId, mutations }
   }
 
@@ -119,7 +121,7 @@ async function applyCmpDocumentation(sub, eventId = TEST_EVENT_ID) {
          canada_residency_status = COALESCE($3, canada_residency_status),
          source_values = $4,
          passport_region = COALESCE($5, passport_region),
-         canada_status_document_readiness = COALESCE($6, canada_status_document_readiness)
+         documentation_assistance_requested = COALESCE($6, documentation_assistance_requested)
      WHERE id = $1`,
     [
       participantId,
@@ -127,7 +129,7 @@ async function applyCmpDocumentation(sub, eventId = TEST_EVENT_ID) {
       updates.canada_residency_status || null,
       JSON.stringify(nextSourceValues),
       updates.passport_region || null,
-      updates.canada_status_document_readiness || null,
+      updates.documentation_assistance_requested ?? null,
     ],
   )
   await pgExec(
@@ -161,6 +163,12 @@ async function cleanup() {
 
 describe('CMP documentation sync database certification', () => {
   beforeAll(async () => {
+    // A database built from the migrations already has the column; only a stale local one needs it (and ALTER TABLE
+    // would take a table lock that stalls the other database suites running in parallel).
+    const hasColumn = (await pgExec(`SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'icplc_participants' AND column_name = 'documentation_assistance_requested'`)).rows.length > 0
+    if (!hasColumn) {
+      await pgExec(readFileSync(new URL('../../../supabase/migrations/20271001000000_icplc_documentation_assistance.sql', import.meta.url), 'utf8'))
+    }
     await cleanup()
     await setupEvents()
   })
@@ -219,24 +227,47 @@ describe('CMP documentation sync database certification', () => {
     expect(row.source_values.cmp_documentation.email).toBe('OWNER@LOCAL.TEST')
     expect(row.source_values.cmp_documentation.phone).toBe('555-9999')
     expect(row.source_values.cmp_documentation.passport_region).toBe('Non-ECOWAS')
-    // reported region and document validity are approved CMP fields; the country is not touched
+    // reported region and assistance are approved CMP fields; the country is not touched
     expect(row.passport_region).toBe('NON_ECOWAS')
-    expect(row.canada_status_document_readiness).toBe('READY')
+    expect(row.documentation_assistance_requested).toBe(true)
+    expect(row.canada_status_document_readiness).toBeNull() // never derived from the validity answer
     expect(row.override_fields.passport_readiness.overridden).toBe(true)
   })
 
-  it('maps document validity to readiness and passport region to its own field', async () => {
+  it('keeps the Canadian document validity answer as source evidence only and maps region to its own field', async () => {
     const yes = await pgInsertReturning('icplc_participants', { event_id: TEST_EVENT_ID, full_name: 'Valid Doc', email: 'valid@local.test', canada_residency_status: 'PERMANENT_RESIDENT' })
     const no = await pgInsertReturning('icplc_participants', { event_id: TEST_EVENT_ID, full_name: 'Expiring Doc', email: 'expiring@local.test', canada_residency_status: 'PERMANENT_RESIDENT' })
     await applyCmpDocumentation(submission('cmp-validity-yes', { [CMP_FIELD_IDS.email]: 'valid@local.test', [CMP_FIELD_IDS.canadianDocValidity]: 'Yes', [CMP_FIELD_IDS.passportRegion]: 'ECOWAS' }))
     await applyCmpDocumentation(submission('cmp-validity-no', { [CMP_FIELD_IDS.email]: 'expiring@local.test', [CMP_FIELD_IDS.canadianDocValidity]: 'No', [CMP_FIELD_IDS.passportRegion]: 'Non-ECOWAS' }))
-    const rows = (await pgExec('SELECT id, canada_status_document_readiness, passport_region, passport_country FROM public.icplc_participants WHERE id = ANY($1::uuid[])', [[yes.id, no.id]])).rows
+    const rows = (await pgExec('SELECT id, canada_status_document_readiness, passport_region, passport_country, source_values FROM public.icplc_participants WHERE id = ANY($1::uuid[])', [[yes.id, no.id]])).rows
     const byId = Object.fromEntries(rows.map((r) => [r.id, r]))
-    expect(byId[yes.id].canada_status_document_readiness).toBe('READY')
+    // "No" must NOT become RENEWAL_NEEDED: Nexus does not know a renewal is needed. Only the raw answer is kept.
+    expect(byId[yes.id].canada_status_document_readiness).toBeNull()
+    expect(byId[no.id].canada_status_document_readiness).toBeNull()
+    expect(byId[no.id].source_values.cmp_documentation.canadian_doc_valid_through_nov).toBe('No')
     expect(byId[yes.id].passport_region).toBe('ECOWAS')
-    expect(byId[no.id].canada_status_document_readiness).toBe('RENEWAL_NEEDED')
     expect(byId[no.id].passport_region).toBe('NON_ECOWAS')
     expect(byId[yes.id].passport_country).toBeNull()
+  })
+
+  it('normalizes the assistance answer and never overwrites a staff correction', async () => {
+    const fresh = await pgInsertReturning('icplc_participants', { event_id: TEST_EVENT_ID, full_name: 'Asks Help', email: 'help@local.test' })
+    const declined = await pgInsertReturning('icplc_participants', { event_id: TEST_EVENT_ID, full_name: 'No Help', email: 'nohelp@local.test' })
+    const corrected = await pgInsertReturning('icplc_participants', {
+      event_id: TEST_EVENT_ID, full_name: 'Staff Corrected', email: 'corrected@local.test',
+      documentation_assistance_requested: false,
+      override_fields: JSON.stringify({ documentation_assistance_requested: { overridden: true, by: TEST_USER_ID } }),
+    })
+    await applyCmpDocumentation(submission('cmp-help-yes', { [CMP_FIELD_IDS.email]: 'help@local.test', [CMP_FIELD_IDS.assistanceRequested]: 'Yes' }))
+    await applyCmpDocumentation(submission('cmp-help-no', { [CMP_FIELD_IDS.email]: 'nohelp@local.test', [CMP_FIELD_IDS.assistanceRequested]: 'No' }))
+    await applyCmpDocumentation(submission('cmp-help-corrected', { [CMP_FIELD_IDS.email]: 'corrected@local.test', [CMP_FIELD_IDS.assistanceRequested]: 'Yes' }))
+    const rows = (await pgExec('SELECT id, documentation_assistance_requested AS a FROM public.icplc_participants WHERE id = ANY($1::uuid[])', [[fresh.id, declined.id, corrected.id]])).rows
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.a]))
+    expect(byId[fresh.id]).toBe(true)
+    expect(byId[declined.id]).toBe(false)
+    expect(byId[corrected.id]).toBe(false) // staff override survives the re-sync
+    const odd = await applyCmpDocumentation(submission('cmp-help-odd', { [CMP_FIELD_IDS.email]: 'help@local.test', [CMP_FIELD_IDS.assistanceRequested]: 'Maybe' }))
+    expect(odd.status).toBe('unknown_value')
   })
 
   it('does not set a status-document readiness for Canadian citizens', async () => {

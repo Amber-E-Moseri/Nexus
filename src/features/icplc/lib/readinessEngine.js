@@ -3,9 +3,10 @@
 // Readiness enum: unknown | waiting_itinerary | in_progress | action_required | blocked | ready
 // CRITICAL is explicitly deferred until deadline configuration exists.
 
-import { DOCUMENT_READINESS, docNeedsAttention } from '../../registration/icplcDocReadiness.js'
+import { DOCUMENT_READINESS } from '../../registration/icplcDocReadiness.js'
 import { effectiveCanadaDocReadiness } from './cmpDocumentation.js'
-import { isCommitted, effectiveVisaRequirement } from './documentationRules.js'
+import { isCommitted, isRegistered, effectiveVisaRequirement, canadianDocAttention } from './documentationRules.js'
+import { flightNotRequired, hasMeaningfulFlight } from './flightRequirement.js'
 
 /**
  * Derives whether a participant has itinerary data.
@@ -28,14 +29,64 @@ export function isConfirmedOrReady(p) {
 }
 
 /**
+ * Effective participation status: derives Likely from Tracking + meaningful attendance evidence.
+ * This is the operational participation status used for Board grouping, Overview counts, and filters.
+ * The persisted participation_status row remains unchanged; this is purely derived.
+ *
+ * Precedence (highest to lowest):
+ * 1. Explicit Not Attending / Absent
+ * 2. Explicit Confirmed
+ * 3. Explicit Uncertain (outranks attendance evidence)
+ * 4. Explicit/persisted Likely
+ * 5. Attendance evidence promoting Tracking -> Likely (flight or FNR)
+ * 6. Tracking (default)
+ *
+ * Attendance evidence is: meaningful flight OR Flight Not Required (FNR).
+ * Nothing derived may produce Confirmed.
+ *
+ * @param {object} p - icplc_participants row
+ * @returns {string} one of: tracking, likely, confirmed, uncertain, not_attending
+ */
+export function effectiveParticipationStatus(p) {
+  const persisted = p?.participation_status
+
+  // Explicit choices outrank everything: Absent, Confirmed, Uncertain never demoted
+  if (persisted === 'not_attending' || persisted === 'confirmed' || persisted === 'uncertain') {
+    return persisted
+  }
+
+  // Likely is already the effective state
+  if (persisted === 'likely') {
+    return 'likely'
+  }
+
+  // Tracking + meaningful attendance evidence => derive as Likely
+  // Attendance evidence: real flight number OR Flight Not Required
+  if (persisted === 'tracking') {
+    if (hasMeaningfulFlight(p) || flightNotRequired(p)) {
+      return 'likely'
+    }
+  }
+
+  // Default: return persisted status (typically 'tracking')
+  return persisted || 'tracking'
+}
+
+/**
  * Derives whether a participant's travel arrangements are complete.
  * @param {object} p
  * @returns {'ready' | 'outstanding'}
  */
 export function deriveTravelStatus(p) {
+  if (flightNotRequired(p)) return 'ready'
   return deriveItineraryStatus(p) === 'received' && p.arrival_date && p.departure_date
     ? 'ready'
     : 'outstanding'
+}
+
+/** Itinerary is settled when one was received, or staff recorded that no flight is required (nothing is invented). */
+export function isItinerarySettled(p) {
+  return deriveItineraryStatus(p) === 'received' || flightNotRequired(p)
 }
 
 /**
@@ -69,23 +120,23 @@ export function deriveReadiness(p) {
   if (visaRequirement === 'required' && p.visa_process_status === 'not_started') {
     reasons.push('Visa required but not started')
   }
+  // Readiness derives from participant DATA only. A staff "Mark reviewed" never changes it; it only changes
+  // whether staff still need to follow up (see attentionModel.attentionReasons).
   if (visaRequirement === 'review' && isCommitted(p)) {
     reasons.push('Visa requirement unknown')
   }
   if (p.visa_process_status === 'issue') {
     reasons.push('Visa issue')
   }
-  if (['issue', 'not_registered'].includes(p.registration_status)) {
+  // Registration is mandatory: only a positive `registered` satisfies it, so unknown/missing blocks Ready too.
+  if (p.participation_status !== 'not_attending' && !isRegistered(p)) {
     reasons.push('Registration outstanding')
   }
-  const canadianDocReason = docNeedsAttention({
-    canadaResidencyStatus: p.canada_residency_status,
-    canadaStatusDocumentReadiness: effectiveCanadaDocReadiness(p),
-  })
+  const canadianDocReason = canadianDocAttention(p)
   if (canadianDocReason) {
     reasons.push(canadianDocReason)
   }
-  if (deriveItineraryStatus(p) === 'missing' && p.participation_status === 'confirmed') {
+  if (deriveItineraryStatus(p) === 'missing' && p.participation_status === 'confirmed' && !flightNotRequired(p)) {
     reasons.push('Itinerary missing for confirmed participant')
   }
 
@@ -104,7 +155,7 @@ export function deriveReadiness(p) {
     p.passport_readiness === 'ready' &&
     visaRequirement !== 'review' &&
     (visaRequirement !== 'required' || p.visa_process_status === 'approved') &&
-    deriveItineraryStatus(p) === 'received'
+    isItinerarySettled(p)
   ) {
     return { readiness: 'ready', reasons: [] }
   }
@@ -155,22 +206,25 @@ export function readinessLabel(readiness) {
  * Derives flight booking status for Working List and Travel page.
  * Separate from deriveItineraryStatus() — this is the three-state Working List contract.
  * @param {object} p - icplc_participants row
- * @returns {'booked' | 'missing' | 'awaiting'}
+ * @returns {'booked' | 'missing' | 'awaiting' | 'not_required'}
  */
 export function deriveFlightStatus(p) {
   if (p.arrival_flight && p.departure_flight) return 'booked'
+  if (flightNotRequired(p)) return 'not_required'
   if (p.participation_status === 'confirmed') return 'missing'
   return 'awaiting'
 }
 
 export function flightStatusTone(status) {
   if (status === 'booked') return 'done'
+  if (status === 'not_required') return 'mute'
   if (status === 'missing') return 'at_risk'
   return 'mute'
 }
 
 export function flightStatusLabel(status) {
   if (status === 'booked') return 'Booked'
+  if (status === 'not_required') return 'Not required'
   if (status === 'missing') return 'Missing'
   return 'Awaiting'
 }

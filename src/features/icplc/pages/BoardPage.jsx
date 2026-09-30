@@ -1,25 +1,31 @@
 import React, { useState, useMemo } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
+import { useICPLCTargets } from '../hooks/useICPLCTargets.js'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import { applyClientFilters, countAttentionCategories } from '../lib/participantFilters.js'
 import { filterParticipantsByWorkingListView } from '../lib/reconciliation.js'
-import { deriveReadiness, readinessLabel } from '../lib/readinessEngine.js'
+import { needsAttentionNow, attentionItems } from '../lib/attentionModel.js'
+import { deriveReadiness, readinessLabel, effectiveParticipationStatus } from '../lib/readinessEngine.js'
+import { isActiveParticipant } from '../lib/reconciliation.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import { useQueryClient } from '@tanstack/react-query'
 import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core'
 import { useUpdateProfile } from '../hooks/useICPLCProfile.js'
 import { isParticipationMove, applyParticipationMove } from '../lib/boardMove.js'
+import { useMediaQuery } from '../../../hooks/useMediaQuery.js'
 
 const PARTICIPATION_COLUMNS = ['tracking', 'likely', 'confirmed', 'uncertain', 'not_attending']
-const READINESS_COLUMNS = ['unknown', 'waiting_itinerary', 'in_progress', 'action_required', 'blocked', 'ready']
+// 'unknown' is intentionally absent: participants whose readiness derives 'unknown' are routed
+// into 'action_required' in the board grouping so the column never appears as a phantom.
+const READINESS_COLUMNS = ['waiting_itinerary', 'in_progress', 'action_required', 'blocked', 'ready']
 
 const PARTICIPATION_DOTS = {
   tracking: '#6B7280', likely: '#2563EB', confirmed: '#2D8653',
   uncertain: '#C97820', not_attending: '#C94830',
 }
 const READINESS_DOTS = {
-  unknown: '#9CA3AF', waiting_itinerary: '#0EA5E9', in_progress: '#2563EB',
+  waiting_itinerary: '#0EA5E9', in_progress: '#2563EB',
   action_required: '#C97820', blocked: '#C94830', ready: '#2D8653',
 }
 
@@ -29,10 +35,10 @@ const PARTICIPATION_LABELS = {
 }
 
 function humanizeReadiness(r) {
-  return { unknown: 'Unknown', waiting_itinerary: 'Waiting on itinerary', in_progress: 'In Progress', action_required: 'Action Required', blocked: 'Blocked', ready: 'Ready' }[r] || r
+  return { waiting_itinerary: 'Waiting on itinerary', in_progress: 'In Progress', action_required: 'Action Required', blocked: 'Blocked', ready: 'Ready' }[r] || r
 }
 
-function BoardCard({ p, canDrag, onOpen }) {
+function BoardCard({ p, canDrag, onOpen, reasons }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: p.id, disabled: !canDrag })
   return (
     <div
@@ -49,16 +55,66 @@ function BoardCard({ p, canDrag, onOpen }) {
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)', opacity: isDragging ? 0.35 : 1, touchAction: canDrag ? 'none' : undefined,
       }}
     >
-      <CardBody p={p} />
+      <CardBody p={p} reasons={reasons} />
     </div>
   )
 }
 
-function CardBody({ p }) {
+// Phone card: no drag (it fights with scrolling). Tap opens the profile; a native select moves the person.
+function MobileBoardCard({ p, onOpen, onMove, canMove, reasons }) {
+  return (
+    <div style={{ padding: 14, background: 'var(--icplc-surface, #fff)', borderRadius: 10, border: '1px solid var(--icplc-border, var(--border))', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onOpen(p.id)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onOpen(p.id) } }}
+        aria-label={`Open profile: ${p.full_name}`}
+        style={{ cursor: 'pointer', minHeight: 44 }}
+      >
+        <CardBody p={p} reasons={reasons} />
+      </div>
+      {canMove && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>
+          Move to
+          <select
+            className="icplc-input"
+            aria-label={`Move ${p.full_name} to another column`}
+            value={p.participation_status}
+            onChange={(e) => onMove(p, e.target.value)}
+            style={{ flex: 1, minHeight: 40 }}
+          >
+            {PARTICIPATION_COLUMNS.map((c) => <option key={c} value={c}>{PARTICIPATION_LABELS[c]}</option>)}
+          </select>
+        </label>
+      )}
+    </div>
+  )
+}
+
+function CardBody({ p, reasons }) {
   return (
     <>
       <div style={{ fontWeight: 600, marginBottom: 3, fontSize: 13.5 }}>{p.full_name}</div>
       {p.subgroup && <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{p.subgroup}</div>}
+      {reasons && reasons.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 5 }}>
+          {reasons.slice(0, 2).map((r, i) => (
+            <span
+              key={i}
+              style={{
+                fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A',
+              }}
+            >
+              {r}
+            </span>
+          ))}
+          {reasons.length > 2 && (
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>+{reasons.length - 2} more</span>
+          )}
+        </div>
+      )}
       {p.tags?.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
           {p.tags.slice(0, 3).map((t) => (
@@ -109,6 +165,9 @@ function BoardColumn({ col, label, dotColor, count, droppable, children }) {
 export default function BoardPage({ canWrite }) {
   const { config, filters, setFilters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const [groupBy, setGroupBy] = useState('participation')
+  const [showAbsent, setShowAbsent] = useState(false)
+  const isMobile = useMediaQuery('(max-width: 768px)')
+  const [mobileCol, setMobileCol] = useState(null)
   const qc = useQueryClient()
   // Same data pipeline and shared filters as the Working List, so a filter set there also applies here.
   const {
@@ -125,14 +184,20 @@ export default function BoardPage({ canWrite }) {
     subgroup: filters.subgroup,
   })
   const attentionCounts = useMemo(() => countAttentionCategories(allParticipants), [allParticipants])
-  const participants = useMemo(() => applyClientFilters(
-    filterParticipantsByWorkingListView(
-      allParticipants, registrations, registrationMaps, config?.id,
-      filters.working_list_view || 'all',
-      (participant) => deriveReadiness(participant).readiness,
-    ),
-    filters,
-  ), [allParticipants, registrations, registrationMaps, config?.id, filters])
+  const targets = useICPLCTargets(config?.id)
+  const participants = useMemo(() => {
+    const base = applyClientFilters(
+      filterParticipantsByWorkingListView(
+        allParticipants, registrations, registrationMaps, config?.id,
+        filters.working_list_view || 'all',
+        (participant) => deriveReadiness(participant).readiness,
+        needsAttentionNow,
+      ),
+      filters,
+      { targets },
+    )
+    return showAbsent ? base : base.filter(isActiveParticipant)
+  }, [allParticipants, registrations, registrationMaps, config?.id, filters, targets, showAbsent])
   const refetch = () => qc.invalidateQueries({ queryKey: ['icplc_participants', config?.id] })
   const updateProfile = useUpdateProfile()
   const [dragged, setDragged] = useState(null)
@@ -145,16 +210,14 @@ export default function BoardPage({ canWrite }) {
     useSensor(KeyboardSensor),
   )
 
-  function handleDragEnd({ active, over }) {
-    setDragged(null)
-    const person = (participants || []).find((p) => p.id === active.id)
-    if (!over || !isParticipationMove(person, over.id)) return
+  function moveParticipant(person, target) {
+    if (!person || !isParticipationMove(person, target)) return
     setMoveError(null)
     const key = ['icplc_participants', config?.id]
     const previous = qc.getQueriesData({ queryKey: key })
-    qc.setQueriesData({ queryKey: key }, (old) => (Array.isArray(old) ? applyParticipationMove(old, person.id, over.id) : old))
+    qc.setQueriesData({ queryKey: key }, (old) => (Array.isArray(old) ? applyParticipationMove(old, person.id, target) : old))
     updateProfile.mutate(
-      { id: person.id, fields: { participation_status: over.id } },
+      { id: person.id, fields: { participation_status: target } },
       {
         onError: (err) => {
           previous.forEach(([k, data]) => qc.setQueryData(k, data))
@@ -162,6 +225,12 @@ export default function BoardPage({ canWrite }) {
         },
       },
     )
+  }
+
+  function handleDragEnd({ active, over }) {
+    setDragged(null)
+    if (!over) return
+    moveParticipant((participants || []).find((p) => p.id === active.id), over.id)
   }
 
   const columns = groupBy === 'participation' ? PARTICIPATION_COLUMNS : READINESS_COLUMNS
@@ -174,13 +243,20 @@ export default function BoardPage({ canWrite }) {
     if (!participants) return {}
     return columns.reduce((acc, col) => {
       if (groupBy === 'participation') {
-        acc[col] = participants.filter((p) => p.participation_status === col)
+        acc[col] = participants.filter((p) => effectiveParticipationStatus(p) === col)
       } else {
-        acc[col] = participants.filter((p) => deriveReadiness(p).readiness === col)
+        acc[col] = participants.filter((p) => {
+          const r = deriveReadiness(p).readiness
+          // 'unknown' participants are routed into 'action_required': insufficient info is actionable.
+          if (col === 'action_required') return r === 'action_required' || r === 'unknown'
+          return r === col
+        })
       }
       return acc
     }, {})
   }, [participants, groupBy, columns])
+
+  const activeCol = columns.includes(mobileCol) ? mobileCol : columns.find((c) => (grouped[c] || []).length) || columns[0]
 
   const loadingSkeleton = (
     <div style={{ display: 'flex', gap: 12, paddingBottom: 16 }}>
@@ -221,20 +297,23 @@ export default function BoardPage({ canWrite }) {
 
   return (
     <div>
-      <div style={{ marginBottom: 12 }}>
-        <input
-          type="search"
-          aria-label="Search the board by name or email"
-          className="icplc-input icplc-search"
-          placeholder="Search by name or email…"
-          value={filters.search || ''}
-          onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-        />
-      </div>
-      <ParticipantFilters resultCount={participants.length} attentionCounts={attentionCounts} />
+      <ParticipantFilters
+        resultCount={participants.length}
+        attentionCounts={attentionCounts}
+        searchSlot={(
+          <input
+            type="search"
+            aria-label="Search the board by name or email"
+            className="icplc-input icplc-search"
+            placeholder="Search by name or email…"
+            value={filters.search || ''}
+            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+          />
+        )}
+      />
 
       {/* Group by toolbar */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>Group by:</span>
         {['participation', 'readiness'].map((opt) => (
           <button
@@ -246,6 +325,16 @@ export default function BoardPage({ canWrite }) {
             {opt === 'participation' ? 'Participation' : 'Readiness'}
           </button>
         ))}
+        <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} aria-hidden />
+        <button
+          type="button"
+          className="icplc-chip"
+          aria-pressed={showAbsent}
+          onClick={() => setShowAbsent((v) => !v)}
+          title={showAbsent ? 'Hide participants marked Not Attending' : 'Show participants marked Not Attending'}
+        >
+          {showAbsent ? 'Hiding absent' : 'Include absent'}
+        </button>
       </div>
 
       {groupBy === 'readiness' && (
@@ -253,7 +342,7 @@ export default function BoardPage({ canWrite }) {
           Readiness is worked out automatically, so cards can't be moved here. Switch to Participation to drag people between columns.
         </div>
       )}
-      {dragEnabled && (
+      {dragEnabled && !isMobile && (
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
           Drag a card to another column to change that person's participation status.
         </div>
@@ -265,7 +354,41 @@ export default function BoardPage({ canWrite }) {
       )}
 
       {/* Board columns */}
-      {isLoading ? loadingSkeleton : (
+      {isMobile && !isLoading && (
+        <>
+          <div role="tablist" aria-label="Board columns" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 10, scrollbarWidth: 'thin' }}>
+            {columns.map((col) => (
+              <button
+                key={col}
+                type="button"
+                role="tab"
+                aria-selected={activeCol === col}
+                className="icplc-chip"
+                onClick={() => setMobileCol(col)}
+                style={{ flexShrink: 0, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: dots[col] || '#9CA3AF' }} />
+                {colLabels[col]} <strong>{(grouped[col] || []).length}</strong>
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel" style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 16 }}>
+            {(grouped[activeCol] || []).map((p) => (
+              <MobileBoardCard
+                key={p.id} p={p} onOpen={openProfile} onMove={moveParticipant} canMove={dragEnabled}
+                reasons={groupBy === 'readiness' && activeCol !== 'ready' ? attentionItems(p) : undefined}
+              />
+            ))}
+            {(grouped[activeCol] || []).length === 0 && (
+              <div style={{ padding: '24px 8px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13, borderRadius: 8, border: '1px dashed var(--border)' }}>
+                No participants in {colLabels[activeCol]}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {isMobile ? (isLoading ? loadingSkeleton : null) : isLoading ? loadingSkeleton : (
       <DndContext
         sensors={sensors}
         onDragStart={({ active }) => setDragged((participants || []).find((p) => p.id === active.id) || null)}
@@ -277,7 +400,12 @@ export default function BoardPage({ canWrite }) {
             const cards = grouped[col] || []
             return (
               <BoardColumn key={col} col={col} label={colLabels[col]} dotColor={dots[col] || '#9CA3AF'} count={cards.length} droppable={dragEnabled}>
-                {cards.map((p) => <BoardCard key={p.id} p={p} canDrag={dragEnabled} onOpen={openProfile} />)}
+                {cards.map((p) => (
+                  <BoardCard
+                    key={p.id} p={p} canDrag={dragEnabled} onOpen={openProfile}
+                    reasons={groupBy === 'readiness' && col !== 'ready' ? attentionItems(p) : undefined}
+                  />
+                ))}
                 {cards.length === 0 && (
                   <div style={{
                     padding: '16px 8px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 11,

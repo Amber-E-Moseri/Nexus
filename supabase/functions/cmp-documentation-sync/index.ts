@@ -62,10 +62,12 @@ const canadianStatusMap: Record<string, string> = {
   'Visitor': 'VISITOR_OTHER',
 }
 
-const docValidityMap: Record<string, string> = {
-  yes: 'READY',
-  no: 'RENEWAL_NEEDED',
-}
+// "Will your Canadian documents remain valid through the required period?" is self-reported triage evidence.
+// It is only recognised here (to flag unexpected values) and kept raw in source_values; it is never converted
+// into a document status, because "No" means "staff should review", not "a renewal is needed".
+const docValidityAnswers = new Set(['yes', 'no'])
+
+const assistanceMap: Record<string, boolean> = { yes: true, no: false }
 
 const passportRegionMap: Record<string, string> = {
   'ecowas': 'ECOWAS',
@@ -98,6 +100,17 @@ function mergeSourceValues(existing: Record<string, unknown> | null, incoming: R
   }
 }
 
+// First + last name concatenated, lowercased, punctuation and honorifics dropped, for name matching.
+function normalizeName(value: unknown): string {
+  return String(value ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\b(pastor|sis|sister|brother|bro|dr|rev|prolific)\b/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function submitterDisplayName(sub: CMPSubmission, answers: Record<string, unknown>): string | null {
   const first = String(answers[FIELD_IDS.firstName] ?? '').trim()
   const last = String(answers[FIELD_IDS.lastName] ?? '').trim()
@@ -126,6 +139,7 @@ interface Lookups {
   identityMaps: Map<string, string> // cmp submission id -> participant id
   emailClaims: Map<string, string> // normalized email -> participant id
   participants: Map<string, any> // participant id -> row
+  byName: Map<string, string[]> // normalized full name -> participant ids
 }
 
 // PostgREST caps a response at 1000 rows by default, so page through the event's rows.
@@ -150,7 +164,13 @@ async function loadLookups(supabase: any, eventId: string): Promise<Lookups> {
     fetchAll((a, b) => supabase.from('icplc_participants').select('*')
       .eq('event_id', eventId).order('id').range(a, b)),
   ])
+  const byName = new Map<string, string[]>()
+  for (const p of parts) {
+    const key = normalizeName(p.full_name)
+    if (key) byName.set(key, [...(byName.get(key) || []), p.id])
+  }
   return {
+    byName,
     identityMaps: new Map(maps.map((m: any) => [m.source_key, m.participant_id])),
     emailClaims: new Map(claims.map((c: any) => [c.normalized_email, c.participant_id])),
     participants: new Map(parts.map((p: any) => [p.id, p])),
@@ -209,6 +229,16 @@ async function processSubmission(
       `durable_map→${existingMap.data.participant_id} vs email_claim→${emailClaimParticipantId}`,
     )
     return result // STOP: do not mutate either participant
+  }
+
+  // 1d. No email match: fall back to the first + last name on the form, only when it names exactly one person.
+  if (!participantId) {
+    const nameKey = normalizeName(submitterDisplayName(sub, answers))
+    const candidates = nameKey ? lookups.byName.get(nameKey) || [] : []
+    if (candidates.length === 1) {
+      participantId = candidates[0]
+      identityMethod = 'exact_name'
+    }
   }
 
   // Step 2: Handle unmatched or conflicted identity
@@ -297,20 +327,25 @@ async function processSubmission(
     result.issues?.push(`unrecognized_passport_region: ${regionRaw}`)
   }
 
-  // Canadian document validity → readiness. Citizens need no status document, so leave them alone.
+  // Canadian document validity: raw answer only (already in source_values above).
   const validityRaw = answers[FIELD_IDS.canadianDocValidity] as string | null
-  const validityCanonical = typeof validityRaw === 'string' ? docValidityMap[validityRaw.trim().toLowerCase()] : null
-  const finalResidency = (updates.canada_residency_status as string | undefined) ?? part.canada_residency_status
-
-  if (validityCanonical) {
-    if (finalResidency !== 'CANADIAN_CITIZEN'
-      && !(part.override_fields?.canada_status_document_readiness?.overridden)) {
-      updates.canada_status_document_readiness = validityCanonical
-      hasCanonicalMutation = true
-    }
-  } else if (validityRaw) {
+  if (validityRaw && !(typeof validityRaw === 'string' && docValidityAnswers.has(validityRaw.trim().toLowerCase()))) {
     result.status = 'unknown_value'
     result.issues?.push(`unrecognized_doc_validity: ${validityRaw}`)
+  }
+
+  // Documentation assistance requested (feeds the visa / travel-documentation follow-up queue)
+  const assistanceRaw = answers[FIELD_IDS.assistanceRequested] as string | null
+  const assistanceCanonical = typeof assistanceRaw === 'string' ? assistanceMap[assistanceRaw.trim().toLowerCase()] : undefined
+
+  if (assistanceCanonical !== undefined) {
+    if (!(part.override_fields?.documentation_assistance_requested?.overridden)) {
+      updates.documentation_assistance_requested = assistanceCanonical
+      hasCanonicalMutation = true
+    }
+  } else if (assistanceRaw) {
+    result.status = 'unknown_value'
+    result.issues?.push(`unrecognized_assistance_requested: ${assistanceRaw}`)
   }
 
   // Step 6: Determine result status
@@ -329,11 +364,22 @@ async function processSubmission(
 
   // Step 7: Apply (if action='apply')
   if (action === 'apply') {
-    const updateResp = await supabase
+    let updateResp = await supabase
       .from('icplc_participants')
       .update(updates)
       .eq('id', participantId)
       .eq('event_id', eventId)
+
+    // Deployed before the documentation_assistance_requested migration? Keep the rest of the sync working;
+    // the raw answer is still stored in source_values and the app reads it from there.
+    if (updateResp.error && /documentation_assistance_requested/.test(updateResp.error.message ?? '')) {
+      delete updates.documentation_assistance_requested
+      updateResp = await supabase
+        .from('icplc_participants')
+        .update(updates)
+        .eq('id', participantId)
+        .eq('event_id', eventId)
+    }
 
     if (updateResp.error) {
       result.status = 'error'

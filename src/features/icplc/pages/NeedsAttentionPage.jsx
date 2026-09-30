@@ -117,7 +117,8 @@ const SEVERITY_BORDER = {
 }
 
 const CATEGORY_SEVERITY = {
-  not_registered: 'warn',
+  registration_missing: 'danger',
+  not_registered: 'danger',
   canadian_status_unknown: 'warn',
   canadian_status_review: 'warn',
   pr_card: 'warn',

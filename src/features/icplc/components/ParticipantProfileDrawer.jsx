@@ -10,7 +10,9 @@ import DocumentationTab from './tabs/DocumentationTab.jsx'
 import TravelTab from './tabs/TravelTab.jsx'
 import ActivityTab from './tabs/ActivityTab.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
-import { deriveReadiness, readinessTone, readinessLabel } from '../lib/readinessEngine.js'
+import { registrationState, REGISTRATION_STATE_LABELS, REGISTRATION_URGENT_LABELS } from '../lib/documentationRules.js'
+import { deriveReadiness, readinessTone, readinessLabel, effectiveParticipationStatus } from '../lib/readinessEngine.js'
+import { attendanceEvidence } from '../lib/flightRequirement.js'
 
 const PARTICIPATION_TONES = {
   tracking: 'mute', likely: 'in_progress', confirmed: 'done',
@@ -21,19 +23,30 @@ const PARTICIPATION_LABELS = {
   uncertain: 'Uncertain', not_attending: 'Not Attending',
 }
 
-function DrawerStatusBadges({ participant }) {
+export function DrawerStatusBadges({ participant }) {
   const { readiness } = deriveReadiness(participant)
-  const regTone = participant.registration_link_status === 'registered' ? 'done'
-    : participant.registration_status === 'registered' ? 'done' : 'at_risk'
-  const regLabel = participant.registration_link_status === 'registered' ? 'Registered'
-    : participant.registration_status === 'registered' ? 'Registered' : 'Not Registered'
+  const regState = registrationState(participant) // the one canonical derivation, shared with every other view
+  const registered = regState === 'registered'
+  // Registration is mandatory and can't be waived: an incomplete one is always urgent, even for a confirmed participant.
+  const urgent = !registered && participant.participation_status !== 'not_attending'
+  const regTone = registered ? 'done' : urgent ? 'blocked' : 'at_risk'
+  const regLabel = registered ? REGISTRATION_STATE_LABELS.registered : urgent ? REGISTRATION_URGENT_LABELS[regState] : REGISTRATION_STATE_LABELS[regState]
+
+  const effective = effectiveParticipationStatus(participant)
+  const evidence = attendanceEvidence(participant)
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
       <Badge
-        tone={PARTICIPATION_TONES[participant.participation_status] || 'mute'}
-        label={PARTICIPATION_LABELS[participant.participation_status] || (participant.participation_status || 'Unknown')}
+        tone={PARTICIPATION_TONES[effective] || 'mute'}
+        label={PARTICIPATION_LABELS[effective] || (effective || 'Unknown')}
       />
+      {evidence && (
+        <Badge
+          tone={evidence.type === 'conflict' ? 'at_risk' : 'in_progress'}
+          label={evidence.label}
+        />
+      )}
       <Badge tone={regTone} label={regLabel} />
       <Badge tone={readinessTone(readiness)} label={readinessLabel(readiness)} />
     </div>

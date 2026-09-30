@@ -8,8 +8,21 @@ import Badge from '../../../../components/ui/Badge.jsx'
 import { useAuth } from '../../../../hooks/useAuth'
 import { useUpdateProfile, useClearFieldOverride } from '../../hooks/useICPLCProfile.js'
 import { getOverrideMeta } from '../../lib/fieldAuthority.js'
+import { registrationState, REGISTRATION_STATE_LABELS } from '../../lib/documentationRules.js'
 
-const REGISTRATION_OPTIONS = ['unknown', 'not_registered', 'registered', 'issue']
+// The stored value has four raw values, but only three states are ever shown: an empty / `unknown` value carries no
+// sign of registration activity, so it reads as Not Registered. `issue` means registration was started but is not complete.
+const REGISTRATION_OPTIONS = [
+  ['not_registered', 'Not registered'],
+  ['issue', 'Registration missing (started, not complete)'],
+  ['registered', 'Registered'],
+]
+const storedRegistrationLabel = (v) => (v === 'registered' ? 'Registered' : v === 'issue' ? 'Registration missing' : 'Not registered')
+const REGISTRATION_STATE_NOTES = {
+  registered: null,
+  registration_missing: 'Registration was started but is not complete. It still needs to be completed.',
+  not_registered: 'Registration has not been started. It needs to be started.',
+}
 const PARTICIPATION_OPTIONS = ['tracking', 'likely', 'confirmed', 'uncertain', 'not_attending']
 
 export default function RegistrationTab({ participant, canWrite }) {
@@ -35,6 +48,7 @@ export default function RegistrationTab({ participant, canWrite }) {
     staleTime: 30_000,
   })
   const isLinked = linkedMaps.length > 0
+  const regState = registrationState({ ...participant, registration_link_status: isLinked ? 'registered' : 'not_registered' })
 
   const registrationOverride = getOverrideMeta(participant, 'registration_status')
   const registrationSource = participant.source_values?.registration_source
@@ -95,11 +109,11 @@ export default function RegistrationTab({ participant, canWrite }) {
       {/* Registration link — derived from the identity map, never from participation */}
       <Card icon={Link2} title="Registration">
       <div>
-        <Badge tone={isLinked ? 'done' : 'at_risk'} label={isLinked ? 'Registered' : 'Not registered'} />
+        <Badge tone={regState === 'registered' ? 'done' : 'blocked'} label={REGISTRATION_STATE_LABELS[regState]} />
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
           {isLinked
             ? `Linked to ${linkedMaps.length} registration${linkedMaps.length === 1 ? '' : 's'}. Linking never changes participation status.`
-            : 'No registration is linked to this participant.'}
+            : REGISTRATION_STATE_NOTES[regState]}
         </div>
       </div>
       <div className="icplc-field-grid" style={{ marginTop: 14 }}>
@@ -111,7 +125,7 @@ export default function RegistrationTab({ participant, canWrite }) {
       <div style={{ marginTop: 14 }}>
 
       <Field
-        label="Registration Status"
+        label="Recorded registration status"
         sourceValue={participant.source_values?.registration_status}
         override={registrationOverride}
         onResumeSync={canWrite ? () => handleResumeSync('registration_status') : null}
@@ -119,16 +133,16 @@ export default function RegistrationTab({ participant, canWrite }) {
         {editing && canWrite ? (
           <select
             aria-label="Registration status"
-            value={form.registration_status}
+            value={form.registration_status === 'unknown' ? 'not_registered' : form.registration_status}
             onChange={(e) => setForm((f) => ({ ...f, registration_status: e.target.value }))}
             style={selectStyle}
           >
-            {REGISTRATION_OPTIONS.map((o) => (
-              <option key={o} value={o}>{o}</option>
+            {REGISTRATION_OPTIONS.map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
             ))}
           </select>
         ) : (
-          <span style={{ fontSize: 13 }}>{participant.registration_status}</span>
+          <span style={{ fontSize: 13 }}>{storedRegistrationLabel(participant.registration_status)}</span>
         )}
       </Field>
       </div>

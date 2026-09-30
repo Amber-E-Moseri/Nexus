@@ -44,7 +44,12 @@ async function fetchParticipants(eventId, filters) {
     q = q.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,alternate_email.ilike.%${filters.search}%`)
   }
   if (filters.participation_status?.length) {
-    q = q.in('participation_status', filters.participation_status)
+    // 'likely' can be derived from 'tracking' via attendance evidence, so fetch tracking rows too
+    // and let the client-side effective-participation filter (applyClientFilters) narrow them down.
+    const dbStatuses = filters.participation_status.includes('likely') && !filters.participation_status.includes('tracking')
+      ? [...filters.participation_status, 'tracking']
+      : filters.participation_status
+    q = q.in('participation_status', dbStatuses)
   }
   if (filters.registration_status?.length) {
     q = q.in('registration_status', filters.registration_status)

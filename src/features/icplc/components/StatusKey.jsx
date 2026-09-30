@@ -17,8 +17,9 @@ const SECTIONS = [
   {
     title: 'Registration',
     items: [
-      { tone: 'done', label: 'Registered', text: 'A registration is linked to this person.' },
-      { tone: 'at_risk', label: 'Not Registered', text: 'No registration linked yet.' },
+      { tone: 'done', label: 'Registered', text: 'A completed registration is linked to this person.' },
+      { tone: 'blocked', label: 'Registration Missing', text: 'Registration was started but is not complete. It still needs to be completed.' },
+      { tone: 'at_risk', label: 'Not Registered', text: 'Registration has not been started. It needs to be started.' },
     ],
   },
   {

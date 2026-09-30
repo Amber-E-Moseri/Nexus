@@ -26,6 +26,8 @@ import { overrideFieldsForEdit } from '../../features/icplc/lib/fieldAuthority.j
 
 // A fully-ready baseline: everything passes. Each case overrides one dimension.
 const ready = {
+  // The Immigration Form was received: without it a confirmed participant shows "documentation information incomplete".
+  source_values: { cmp_documentation: { submission_id: 'form-1' } },
   participation_status: 'confirmed',
   registration_status: 'registered',
   registration_link_status: 'registered',
@@ -237,9 +239,9 @@ describe('Data-state matrix', () => {
     expect(reasonsOf(x)).not.toMatch(/country/i)
     expect(attentionCategoryKeys(x).some((k) => /country/i.test(k))).toBe(false)
   })
-  it('L. Manual, not registered, likely → Not Registered attention', () => {
+  it('L. Manual, not registered, likely, with a flight → Registration Missing attention', () => {
     const x = p({ participation_status: 'likely', registration_status: 'not_registered', registration_link_status: 'not_registered' })
-    expect(attentionCategoryKeys(x)).toContain('not_registered')
+    expect(attentionCategoryKeys(x)).toContain('registration_missing')
   })
   it('O. Passport incomplete → blocker visible', () => {
     const x = p({ passport_readiness: 'renewal_needed', visa_requirement: 'not_required' })

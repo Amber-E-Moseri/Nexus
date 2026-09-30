@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import { deriveItineraryStatus, deriveTravelStatus } from '../lib/readinessEngine.js'
+import { flightNotRequired } from '../lib/flightRequirement.js'
 import { fmtTime, groupByDate, groupIntoBands } from '../lib/travelGrouping.js'
 import { printTravelManifest } from '../lib/printTravelManifest.js'
 import { SUBGROUP_OPTIONS } from '../lib/subgroups.js'
@@ -11,6 +12,7 @@ import { Lock, Printer, RefreshCw, Unlock } from 'lucide-react'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import { rowOpenProps } from '../components/ParticipantTable.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
+import FlightSyncBlock from '../components/FlightSyncBlock.jsx'
 
 export default function TravelPage({ canWrite }) {
   const { config, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
@@ -91,6 +93,12 @@ export default function TravelPage({ canWrite }) {
 
   return (
     <div>
+      {canWrite && (
+        <details style={{ marginBottom: 14 }}>
+          <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Sync flight data from the CMP Flight Form</summary>
+          <div style={{ marginTop: 10 }}><FlightSyncBlock /></div>
+        </details>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
         <div role="status" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
           Flight manifest — {participants.length} participants
@@ -167,7 +175,9 @@ export default function TravelPage({ canWrite }) {
                       {p.subgroup && <div className="icplc-cell-sub">{p.subgroup}</div>}
                     </td>
                     <td data-label="Itinerary">
-                      <Badge tone={itinerary === 'received' ? 'done' : 'warn'} label={itinerary === 'received' ? 'Received' : 'Missing'} />
+                      {flightNotRequired(p)
+                        ? <Badge tone="mute" label="Not required" />
+                        : <Badge tone={itinerary === 'received' ? 'done' : 'warn'} label={itinerary === 'received' ? 'Received' : 'Missing'} />}
                     </td>
                     <td data-label="Travel status">
                       <Badge tone={travel === 'ready' ? 'done' : 'at_risk'} label={travel === 'ready' ? 'Ready' : 'Outstanding'} />

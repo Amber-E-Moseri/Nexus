@@ -40,24 +40,68 @@ export function mapCanadianStatus(rawValue) {
   return map[rawValue] || null; // null = unknown/unrecognized
 }
 
-// Canadian document validity ("remain valid through the end of November?")
-export function mapCanadianDocValidity(rawValue) {
+// Canadian document validity ("remain valid through the end of November?") is SELF-REPORTED triage evidence.
+// It is never turned into a document status: "No" means "staff should review", not "a renewal is needed".
+export function mapCanadianDocSelfReport(rawValue) {
   const v = typeof rawValue === 'string' ? rawValue.trim().toLowerCase() : '';
-  if (v === 'yes') return 'READY';
-  if (v === 'no') return 'RENEWAL_NEEDED';
+  if (v === 'yes') return 'yes';
+  if (v === 'no') return 'no';
   return null; // null = unknown/unrecognized
 }
 
+// "Would you like assistance from the ICPLC team ...?" -> boolean, or null when unanswered/unrecognized.
+export function mapAssistanceRequested(rawValue) {
+  const v = typeof rawValue === 'string' ? rawValue.trim().toLowerCase() : '';
+  if (v === 'yes') return true;
+  if (v === 'no') return false;
+  return null;
+}
+
+const isOverridden = (p, field) => p?.override_fields?.[field]?.overridden === true;
+
 /**
- * Status-document readiness to use for a participant: the stored value when staff/sync set one,
- * otherwise what the participant reported on the CMP form ("valid through November?" Yes/No),
- * so records synced before the mapping existed are still understood. Citizens need no document.
+ * Self-reported Canadian document validity for a participant.
+ * `concern` is true when the participant answered "No" and staff have not recorded their own view of the
+ * document (a staff-set readiness always wins). It flags a review; it does not say which document, or that
+ * anything expired.
+ */
+export function canadianDocSelfReport(p) {
+  const answer = mapCanadianDocSelfReport(p?.source_values?.cmp_documentation?.canadian_doc_valid_through_nov);
+  const staffSet = isOverridden(p, 'canada_status_document_readiness');
+  return {
+    answer,
+    concern: answer === 'no' && !staffSet && p?.canada_residency_status !== 'CANADIAN_CITIZEN',
+  };
+}
+
+/**
+ * Status-document readiness to use for a participant. A staff-set value always wins. Otherwise the
+ * self-reported "Yes" counts as ready and "No" is NOT converted into a status (see canadianDocSelfReport);
+ * anything else falls back to the stored value. Citizens need no document.
  */
 export function effectiveCanadaDocReadiness(p) {
   const stored = p?.canada_status_document_readiness;
-  if (stored && stored !== 'UNKNOWN') return stored;
+  if (isOverridden(p, 'canada_status_document_readiness')) return stored || null;
   if (p?.canada_residency_status === 'CANADIAN_CITIZEN') return stored || null;
-  return mapCanadianDocValidity(p?.source_values?.cmp_documentation?.canadian_doc_valid_through_nov) || stored || null;
+  const { answer } = canadianDocSelfReport(p);
+  const hasStored = stored && stored !== 'UNKNOWN';
+  // Earlier syncs turned a "No" answer into RENEWAL_NEEDED. That was never a staff decision, so it no longer
+  // counts as one: the concern is surfaced through canadianDocSelfReport() instead.
+  if (answer === 'no') return hasStored && stored !== 'RENEWAL_NEEDED' ? stored : null;
+  if (hasStored) return stored;
+  return answer === 'yes' ? 'READY' : (stored || null);
+}
+
+/**
+ * Whether the participant asked for documentation assistance. The stored value (staff-corrected or synced)
+ * wins; otherwise the raw CMP answer already kept in source_values is used, so participants synced before the
+ * column existed are still understood without a re-sync. Returns true | false | null (unknown).
+ */
+export function effectiveAssistanceRequested(p) {
+  if (p?.documentation_assistance_requested === true || p?.documentation_assistance_requested === false) {
+    return p.documentation_assistance_requested;
+  }
+  return mapAssistanceRequested(p?.source_values?.cmp_documentation?.assistance_requested);
 }
 
 // Passport region as reported by the participant (not the country)
@@ -164,18 +208,23 @@ export function computeMutations(participant, answers, sourceValues) {
     mutations.unrecognized_passport_region_value = regionRaw;
   }
 
-  // Canadian document validity → readiness. Citizens need no status document, so leave them alone.
+  // Canadian document validity: kept only as raw source evidence (source_values). It is deliberately NOT
+  // written to canada_status_document_readiness; see canadianDocSelfReport().
   const validityRaw = answers[CMP_FIELD_IDS.canadianDocValidity];
-  const validityCanonical = mapCanadianDocValidity(validityRaw);
-  const finalResidency = mutations.canonical.canada_residency_status ?? participant.canada_residency_status;
-
-  if (validityCanonical) {
-    if (finalResidency !== 'CANADIAN_CITIZEN'
-      && !(participant.override_fields?.canada_status_document_readiness?.overridden)) {
-      mutations.canonical.canada_status_document_readiness = validityCanonical;
-    }
-  } else if (validityRaw) {
+  if (validityRaw && mapCanadianDocSelfReport(validityRaw) === null) {
     mutations.unrecognized_doc_validity_value = validityRaw;
+  }
+
+  // Documentation assistance requested
+  const assistanceRaw = answers[CMP_FIELD_IDS.assistanceRequested];
+  const assistanceCanonical = mapAssistanceRequested(assistanceRaw);
+
+  if (assistanceCanonical !== null) {
+    if (!(participant.override_fields?.documentation_assistance_requested?.overridden)) {
+      mutations.canonical.documentation_assistance_requested = assistanceCanonical;
+    }
+  } else if (assistanceRaw) {
+    mutations.unrecognized_assistance_value = assistanceRaw;
   }
 
   return mutations;
