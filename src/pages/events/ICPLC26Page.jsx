@@ -14,8 +14,8 @@ const INK = '#111010'
 const MUTED = '#6B6560'
 const WRAP = { width: 'min(1200px, calc(100% - 40px))', margin: 'auto' }
 const eyebrow = (color) => ({ fontSize: 11, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 10 })
-const h2 = { fontFamily: 'Syne, sans-serif', fontSize: 'clamp(36px,5vw,64px)', fontWeight: 800, lineHeight: 0.95, letterSpacing: '-0.05em', margin: 0 }
-const h3 = { fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em' }
+const h2 = { fontFamily: "'Bricolage Grotesque', Inter, sans-serif", fontSize: 'clamp(36px,5vw,64px)', fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em', margin: 0 }
+const h3 = { fontFamily: "'Bricolage Grotesque', Inter, sans-serif", fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em' }
 
 // Named editor granted access without changing their app-wide role:
 // Pastor Chi Nwokem (cedochie@gmail.com). Mirrors the RLS policy in the migration.
@@ -300,7 +300,7 @@ export default function ICPLC26Page() {
   useEffect(() => {
     const link = document.createElement('link')
     link.rel = 'stylesheet'
-    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Syne:wght@400;700;800&display=swap'
+    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Syne:wght@400;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap'
     document.head.appendChild(link)
     const prevTitle = document.title
     document.title = 'ICPLC 2026 — Canada Help Centre'
