@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
-import { operationalSummary, isRegistrationMissing } from '../../features/icplc/lib/attentionModel.js'
+import { operationalSummary, isRegistrationIncomplete } from '../../features/icplc/lib/attentionModel.js'
 import {
   attentionCategoryKeys, attentionTier, documentationMissingInfo, documentationReviewFingerprint,
   isDocumentationReviewAcknowledged, isDocumentationReviewStale,
@@ -37,18 +37,18 @@ const has = (p, key) => attentionCategoryKeys(p).includes(key)
 describe('1-3. registration is mandatory, cannot be waived, and is urgent', () => {
   it('1. a confirmed participant without a registration needs registration', () => {
     const p = base(unregistered)
-    expect(isRegistrationMissing(p)).toBe(true)
-    expect(has(p, 'not_registered')).toBe(true)
+    expect(isRegistrationIncomplete(p)).toBe(true)
+    expect(has(p, 'registration_missing')).toBe(true)
   })
 
   it('2. nothing waives it: not Flight Not Required, not a staff override, not Mark reviewed, not a made-up status', () => {
-    expect(isRegistrationMissing(base({ ...unregistered, ...noFlight, ...inNigeria }))).toBe(true)
-    expect(isRegistrationMissing(base({ ...unregistered, override_fields: { registration_status: { overridden: true } } }))).toBe(true)
-    expect(isRegistrationMissing(reviewed(base({ ...unregistered, ...infoMissing })))).toBe(true)
+    expect(isRegistrationIncomplete(base({ ...unregistered, ...noFlight, ...inNigeria }))).toBe(true)
+    expect(isRegistrationIncomplete(base({ ...unregistered, override_fields: { registration_status: { overridden: true } } }))).toBe(true)
+    expect(isRegistrationIncomplete(reviewed(base({ ...unregistered, ...infoMissing })))).toBe(true)
     for (const status of ['not_required', 'waived', 'exempt', 'n/a', '']) {
-      expect(isRegistrationMissing(base({ registration_status: status, registration_link_status: undefined }))).toBe(true)
+      expect(isRegistrationIncomplete(base({ registration_status: status, registration_link_status: undefined }))).toBe(true)
     }
-    expect(isRegistrationMissing(base({ registration_status: 'registered', registration_link_status: undefined }))).toBe(false)
+    expect(isRegistrationIncomplete(base({ registration_status: 'registered', registration_link_status: undefined }))).toBe(false)
   })
 
   it('2b. no "registration not required" value exists in the schema, the rules, or the registration UI', () => {
@@ -71,8 +71,8 @@ describe('1-3. registration is mandatory, cannot be waived, and is urgent', () =
     const p = base({ ...unregistered, visa_requirement: 'required', visa_process_status: 'issue', passport_readiness: 'no_passport' })
     const s = operationalSummary(p)
     expect(s.urgent).toBe(true)
-    expect(s.attention[0]).toBe('not_registered')
-    expect(attentionTier('not_registered')).toBe(0)
+    expect(s.attention[0]).toBe('registration_missing')
+    expect(attentionTier('registration_missing')).toBe(0)
     expect(attentionTier('visa_blocked')).toBeGreaterThan(0)
   })
 })
@@ -133,7 +133,7 @@ describe('6-10. Flight Not Required', () => {
     const p = base({ ...unregistered, ...noFlight, ...inNigeria })
     const s = operationalSummary(p)
     expect(s.urgent).toBe(true)
-    expect(s.attention[0]).toBe('not_registered')
+    expect(s.attention[0]).toBe('registration_missing')
     expect(s.confirmed).toBe(true)
   })
 })
@@ -186,7 +186,7 @@ describe('11-16. documentation information and Mark reviewed', () => {
     keep({ passport_readiness: 'no_passport' }, 'passport_incomplete')
     keep({ passport_readiness: 'renewal_in_progress' }, 'passport_incomplete')
     keep({ canada_residency_status: 'PERMANENT_RESIDENT', source_values: { cmp_documentation: { submission_id: 's', canadian_doc_valid_through_nov: 'No' } } }, 'canadian_docs_review')
-    keep({ ...unregistered }, 'not_registered')
+    keep({ ...unregistered }, 'registration_missing')
     keep({ ...noFlight }, 'travel_incomplete')
   })
 

@@ -10,6 +10,7 @@ import { ATTENTION_CATEGORIES } from '../lib/documentationRules.js'
 const WORKING_LIST_VIEW_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'registered', label: 'Registered' },
+  { value: 'registration_missing', label: 'Registration Missing' },
   { value: 'not_registered', label: 'Not Registered' },
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'needs_attention', label: 'Needs Attention' },
@@ -23,10 +24,12 @@ const GROUPS = [
   { field: 'readiness', label: 'Readiness', options: ['unknown', 'waiting_itinerary', 'in_progress', 'action_required', 'blocked', 'ready'] },
   {
     field: 'attention_state', label: 'Attention',
-    options: ['registration_missing', 'confirmed_registration_missing', 'confirmed_needs_attention', 'docs_incomplete', 'docs_review_acknowledged'],
+    options: ['registration_missing', 'not_registered', 'confirmed_registration_missing', 'confirmed_not_registered', 'confirmed_needs_attention', 'docs_incomplete', 'docs_review_acknowledged'],
     labels: {
       registration_missing: 'Registration missing',
+      not_registered: 'Not registered',
       confirmed_registration_missing: 'Confirmed + registration missing',
+      confirmed_not_registered: 'Confirmed + not registered',
       confirmed_needs_attention: 'Confirmed + needs attention',
       docs_incomplete: 'Documentation information incomplete',
       docs_review_acknowledged: 'Documentation review acknowledged',

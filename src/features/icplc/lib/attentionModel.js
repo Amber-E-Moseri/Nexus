@@ -14,6 +14,9 @@ import {
   isDocumentationReviewStale,
   isMissingInfoReason,
   isRegistered,
+  registrationState,
+  REGISTRATION_STATE,
+  REGISTRATION_URGENT_LABELS,
   attentionCategoryDef,
 } from './documentationRules.js'
 
@@ -48,10 +51,14 @@ export function needsAttentionNow(p) {
 export function attentionItems(p) {
   return attentionCategoryKeys(p)
     .filter((k) => !INFORMATIONAL.has(k))
-    .map((k) => (k === 'not_registered' ? 'URGENT — Registration Required' : attentionCategoryDef(k)?.label || k))
+    .map((k) => REGISTRATION_URGENT_LABELS[k] || attentionCategoryDef(k)?.label || k)
 }
 
-export function isRegistrationMissing(p) {
+/**
+ * Registration is not complete (either Registration Missing or Not Registered). Both fail the gate the same way and
+ * both are urgent. Use registrationState() when the distinction matters.
+ */
+export function isRegistrationIncomplete(p) {
   if (!p || p.participation_status === 'not_attending') return false
   return !isRegistered(p)
 }
@@ -59,7 +66,8 @@ export function isRegistrationMissing(p) {
 /**
  * One participant's operational picture.
  *  confirmed            staff-confirmed, or derived Ready (never lowered by attention)
- *  urgent               registration is missing (highest priority, cannot be acknowledged or waived)
+ *  registration         registered | registration_missing | not_registered (canonical, see registrationState)
+ *  urgent               registration is not complete (highest priority, cannot be acknowledged or waived)
  *  attention            attention keys, highest priority first
  *  needsAttention       any non-informational attention key
  *  docsIncomplete       documentation information is missing and staff have not reviewed it
@@ -74,7 +82,8 @@ export function operationalSummary(p) {
   const reviewed = isDocumentationReviewAcknowledged(p)
   return {
     confirmed: isConfirmedOrReady(p),
-    urgent: isRegistrationMissing(p),
+    registration: registrationState(p),
+    urgent: isRegistrationIncomplete(p),
     attention,
     needsAttention: hasActionableAttention(attention),
     topTier: actionable.length ? attentionTier(actionable[0]) : null,
@@ -89,8 +98,11 @@ export function operationalSummary(p) {
 /** Values of the `attention_state` Working List filter. */
 export const ATTENTION_STATES = {
   confirmed_needs_attention: (s) => s.confirmed && s.needsAttention,
-  registration_missing: (s) => s.urgent,
-  confirmed_registration_missing: (s) => s.confirmed && s.urgent,
+  // Registration Missing (started, not complete) and Not Registered (not started) are different states.
+  registration_missing: (s) => s.urgent && s.registration === REGISTRATION_STATE.MISSING,
+  not_registered: (s) => s.urgent && s.registration === REGISTRATION_STATE.NOT_REGISTERED,
+  confirmed_registration_missing: (s) => s.confirmed && s.urgent && s.registration === REGISTRATION_STATE.MISSING,
+  confirmed_not_registered: (s) => s.confirmed && s.urgent && s.registration === REGISTRATION_STATE.NOT_REGISTERED,
   docs_incomplete: (s) => s.docsIncomplete,
   docs_review_acknowledged: (s) => s.docsReviewed,
 }

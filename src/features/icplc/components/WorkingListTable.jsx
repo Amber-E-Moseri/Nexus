@@ -3,21 +3,22 @@ import { CheckCircle2, XCircle, ArrowUp, ArrowDown, X, UserX, UserCheck } from '
 import { rowOpenProps } from './ParticipantTable.jsx'
 import { attentionCategoryKeys } from '../lib/documentationRules.js'
 import { groupForSubgroup } from '../lib/subgroups.js'
+import { registrationState, REGISTRATION_STATE, REGISTRATION_STATE_LABELS } from '../lib/documentationRules.js'
 
 const DASH = <span className="icplc-wl-muted">—</span>
 
 const isAbsent = (p) => p.participation_status === 'not_attending'
 
-function isRegistered(p) {
-  return (p.registration_link_status || p.registration_status) === 'registered'
-}
+const regStateOf = (p) => registrationState(p) // registered | registration_missing | not_registered (one canonical derivation)
+const isRegistered = (p) => regStateOf(p) === REGISTRATION_STATE.REGISTERED
+const isCommittedToAttend = (p) => p.participation_status === 'confirmed' || p.participation_status === 'likely'
 
 function phoneOf(p) {
   return p.phone_number || p.phone || p.source_values?.phone_number?.value || ''
 }
 
 const handleOf = (p) => (p.kingschat_username ? String(p.kingschat_username).replace(/^@/, '') : '')
-const attentionOf = (p) => attentionCategoryKeys(p).filter((k) => k !== 'not_registered')
+const attentionOf = (p) => attentionCategoryKeys(p).filter((k) => k !== 'not_registered' && k !== 'registration_missing')
 const humanize = (k) => k.replace(/_/g, ' ')
 
 // Column definitions: how to sort, and (optionally) which values a cell click can filter on.
@@ -30,7 +31,7 @@ const COLUMNS = {
   campus: { label: 'Campus', sort: (p) => (p.region || '').toLowerCase(), values: (p) => (p.region ? [p.region] : []) },
   phone: { label: 'Phone', sort: (p) => phoneOf(p) },
   kingschat: { label: 'KingsChat', sort: (p) => handleOf(p).toLowerCase() },
-  registered: { label: 'Registered', sort: (p) => (isRegistered(p) ? 1 : 0), values: (p) => [isRegistered(p) ? 'Registered' : 'Not registered'] },
+  registered: { label: 'Registered', sort: (p) => ({ registered: 2, registration_missing: 1, not_registered: 0 })[regStateOf(p)], values: (p) => [REGISTRATION_STATE_LABELS[regStateOf(p)]] },
   attention: { label: 'Attention', sort: (p) => attentionOf(p).length, values: (p) => attentionOf(p).map(humanize) },
 }
 
@@ -151,6 +152,7 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
             )}
             {rows.map((p, i) => {
               const registered = isRegistered(p)
+              const regState = regStateOf(p)
               const attention = attentionOf(p)
               const phone = phoneOf(p)
               const handle = handleOf(p)
@@ -168,12 +170,26 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
                   <td className="icplc-wl-phone">{phone || DASH}</td>
                   <td className="icplc-wl-muted">{handle ? `@${handle}` : DASH}</td>
                   <td style={{ textAlign: 'center' }}>
-                    <FilterCell column="registered" value={registered ? 'Registered' : 'Not registered'}>
-                      {registered
-                        ? <CheckCircle2 size={18} color="#16A34A" aria-label="Registered" />
-                        : (p.participation_status === 'confirmed' || p.participation_status === 'likely')
-                          ? <span style={{ background: '#FBE4E2', color: '#B42318', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>URGENT · Register</span>
-                          : <XCircle size={18} color="#DC2626" aria-label="Not registered" />}
+                    <FilterCell column="registered" value={REGISTRATION_STATE_LABELS[regState]}>
+                      {registered ? (
+                        <CheckCircle2 size={18} color="#16A34A" aria-label="Registered" />
+                      ) : regState === 'registration_missing' ? (
+                        <span
+                          aria-label="Registration missing"
+                          style={{ background: isCommittedToAttend(p) ? '#FBE4E2' : '#FDF0DC', color: isCommittedToAttend(p) ? '#B42318' : '#A15C07', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}
+                        >
+                          {isCommittedToAttend(p) ? 'URGENT · Missing' : 'Missing'}
+                        </span>
+                      ) : isCommittedToAttend(p) ? (
+                        <span
+                          aria-label="Not registered"
+                          style={{ background: '#FBE4E2', color: '#B42318', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}
+                        >
+                          URGENT · Not registered
+                        </span>
+                      ) : (
+                        <XCircle size={18} color="#DC2626" aria-label="Not registered" />
+                      )}
                     </FilterCell>
                   </td>
                   <td className="icplc-wl-muted">

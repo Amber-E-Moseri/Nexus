@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { operationalSummary, matchesAttentionState, isRegistrationMissing, attentionReasons, needsAttentionNow } from '../../features/icplc/lib/attentionModel.js'
+import { operationalSummary, matchesAttentionState, isRegistrationIncomplete, attentionReasons, needsAttentionNow } from '../../features/icplc/lib/attentionModel.js'
 import { attentionCategoryKeys, attentionTier, documentationMissingInfo, documentationReviewFingerprint, sortAttentionKeys } from '../../features/icplc/lib/documentationRules.js'
 import { deriveReadiness, deriveFlightStatus, deriveTravelStatus, deriveItineraryStatus } from '../../features/icplc/lib/readinessEngine.js'
 import { flightNotRequired, flightNotRequiredInfo, flightNotRequiredReasonLabel, FLIGHT_NOT_REQUIRED_REASONS } from '../../features/icplc/lib/flightRequirement.js'
@@ -47,8 +47,8 @@ describe('B. not registered + known attending + flight submitted', () => {
     const s = operationalSummary(p)
     expect(s.confirmed).toBe(true)
     expect(s.urgent).toBe(true)
-    expect(s.attention[0]).toBe('not_registered')
-    expect(attentionTier('not_registered')).toBe(0)
+    expect(s.attention[0]).toBe('registration_missing')
+    expect(attentionTier('registration_missing')).toBe(0)
     expect(deriveReadiness(p).reasons).toContain('Registration outstanding')
   })
 })
@@ -59,7 +59,7 @@ describe('C. not registered + Flight Not Required (already in Nigeria)', () => {
     const s = operationalSummary(p)
     expect(s.confirmed).toBe(true)
     expect(s.urgent).toBe(true)
-    expect(s.attention).toContain('not_registered')
+    expect(s.attention).toContain('registration_missing')
     expect(s.attention).not.toContain('travel_incomplete')
     expect(s.flight).toBe('not_required')
     expect(deriveReadiness(p).reasons.join(' ')).not.toMatch(/itinerary/i)
@@ -251,7 +251,7 @@ describe('H-K, M. acknowledgement never clears a real problem or registration', 
   it('K. missing registration always remains, whatever else is reviewed', () => {
     for (const base of [complete(unregistered), complete({ ...unregistered, ...infoMissing }), complete({ ...unregistered, ...noFlight, ...inNigeria })]) {
       const p = review(base)
-      expect(attentionCategoryKeys(p)[0]).toBe('not_registered')
+      expect(attentionCategoryKeys(p)[0]).toBe('registration_missing')
       expect(operationalSummary(p).urgent).toBe(true)
       expect(attentionReasons(p)).toContain('Registration outstanding')
       expect(needsAttentionNow(p)).toBe(true)
@@ -268,16 +268,16 @@ describe('H-K, M. acknowledgement never clears a real problem or registration', 
 describe('N-O. registration cannot be waived', () => {
   it('N. Flight Not Required does not waive registration', () => {
     const p = complete({ ...unregistered, ...noFlight, ...inNigeria })
-    expect(isRegistrationMissing(p)).toBe(true)
+    expect(isRegistrationIncomplete(p)).toBe(true)
   })
 
   it('O. only a real registration satisfies it: no "not required" value exists or is honoured', () => {
     for (const status of ['not_required', 'waived', 'unknown', 'issue', 'not_registered', undefined]) {
-      expect(isRegistrationMissing(complete({ registration_status: status, registration_link_status: undefined }))).toBe(true)
+      expect(isRegistrationIncomplete(complete({ registration_status: status, registration_link_status: undefined }))).toBe(true)
     }
-    expect(isRegistrationMissing(complete({ registration_status: 'registered', registration_link_status: undefined }))).toBe(false)
+    expect(isRegistrationIncomplete(complete({ registration_status: 'registered', registration_link_status: undefined }))).toBe(false)
     // staff cannot override it away either
-    expect(isRegistrationMissing(complete({ ...unregistered, override_fields: { registration_status: { overridden: true } } }))).toBe(true)
+    expect(isRegistrationIncomplete(complete({ ...unregistered, override_fields: { registration_status: { overridden: true } } }))).toBe(true)
     // and no registration UI or rule mentions such a state
     for (const file of ['src/features/icplc/components/tabs/RegistrationTab.jsx', 'src/features/icplc/lib/documentationRules.js', 'src/features/icplc/lib/attentionModel.js']) {
       expect(readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8')).not.toMatch(/registration[^\n]{0,40}not[_ ]required/i)
@@ -285,7 +285,7 @@ describe('N-O. registration cannot be waived', () => {
   })
 
   it('not-attending people are simply not chased for registration', () => {
-    expect(isRegistrationMissing(complete({ ...unregistered, participation_status: 'not_attending' }))).toBe(false)
+    expect(isRegistrationIncomplete(complete({ ...unregistered, participation_status: 'not_attending' }))).toBe(false)
   })
 })
 
@@ -305,10 +305,10 @@ describe('attention priority and filters', () => {
   it('orders registration, then known problems, then information gaps', () => {
     const p = complete({ ...unregistered, ...infoMissing, visa_requirement: 'required', visa_process_status: 'issue', passport_readiness: 'no_passport' })
     const keys = attentionCategoryKeys(p)
-    expect(keys[0]).toBe('not_registered')
+    expect(keys[0]).toBe('registration_missing')
     const lastKnown = Math.max(keys.indexOf('visa_blocked'), keys.indexOf('passport_incomplete'))
     expect(lastKnown).toBeLessThan(keys.indexOf('documentation_incomplete'))
-    expect(sortAttentionKeys(['documentation_incomplete', 'travel_incomplete', 'not_registered'])).toEqual(['not_registered', 'travel_incomplete', 'documentation_incomplete'])
+    expect(sortAttentionKeys(['documentation_incomplete', 'travel_incomplete', 'registration_missing', 'not_registered'])).toEqual(['registration_missing', 'not_registered', 'travel_incomplete', 'documentation_incomplete'])
   })
 
   it('an overdue target never makes anyone Blocked', () => {
@@ -328,8 +328,11 @@ describe('attention priority and filters', () => {
       { ...review(complete({ ...infoMissing })), id: 'docs-ack' },
     ]
     const ids = (state) => applyClientFilters(list, { attention_state: [state] }).map((p) => p.id).sort()
+    // these fixtures have a submitted flight and the Immigration Form, so an unregistered one is Registration Missing
     expect(ids('registration_missing')).toEqual(['reg', 'reg-tracking'])
     expect(ids('confirmed_registration_missing')).toEqual(['reg'])
+    expect(ids('not_registered')).toEqual([])
+    expect(ids('confirmed_not_registered')).toEqual([])
     expect(ids('confirmed_needs_attention')).toEqual(['docs', 'flight', 'reg'])
     expect(ids('docs_incomplete')).toEqual(['docs'])
     expect(ids('docs_review_acknowledged')).toEqual(['docs-ack'])
@@ -358,7 +361,7 @@ describe('L-M. Flight Not Required satisfies the travel dependency without an it
   it('M. Flight Not Required + registration missing: registration stays urgent and the person is not Ready', () => {
     const p = complete({ ...unregistered, ...noFlight, ...inNigeria })
     expect(operationalSummary(p).urgent).toBe(true)
-    expect(attentionCategoryKeys(p)[0]).toBe('not_registered')
+    expect(attentionCategoryKeys(p)[0]).toBe('registration_missing')
     expect(deriveReadiness(p).readiness).toBe('action_required')
   })
 })

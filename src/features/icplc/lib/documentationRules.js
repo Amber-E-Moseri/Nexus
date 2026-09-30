@@ -23,7 +23,7 @@ import {
 } from '../../registration/icplcDocReadiness.js'
 import { PASSPORT_REGION, effectivePassportRegion } from './passportRegion.js'
 import { effectiveCanadaDocReadiness, canadianDocSelfReport } from './cmpDocumentation.js'
-import { flightNotRequired } from './flightRequirement.js'
+import { flightNotRequired, hasFlightData } from './flightRequirement.js'
 
 export const SUPPORTING_DOC = {
   NOT_REQUIRED: 'NOT_REQUIRED', // ECOWAS passport
@@ -41,6 +41,66 @@ const COMMITTED = ['confirmed', 'likely']
  */
 export function isRegistered(p) {
   return (p?.registration_link_status || p?.registration_status) === 'registered'
+}
+
+// ── Registration: three user-facing states, ONE canonical derivation ─────────────────────────────────────────
+//
+//   registered            a completed registration (the only state that satisfies the requirement)
+//   registration_missing  no completed registration, but there is meaningful evidence the participant is already
+//                         progressing through ICPLC (see registrationProgressSignals: a flight, the documentation form,
+//                         registration CSV / issue evidence, visa progress). Meaning: "registration still needs to be completed"
+//   not_registered        no completed registration and no meaningful ICPLC progress. Meaning: "registration needs to be started"
+//
+// There is deliberately no "unknown" state: an empty, `unknown` or unrecognised stored value carries no evidence of
+// any activity, so it is Not Registered. Both non-complete states fail the registration gate identically.
+export const REGISTRATION_STATE = { REGISTERED: 'registered', MISSING: 'registration_missing', NOT_REGISTERED: 'not_registered' }
+export const REGISTRATION_STATE_LABELS = {
+  registered: 'Registered',
+  registration_missing: 'Registration Missing',
+  not_registered: 'Not Registered',
+}
+// The urgent Needs Attention wording for the two non-complete states.
+export const REGISTRATION_URGENT_LABELS = {
+  registration_missing: 'URGENT — Registration Missing',
+  not_registered: 'URGENT — Not Registered',
+}
+
+/**
+ * Evidence that a participant is already progressing through ICPLC. Each signal is an ICPLC-specific step that actually
+ * happened, recorded by the registration CSV, a CMP form, or staff. Merely existing in the Working List does not
+ * count, and neither does participation stage (a Confirmed person can still be Not Registered), passport / Canadian
+ * fields on their own, tags, notes or manual overrides.
+ *
+ *   flight              a flight / itinerary is recorded (arrival or departure flight or date, or a linked CMP flight submission)
+ *   documentation_form  the ICPLC Immigration / documentation form was received
+ *   registration_csv    the registration export lists them with Registered other than Yes (started, not complete)
+ *   registration_issue  the stored registration status is `issue`
+ *   visa                the visa process has moved past "not started" (in progress, submitted, processing, approved, issue)
+ *   flight_not_required staff recorded that no flight is needed (they are being handled for travel)
+ */
+export function registrationProgressSignals(p) {
+  const signals = []
+  const sv = p?.source_values
+  if (hasFlightData(p) || (sv?.cmp_flights && typeof sv.cmp_flights === 'object' && Object.keys(sv.cmp_flights).length > 0)) {
+    signals.push('flight')
+  }
+  if (sv?.cmp_documentation?.submission_id) signals.push('documentation_form')
+  const csv = sv?.registered_raw?.value
+  if (typeof csv === 'string' && csv.trim() !== '' && csv.trim().toLowerCase() !== 'yes') signals.push('registration_csv')
+  if (p?.registration_status === 'issue') signals.push('registration_issue')
+  if (['in_progress', 'submitted', 'processing', 'approved', 'issue'].includes(p?.visa_process_status)) signals.push('visa')
+  if (p?.flight_not_required_reason) signals.push('flight_not_required')
+  return signals
+}
+
+export function hasRegistrationProgress(p) {
+  return registrationProgressSignals(p).length > 0
+}
+
+/** registered | registration_missing | not_registered. Use this everywhere registration is shown or filtered. */
+export function registrationState(p) {
+  if (isRegistered(p)) return REGISTRATION_STATE.REGISTERED
+  return hasRegistrationProgress(p) ? REGISTRATION_STATE.MISSING : REGISTRATION_STATE.NOT_REGISTERED
 }
 
 /** Participants staff are actively counting on (used to gate "missing data" blockers). */
@@ -211,7 +271,8 @@ export function deriveDocumentation(p) {
 // ── Needs Attention categories ────────────────────────────────────────────────
 
 export const ATTENTION_CATEGORIES = [
-  { key: 'not_registered', label: 'Registration Required', section: 'registration', urgent: true, description: 'URGENT: no registration is linked to this participant. Registration is mandatory and can never be waived' },
+  { key: 'registration_missing', label: 'Registration Missing', section: 'registration', urgent: true, description: 'URGENT: registration was started but is not complete. Registration is mandatory and can never be waived' },
+  { key: 'not_registered', label: 'Not Registered', section: 'registration', urgent: true, description: 'URGENT: registration has not been started. Registration is mandatory and can never be waived' },
   { key: 'canadian_status_unknown', label: 'Canadian Status Unknown', section: 'documentation', description: 'Canadian status has not been collected' },
   { key: 'documentation_incomplete', label: 'Documentation Information Incomplete', section: 'documentation', description: 'Information is missing (for example the Immigration Form). Staff can mark it reviewed; nothing is verified or filled in' },
   { key: 'canadian_docs_review', label: 'Canadian Documents Require Review', section: 'documentation', description: 'Participant reported their Canadian immigration/residency documents may not stay valid through the required period' },
@@ -246,7 +307,8 @@ export function attentionCategoryKeys(p) {
   const reviewed = isDocumentationReviewAcknowledged(p)
 
   // Registration is the one universally mandatory item: there is no "not required", and nothing clears it but a registration.
-  if (!isRegistered(p)) keys.push('not_registered')
+  const registration = registrationState(p)
+  if (registration !== REGISTRATION_STATE.REGISTERED) keys.push(registration) // registration_missing | not_registered
 
   const canadian = deriveCanadianDocumentation(p)
   if (!canadian.status) { if (!reviewed) keys.push('canadian_status_unknown') }

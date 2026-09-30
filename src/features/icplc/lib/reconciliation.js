@@ -1,4 +1,5 @@
 import { needsAttentionNow } from './attentionModel.js'
+import { registrationState, REGISTRATION_STATE } from './documentationRules.js'
 
 export const REGISTRATION_SOURCE_TYPE = 'registration'
 // Identity maps written by the Registration CSV import: the registration ID in the export is the link.
@@ -137,8 +138,15 @@ export function filterParticipantsByWorkingListView(
   const linkedParticipantIds = registrationLinkedParticipantIds(registrations, maps, eventId)
 
   return participants.filter((participant) => {
-    if (view === 'registered') return linkedParticipantIds.has(participant.id)
-    if (view === 'not_registered') return !linkedParticipantIds.has(participant.id)
+    // One canonical derivation: the linked-registration set decides "registered"; the stored evidence separates
+    // Registration Missing (started, not complete) from Not Registered (not started).
+    const stateOf = () => registrationState({
+      ...participant,
+      registration_link_status: linkedParticipantIds.has(participant.id) ? 'registered' : 'not_registered',
+    })
+    if (view === 'registered') return stateOf() === REGISTRATION_STATE.REGISTERED
+    if (view === 'registration_missing') return stateOf() === REGISTRATION_STATE.MISSING
+    if (view === 'not_registered') return stateOf() === REGISTRATION_STATE.NOT_REGISTERED
     if (view === 'confirmed') {
       // A Ready person counts as Confirmed (derived, never persisted).
       return participant.participation_status === 'confirmed'

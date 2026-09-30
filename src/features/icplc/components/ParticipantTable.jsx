@@ -3,11 +3,11 @@ import { applyClientFilters } from '../lib/participantFilters.js'
 import { useICPLC } from '../ICPLCContext.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
 import { deriveReadiness, readinessTone, readinessLabel, deriveFlightStatus, flightStatusTone, flightStatusLabel } from '../lib/readinessEngine.js'
-import { deriveDocumentation, attentionCategoryKeys } from '../lib/documentationRules.js'
+import { deriveDocumentation, attentionCategoryKeys, registrationState, REGISTRATION_STATE_LABELS } from '../lib/documentationRules.js'
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_READINESS_LABELS } from '../../registration/icplcDocReadiness.js'
 import { PASSPORT_REGION_LABELS } from '../lib/passportRegion.js'
 
-const REGISTRATION_TONES = { registered: 'done', not_registered: 'at_risk', issue: 'blocked', unknown: 'mute' }
+const REGISTRATION_TONES = { registered: 'done', registration_missing: 'blocked', not_registered: 'at_risk' }
 
 const CONFIRMATION_MAP = {
   confirmed:    { label: 'Confirmed',    tone: 'done' },
@@ -93,7 +93,7 @@ export default function ParticipantTable({ participants, loading, profileTab }) 
 }
 
 function Row({ p, onOpen }) {
-  const registration = p.registration_link_status || p.registration_status
+  const registration = registrationState(p) // registered | registration_missing | not_registered
   const { readiness } = deriveReadiness(p)
   const flightStatus = deriveFlightStatus(p)
   const flightMissing = flightStatus === 'missing'
@@ -135,7 +135,7 @@ function Row({ p, onOpen }) {
 
       {/* Registration */}
       <td data-label="Registration">
-        <Badge tone={REGISTRATION_TONES[registration] || 'mute'} label={humanize(registration)} />
+        <Badge tone={REGISTRATION_TONES[registration]} label={REGISTRATION_STATE_LABELS[registration]} />
       </td>
 
       {/* Confirmation */}
@@ -234,7 +234,7 @@ function AttentionCell({ keys, flightMissing }) {
             Flight details missing
           </li>
         ) : (
-          <li key={k}>{k === 'not_registered' ? 'Registration not linked' : humanize(k)}</li>
+          <li key={k}>{k === 'not_registered' ? 'Not registered' : k === 'registration_missing' ? 'Registration missing' : humanize(k)}</li>
         )
       )}
       {overflow > 0 && <li>+{overflow} more</li>}

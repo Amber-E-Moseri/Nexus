@@ -10,7 +10,7 @@ import DocumentationTab from './tabs/DocumentationTab.jsx'
 import TravelTab from './tabs/TravelTab.jsx'
 import ActivityTab from './tabs/ActivityTab.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
-import { isRegistered } from '../lib/documentationRules.js'
+import { registrationState, REGISTRATION_STATE_LABELS, REGISTRATION_URGENT_LABELS } from '../lib/documentationRules.js'
 import { deriveReadiness, readinessTone, readinessLabel } from '../lib/readinessEngine.js'
 
 const PARTICIPATION_TONES = {
@@ -22,13 +22,14 @@ const PARTICIPATION_LABELS = {
   uncertain: 'Uncertain', not_attending: 'Not Attending',
 }
 
-function DrawerStatusBadges({ participant }) {
+export function DrawerStatusBadges({ participant }) {
   const { readiness } = deriveReadiness(participant)
-  const registered = isRegistered(participant) // same precedence as attention: the registration link wins over the stored status
-  // Registration is mandatory and can't be waived: a missing one is always urgent, even for a confirmed participant.
+  const regState = registrationState(participant) // the one canonical derivation, shared with every other view
+  const registered = regState === 'registered'
+  // Registration is mandatory and can't be waived: an incomplete one is always urgent, even for a confirmed participant.
   const urgent = !registered && participant.participation_status !== 'not_attending'
   const regTone = registered ? 'done' : urgent ? 'blocked' : 'at_risk'
-  const regLabel = registered ? 'Registered' : urgent ? 'URGENT — Registration Required' : 'Not Registered'
+  const regLabel = registered ? REGISTRATION_STATE_LABELS.registered : urgent ? REGISTRATION_URGENT_LABELS[regState] : REGISTRATION_STATE_LABELS[regState]
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>

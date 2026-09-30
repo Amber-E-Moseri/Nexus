@@ -28,6 +28,9 @@ describe('A-E. registration is a real readiness gate', () => {
     expect(needsAttentionNow(complete())).toBe(false)
   })
 
+  // [label, participant overrides]. The gate fixture is Ready-capable, so it always has a submitted flight and the
+  // Immigration Form (evidence of ICPLC progress): without a registration that is Registration Missing. The
+  // no-progress case (Not Registered) is proven in registrationStates.test.jsx. Both fail the gate identically.
   for (const [label, over] of [
     ['A. registration_status = unknown', { registration_status: 'unknown' }],
     ['B. registration_status missing (null)', { registration_status: null }],
@@ -42,8 +45,8 @@ describe('A-E. registration is a real readiness gate', () => {
       expect(isRegistered(p)).toBe(false)
       expect(deriveReadiness(p).readiness).not.toBe('ready')
       expect(deriveReadiness(p).reasons).toContain('Registration outstanding')
-      expect(attentionCategoryKeys(p)[0]).toBe('not_registered')
-      expect(attentionItems(p)[0]).toBe('URGENT — Registration Required')
+      expect(attentionCategoryKeys(p)[0]).toBe('registration_missing')
+      expect(attentionItems(p)[0]).toBe('URGENT — Registration Missing')
       expect(needsAttentionNow(p)).toBe(true)
     })
   }
@@ -71,13 +74,13 @@ describe('A-E. registration is a real readiness gate', () => {
     expect(deriveReadiness(p).readiness).not.toBe('ready')
     expect(s.needsAttention).toBe(true)
     expect(s.urgent).toBe(true)
-    expect(s.attention[0]).toBe('not_registered')
+    expect(s.attention[0]).toBe('registration_missing')
   })
 
   it('Flight Not Required does not waive it, and unknown registration is still not Ready', () => {
     const p = complete({ registration_status: 'unknown', arrival_flight: null, arrival_date: null, departure_flight: null, departure_date: null, flight_not_required_reason: 'already_in_nigeria' })
     expect(deriveReadiness(p).readiness).not.toBe('ready')
-    expect(attentionCategoryKeys(p)).toEqual(['not_registered'])
+    expect(attentionCategoryKeys(p)).toEqual(['registration_missing'])
   })
 
   it('a person not attending is not chased for registration', () => {
@@ -162,7 +165,7 @@ describe('J. known concerns cannot be acknowledged away', () => {
     const base = { source_values: {} }
     expect(attentionCategoryKeys(review(complete({ ...base, passport_readiness: 'no_passport' })))).toContain('passport_incomplete')
     expect(attentionCategoryKeys(review(complete({ ...base, visa_requirement: 'required', visa_process_status: 'issue' })))).toContain('visa_blocked')
-    expect(attentionCategoryKeys(review(complete({ ...base, registration_status: 'unknown' })))[0]).toBe('not_registered')
+    expect(attentionCategoryKeys(review(complete({ ...base, registration_status: 'unknown' })))[0]).toBe('registration_missing')
     expect(attentionCategoryKeys(review(complete({ ...base, arrival_flight: null, arrival_date: null, departure_flight: null, departure_date: null })))).toContain('travel_incomplete')
   })
 })
