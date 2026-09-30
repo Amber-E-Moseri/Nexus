@@ -16,6 +16,9 @@ vi.mock('../../features/icplc/hooks/useICPLCProfile.js', () => ({
   useICPLCActivity: () => ({ data: [], isLoading: false }),
 }))
 vi.mock('../../lib/supabase', () => ({ supabase: {} }))
+vi.mock('../../features/icplc/hooks/useUserName.js', () => ({ useUserName: () => 'Staff Member' }))
+let mockTargets = { visaTarget: null, passportTarget: null }
+vi.mock('../../features/icplc/hooks/useICPLCTargets.js', () => ({ useICPLCTargets: () => mockTargets }))
 
 const openProfile = vi.fn()
 vi.mock('../../features/icplc/ICPLCContext.jsx', () => ({
@@ -23,6 +26,8 @@ vi.mock('../../features/icplc/ICPLCContext.jsx', () => ({
 }))
 
 import DocumentationTab from '../../features/icplc/components/tabs/DocumentationTab.jsx'
+import TravelTab from '../../features/icplc/components/tabs/TravelTab.jsx'
+import { documentationReviewFingerprint } from '../../features/icplc/lib/documentationRules.js'
 import ParticipantTable from '../../features/icplc/components/ParticipantTable.jsx'
 
 const base = {
@@ -34,7 +39,7 @@ const base = {
   override_fields: {},
 }
 
-beforeEach(() => { mutateAsync.mockClear(); openProfile.mockClear(); cleanup() })
+beforeEach(() => { mutateAsync.mockClear(); openProfile.mockClear(); mockTargets = { visaTarget: null, passportTarget: null }; cleanup() })
 
 describe('DocumentationTab', () => {
   it('shows Canadian status, passport region, additional passport document and visa as separate dimensions', () => {
@@ -150,5 +155,117 @@ describe('Working List table', () => {
     expect(screen.getByRole('status').textContent).toMatch(/Loading/)
     rerender(<ParticipantTable participants={[]} loading={false} />)
     expect(screen.getByRole('status').textContent).toMatch(/No participants/)
+  })
+})
+
+describe('DocumentationTab: documentation readiness follow-up', () => {
+  it('separates participant action, ICPLC team action and review, without renewal-assistance wording', () => {
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const soon = new Date(); soon.setDate(soon.getDate() + 5)
+    mockTargets = { visaTarget: iso(soon), passportTarget: iso(soon) }
+    render(<DocumentationTab canWrite participant={{
+      ...base, canada_residency_status: 'PERMANENT_RESIDENT', passport_readiness: 'renewal_in_progress',
+      visa_requirement: 'required', visa_process_status: 'not_started', documentation_assistance_requested: true,
+      source_values: { cmp_documentation: { canadian_doc_valid_through_nov: 'No' } },
+    }} />)
+    const followUp = screen.getByText('Follow-up').closest('section, div')
+    expect(screen.getAllByText('Participant action').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('ICPLC team action').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Review needed').length).toBeGreaterThan(0)
+    expect(screen.getByText(/participant must obtain a valid passport/)).toBeTruthy()
+    expect(screen.getByText(/Visa not started — 5 days to visa target/)).toBeTruthy()
+    expect(screen.getByText(/assistance requested — team follow-up required/)).toBeTruthy()
+    expect(screen.getByText(/Canadian immigration\/residency documents require review \(self-reported\)/)).toBeTruthy()
+    expect(followUp).toBeTruthy()
+    expect(document.body.textContent).not.toMatch(/Renewal needed by ICPLC|ICPLC will renew/i)
+  })
+
+  it('shows a Canadian "No" answer as a review concern, not a document status', () => {
+    render(<DocumentationTab canWrite={false} participant={{
+      ...base, canada_residency_status: 'INTERNATIONAL_STUDENT',
+      source_values: { cmp_documentation: { canadian_doc_valid_through_nov: 'No' } },
+    }} />)
+    expect(screen.getByText('No — staff review needed')).toBeTruthy()
+    expect(screen.getByText('Review needed (self-reported)')).toBeTruthy()
+    expect(screen.queryByText('Renewal needed')).toBeNull()
+  })
+
+  it('records a staff change to assistance as an override', async () => {
+    render(<DocumentationTab canWrite participant={{ ...base, passport_country: 'Ghana' }} />)
+    fireEvent.click(screen.getByRole('button', { name: /edit/i }))
+    fireEvent.change(screen.getByLabelText('Visa / travel documentation assistance requested'), { target: { value: 'yes' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled())
+    const call = mutateAsync.mock.calls[0][0]
+    expect(call.fields).toEqual({ documentation_assistance_requested: true })
+    expect(call.overrideFields).toContain('documentation_assistance_requested')
+  })
+})
+
+describe('Documentation information: staff Mark reviewed', () => {
+  const incomplete = { ...base, participation_status: 'confirmed', source_values: {}, canada_residency_status: null, passport_readiness: 'unknown', visa_requirement: 'review' }
+
+  it('lists what is missing and records only who reviewed and when: no value is filled in', async () => {
+    render(<DocumentationTab canWrite participant={incomplete} />)
+    expect(screen.getByText('Immigration Form not received')).toBeTruthy()
+    expect(screen.getByText('Passport status unknown')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Mark reviewed/ }))
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled())
+    const { fields } = mutateAsync.mock.calls[0][0]
+    expect(Object.keys(fields).sort()).toEqual(['documentation_review_at', 'documentation_review_by', 'documentation_review_fingerprint'])
+    expect(fields.documentation_review_fingerprint).toBe('canadian_status,form_not_received,passport_region,passport_status,visa_requirement')
+    expect(fields.documentation_review_by).toBe('user-1')
+  })
+
+  it('after review the gaps are still listed and the review is attributed; real problems stay in Follow-up', () => {
+    const state = { ...incomplete, passport_readiness: 'no_passport' }
+    render(<DocumentationTab canWrite participant={{
+      ...state,
+      documentation_review_at: '2026-09-30T15:00:00Z', documentation_review_by: 'staff-2',
+      documentation_review_fingerprint: documentationReviewFingerprint(state), // reviewed in exactly this state
+    }} />)
+    expect(screen.getByText('Staff review completed')).toBeTruthy()
+    expect(screen.getByText('Immigration Form not received')).toBeTruthy() // still missing
+    expect(screen.getByText(/No valid passport — participant must obtain a valid passport/)).toBeTruthy() // real issue stays
+    expect(document.body.textContent).not.toMatch(/verified|approved|cleared/i)
+  })
+
+  it('a review that no longer matches what is missing is shown as stale and can be redone', () => {
+    render(<DocumentationTab canWrite participant={{
+      ...incomplete, documentation_review_at: '2026-09-30T15:00:00Z', documentation_review_by: 'staff-2',
+      documentation_review_fingerprint: 'form_not_received', // only the form was missing when it was reviewed
+    }} />)
+    expect(screen.queryByText('Staff review completed')).toBeNull()
+    expect(screen.getByText(/what is missing has changed since/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Mark reviewed/ })).toBeTruthy()
+  })
+
+  it('read-only viewers get no Mark reviewed button', () => {
+    render(<DocumentationTab canWrite={false} participant={incomplete} />)
+    expect(screen.queryByRole('button', { name: /Mark reviewed/ })).toBeNull()
+  })
+})
+
+describe('TravelTab: Flight not required', () => {
+  const noFlight = { ...base, participation_status: 'confirmed', arrival_date: null, arrival_flight: null, departure_date: null, departure_flight: null }
+
+  it('records the exception with reason, note, who and when, and creates no flight fields', async () => {
+    render(<TravelTab canWrite participant={noFlight} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Mark flight not required' }))
+    fireEvent.change(screen.getByLabelText('Note (optional)'), { target: { value: 'At the pre-conference' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled())
+    const { fields } = mutateAsync.mock.calls[0][0]
+    expect(fields).toMatchObject({ flight_not_required_reason: 'already_in_nigeria', flight_not_required_note: 'At the pre-conference', flight_not_required_by: 'user-1' })
+    expect(typeof fields.flight_not_required_at).toBe('string')
+    expect(Object.keys(fields).some((k) => k.startsWith('arrival') || k.startsWith('departure'))).toBe(false)
+  })
+
+  it('shows an existing exception and says it never waives registration', () => {
+    render(<TravelTab canWrite participant={{ ...noFlight, flight_not_required_reason: 'already_in_nigeria', flight_not_required_by: 'staff-1', flight_not_required_at: '2026-09-30T12:00:00Z' }} />)
+    expect(screen.getByText('Flight not required')).toBeTruthy()
+    expect(screen.getByText('Reason: Already in Nigeria')).toBeTruthy()
+    expect(screen.getByText('Not required')).toBeTruthy() // itinerary row is not "Missing"
+    expect(screen.getByText(/never waives registration/)).toBeTruthy()
   })
 })

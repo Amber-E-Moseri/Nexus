@@ -1,9 +1,12 @@
 import React, { useMemo, useState } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
+import { useICPLCTargets } from '../hooks/useICPLCTargets.js'
+import DocumentationOverview from '../components/DocumentationOverview.jsx'
 import { deriveReadiness, isConfirmedOrReady } from '../lib/readinessEngine.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import { attentionCategoryKeys } from '../lib/documentationRules.js'
+import { needsAttentionNow } from '../lib/attentionModel.js'
 import { isActiveParticipant } from '../lib/reconciliation.js'
 
 /** Subgroup label; hover / focus / tap shows who is in it (click a name to open their profile). */
@@ -66,6 +69,7 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
   const { config, activeProfileId, activeProfileTab, closeProfile, openProfile, setFilters } = useICPLC()
   const eventId = config?.id
   const { participants, ambiguousRegistrations, isLoading } = useICPLCWorkingList(eventId)
+  const targets = useICPLCTargets(eventId)
 
   const stats = useMemo(() => {
     const active = participants.filter(isActiveParticipant)
@@ -82,7 +86,8 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
     const ready = readinessCounts.ready
     // A Ready person counts as Confirmed (derived, never persisted).
     const confirmed = active.filter((p) => isConfirmedOrReady(p)).length
-    const needsAttention = readinessCounts.action_required + readinessCounts.blocked
+    // Readiness counts stay data-only; Needs Attention also skips people whose only reasons are missing information staff already reviewed.
+    const needsAttention = active.filter(needsAttentionNow).length
     return {
       total, registered, confirmed, ready, needsAttention,
       registeredPct: pct(registered), confirmedPct: pct(confirmed), readyPct: pct(ready),
@@ -97,6 +102,17 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
   function showSubgroupInWorkingList(row) {
     const others = subgroupRows.map((r) => r.subgroup).filter((sg) => sg && sg !== row.subgroup)
     setFilters((prev) => ({ ...prev, search: '', working_list_view: 'all', subgroup: others }))
+    onShowPeople?.()
+  }
+
+  // Clear every documentation filter, then apply the one that was clicked so the People count matches the tile.
+  const DOC_FILTER_FIELDS = ['readiness', 'documentation', 'time_risk', 'passport_readiness', 'passport_region', 'visa_requirement', 'visa_process_status', 'assistance', 'attention_state', 'flight_status']
+  function showDocumentationInWorkingList(patch) {
+    setFilters((prev) => ({
+      ...prev, search: '', working_list_view: 'all', subgroup: [],
+      ...Object.fromEntries(DOC_FILTER_FIELDS.map((f) => [f, []])),
+      ...patch,
+    }))
     onShowPeople?.()
   }
 
@@ -191,6 +207,14 @@ export default function OverviewPage({ canWrite, onShowPeople }) {
           <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)' }}>Review in Imports</div>
         </div>
       )}
+
+      {/* Documentation */}
+      <DocumentationOverview
+        participants={stats.active}
+        targets={targets}
+        onOpenPeople={showDocumentationInWorkingList}
+        onOpenProfile={openProfile}
+      />
 
       {/* By Subgroup */}
       <div className="icplc-overview-section">

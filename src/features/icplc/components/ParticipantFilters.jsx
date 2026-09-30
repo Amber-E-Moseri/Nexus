@@ -15,16 +15,40 @@ const WORKING_LIST_VIEW_OPTIONS = [
   { value: 'needs_attention', label: 'Needs Attention' },
 ]
 
-// Order = order in the popover. `field` is the key in the shared filters object.
+// Order = order in the popover. `field` is the key in the shared filters object; `labels` overrides the default
+// wording per option. Passport / Canadian-document filters are readiness indicators only (ICPLC does not renew
+// those documents); the visa filters are the active assistance workflow.
 const GROUPS = [
   { field: 'participation_status', label: 'Participation', options: ['tracking', 'likely', 'confirmed', 'uncertain', 'not_attending'] },
   { field: 'readiness', label: 'Readiness', options: ['unknown', 'waiting_itinerary', 'in_progress', 'action_required', 'blocked', 'ready'] },
-  { field: 'flight_status', label: 'Flights', options: ['booked', 'awaiting', 'missing'] },
-  { field: 'passport_readiness', label: 'Passport', options: ['unknown', 'ready', 'renewal_needed', 'renewal_in_progress', 'no_passport', 'unsure', 'issue'] },
-  { field: 'visa_requirement', label: 'Visa', options: ['review', 'required', 'not_required'] },
+  {
+    field: 'attention_state', label: 'Attention',
+    options: ['registration_missing', 'confirmed_registration_missing', 'confirmed_needs_attention', 'docs_incomplete', 'docs_review_acknowledged'],
+    labels: {
+      registration_missing: 'Registration missing',
+      confirmed_registration_missing: 'Confirmed + registration missing',
+      confirmed_needs_attention: 'Confirmed + needs attention',
+      docs_incomplete: 'Documentation information incomplete',
+      docs_review_acknowledged: 'Documentation review acknowledged',
+    },
+  },
+  { field: 'documentation', label: 'Documentation', options: ['action_required', 'canadian_docs_review'], labels: { action_required: 'Action required', canadian_docs_review: 'Canadian documents require review' } },
+  { field: 'time_risk', label: 'Target dates', options: ['due_soon', 'overdue'], labels: { due_soon: 'Due soon', overdue: 'Overdue' } },
+  { field: 'flight_status', label: 'Flights', options: ['booked', 'awaiting', 'missing', 'not_required'], labels: { not_required: 'Not required' } },
+  {
+    field: 'passport_readiness', label: 'Passport', options: ['ready', 'renewal_in_progress', 'no_passport', 'renewal_needed', 'unsure', 'issue', 'unknown'],
+    labels: { ready: 'Valid', renewal_in_progress: 'In progress', no_passport: 'No valid passport', renewal_needed: 'Renewal needed', unknown: 'Unknown' },
+  },
+  { field: 'passport_region', label: 'Passport region', options: ['ECOWAS', 'NON_ECOWAS'], labels: { ECOWAS: 'ECOWAS', NON_ECOWAS: 'Non-ECOWAS' } },
+  { field: 'visa_requirement', label: 'Visa requirement', options: ['review', 'required', 'not_required'] },
+  {
+    field: 'visa_process_status', label: 'Visa process', options: ['not_started', 'in_progress', 'submitted', 'processing', 'approved', 'issue', 'not_applicable'],
+    labels: { approved: 'Approved', issue: 'Issue', not_applicable: 'Not applicable' },
+  },
+  { field: 'assistance', label: 'Assistance', options: ['requested'], labels: { requested: 'Visa assistance requested' } },
 ]
 const LABEL_OVERRIDES = { review: 'Needs review', waiting_itinerary: 'Waiting on itinerary' }
-const labelOf = (v) => LABEL_OVERRIDES[v] || (v.charAt(0).toUpperCase() + v.slice(1).replace(/_/g, ' '))
+const labelOf = (v, group) => group?.labels?.[v] || LABEL_OVERRIDES[v] || (v.charAt(0).toUpperCase() + v.slice(1).replace(/_/g, ' '))
 
 const FILTER_FIELDS = [...GROUPS.map((g) => g.field), 'tags', 'attention']
 const TAG_SEARCH_THRESHOLD = 8
@@ -109,7 +133,7 @@ export default function ParticipantFilters({ resultCount, attentionCounts, searc
 
   // Removable summary chips, so it is obvious what is narrowing the list.
   const activeChips = [
-    ...GROUPS.flatMap((g) => (filters[g.field] || []).map((v) => ({ field: g.field, value: v, group: g.label, label: labelOf(v) }))),
+    ...GROUPS.flatMap((g) => (filters[g.field] || []).map((v) => ({ field: g.field, value: v, group: g.label, label: labelOf(v, g) }))),
     ...(filters.attention || []).map((v) => ({ field: 'attention', value: v, group: 'Attention', label: ATTENTION_CATEGORIES.find((c) => c.key === v)?.label || v })),
     ...selectedTags.map((v) => ({ field: 'tags', value: v, group: 'Tag', label: v === UNTAGGED ? 'Untagged' : v, color: tagColor.get(v) })),
   ]
@@ -291,7 +315,7 @@ export default function ParticipantFilters({ resultCount, attentionCounts, searc
                             aria-pressed={!!filters[g.field]?.includes(opt)}
                             onClick={() => toggle(g.field, opt)}
                           >
-                            {labelOf(opt)}
+                            {labelOf(opt, g)}
                           </button>
                         ))}
                       </div>

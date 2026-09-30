@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest'
 import {
   mapPassportStatus,
   mapCanadianStatus,
-  mapCanadianDocValidity,
+  mapCanadianDocSelfReport,
   mapPassportRegion,
   normalizeEmail,
   buildSourceValues,
@@ -326,11 +326,11 @@ describe('CMP Documentation Mapper', () => {
       expect(mutations.unrecognized_passport_region_value).toBe('Kenya')
     })
 
-    it('maps document validity to canada_status_document_readiness', () => {
+    it('keeps document validity as source evidence only: neither Yes nor No writes canada_status_document_readiness', () => {
       const yes = computeMutations({ id: 'part-12', canada_residency_status: 'PERMANENT_RESIDENT', override_fields: {} }, { [CMP_FIELD_IDS.canadianDocValidity]: 'Yes' }, {})
-      expect(yes.canonical.canada_status_document_readiness).toBe('READY')
+      expect(yes.canonical.canada_status_document_readiness).toBeUndefined()
       const no = computeMutations({ id: 'part-12b', canada_residency_status: 'PERMANENT_RESIDENT', override_fields: {} }, { [CMP_FIELD_IDS.canadianDocValidity]: 'No' }, {})
-      expect(no.canonical.canada_status_document_readiness).toBe('RENEWAL_NEEDED')
+      expect(no.canonical.canada_status_document_readiness).toBeUndefined()
     })
 
     it('does not set document readiness for citizens, overridden fields, or unrecognised answers', () => {
@@ -391,15 +391,15 @@ describe('CMP Documentation Mapper', () => {
     })
   })
 
-  describe('mapCanadianDocValidity', () => {
-    it('maps Yes to READY and No to RENEWAL_NEEDED (case/whitespace tolerant)', () => {
-      expect(mapCanadianDocValidity('Yes')).toBe('READY')
-      expect(mapCanadianDocValidity(' no ')).toBe('RENEWAL_NEEDED')
+  describe('mapCanadianDocSelfReport', () => {
+    it('maps Yes/No to a self-report answer, never a status (case/whitespace tolerant)', () => {
+      expect(mapCanadianDocSelfReport('Yes')).toBe('yes')
+      expect(mapCanadianDocSelfReport(' no ')).toBe('no')
     })
     it('returns null for anything else', () => {
-      expect(mapCanadianDocValidity('Maybe')).toBeNull()
-      expect(mapCanadianDocValidity('')).toBeNull()
-      expect(mapCanadianDocValidity(undefined)).toBeNull()
+      expect(mapCanadianDocSelfReport('Maybe')).toBeNull()
+      expect(mapCanadianDocSelfReport('')).toBeNull()
+      expect(mapCanadianDocSelfReport(undefined)).toBeNull()
     })
   })
 

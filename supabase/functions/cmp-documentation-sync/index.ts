@@ -62,10 +62,12 @@ const canadianStatusMap: Record<string, string> = {
   'Visitor': 'VISITOR_OTHER',
 }
 
-const docValidityMap: Record<string, string> = {
-  yes: 'READY',
-  no: 'RENEWAL_NEEDED',
-}
+// "Will your Canadian documents remain valid through the required period?" is self-reported triage evidence.
+// It is only recognised here (to flag unexpected values) and kept raw in source_values; it is never converted
+// into a document status, because "No" means "staff should review", not "a renewal is needed".
+const docValidityAnswers = new Set(['yes', 'no'])
+
+const assistanceMap: Record<string, boolean> = { yes: true, no: false }
 
 const passportRegionMap: Record<string, string> = {
   'ecowas': 'ECOWAS',
@@ -325,20 +327,25 @@ async function processSubmission(
     result.issues?.push(`unrecognized_passport_region: ${regionRaw}`)
   }
 
-  // Canadian document validity → readiness. Citizens need no status document, so leave them alone.
+  // Canadian document validity: raw answer only (already in source_values above).
   const validityRaw = answers[FIELD_IDS.canadianDocValidity] as string | null
-  const validityCanonical = typeof validityRaw === 'string' ? docValidityMap[validityRaw.trim().toLowerCase()] : null
-  const finalResidency = (updates.canada_residency_status as string | undefined) ?? part.canada_residency_status
-
-  if (validityCanonical) {
-    if (finalResidency !== 'CANADIAN_CITIZEN'
-      && !(part.override_fields?.canada_status_document_readiness?.overridden)) {
-      updates.canada_status_document_readiness = validityCanonical
-      hasCanonicalMutation = true
-    }
-  } else if (validityRaw) {
+  if (validityRaw && !(typeof validityRaw === 'string' && docValidityAnswers.has(validityRaw.trim().toLowerCase()))) {
     result.status = 'unknown_value'
     result.issues?.push(`unrecognized_doc_validity: ${validityRaw}`)
+  }
+
+  // Documentation assistance requested (feeds the visa / travel-documentation follow-up queue)
+  const assistanceRaw = answers[FIELD_IDS.assistanceRequested] as string | null
+  const assistanceCanonical = typeof assistanceRaw === 'string' ? assistanceMap[assistanceRaw.trim().toLowerCase()] : undefined
+
+  if (assistanceCanonical !== undefined) {
+    if (!(part.override_fields?.documentation_assistance_requested?.overridden)) {
+      updates.documentation_assistance_requested = assistanceCanonical
+      hasCanonicalMutation = true
+    }
+  } else if (assistanceRaw) {
+    result.status = 'unknown_value'
+    result.issues?.push(`unrecognized_assistance_requested: ${assistanceRaw}`)
   }
 
   // Step 6: Determine result status
@@ -357,11 +364,22 @@ async function processSubmission(
 
   // Step 7: Apply (if action='apply')
   if (action === 'apply') {
-    const updateResp = await supabase
+    let updateResp = await supabase
       .from('icplc_participants')
       .update(updates)
       .eq('id', participantId)
       .eq('event_id', eventId)
+
+    // Deployed before the documentation_assistance_requested migration? Keep the rest of the sync working;
+    // the raw answer is still stored in source_values and the app reads it from there.
+    if (updateResp.error && /documentation_assistance_requested/.test(updateResp.error.message ?? '')) {
+      delete updates.documentation_assistance_requested
+      updateResp = await supabase
+        .from('icplc_participants')
+        .update(updates)
+        .eq('id', participantId)
+        .eq('event_id', eventId)
+    }
 
     if (updateResp.error) {
       result.status = 'error'

@@ -327,9 +327,10 @@ function VisaDefaultsSection({ eventId }) {
 /* ── Deadlines ── */
 
 const DEADLINE_FIELDS = [
-  { key: 'registration_deadline', label: 'Registration Deadline', description: 'Last date to accept new registrations' },
-  { key: 'visa_target_date', label: 'Visa Target Date', description: 'Target date for all visa applications to be submitted' },
-  { key: 'flight_booking_deadline', label: 'Flight Booking Deadline', description: 'Last date to book flights' },
+  { key: 'registration_deadline', label: 'Registration Deadline', description: 'Planning date only. Never blocks or changes readiness.' },
+  { key: 'visa_target_date', label: 'Visa Target Date', description: 'Target for Nigerian visa applications to be submitted. Drives due soon / overdue follow-up.' },
+  { key: 'passport_ready_target', label: 'Passport Ready Target', description: 'Monitoring only. Flags people whose passport situation may delay their visa. ICPLC does not renew passports.' },
+  { key: 'flight_booking_deadline', label: 'Flight Booking Deadline', description: 'Planning date only. Never blocks or changes readiness.' },
 ]
 
 function DeadlinesSection({ eventId }) {
@@ -360,7 +361,7 @@ function DeadlinesSection({ eventId }) {
         .eq('id', eventId)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries(['icplc_event_config_deadlines', eventId]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['icplc_event_config_deadlines', eventId] }),
   })
 
   if (isLoading) return null

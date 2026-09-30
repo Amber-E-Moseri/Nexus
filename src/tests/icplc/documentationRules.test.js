@@ -26,6 +26,8 @@ import { overrideFieldsForEdit } from '../../features/icplc/lib/fieldAuthority.j
 
 // A fully-ready baseline: everything passes. Each case overrides one dimension.
 const ready = {
+  // The Immigration Form was received: without it a confirmed participant shows "documentation information incomplete".
+  source_values: { cmp_documentation: { submission_id: 'form-1' } },
   participation_status: 'confirmed',
   registration_status: 'registered',
   registration_link_status: 'registered',

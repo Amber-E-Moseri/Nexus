@@ -3,7 +3,9 @@ import { useAuth } from '../../../../hooks/useAuth'
 import { useUpdateProfile } from '../../hooks/useICPLCProfile.js'
 import { overrideFieldsForEdit } from '../../lib/fieldAuthority.js'
 import { deriveItineraryStatus, deriveTravelStatus } from '../../lib/readinessEngine.js'
-import { Plane, PlaneTakeoff, PlaneLanding } from 'lucide-react'
+import { Plane, PlaneTakeoff, PlaneLanding, MapPin as NoFlightIcon } from 'lucide-react'
+import { FLIGHT_NOT_REQUIRED_REASONS, flightNotRequired, flightNotRequiredInfo } from '../../lib/flightRequirement.js'
+import { useUserName } from '../../hooks/useUserName.js'
 import { Card, EditButton, Chip, Row } from './tabUi.jsx'
 
 export default function TravelTab({ participant, canWrite }) {
@@ -21,6 +23,26 @@ export default function TravelTab({ participant, canWrite }) {
 
   const itineraryStatus = deriveItineraryStatus(participant)
   const travelStatus = deriveTravelStatus(participant)
+  const notRequired = flightNotRequired(participant)
+  const exception = flightNotRequiredInfo(participant)
+  const setBy = useUserName(exception?.by)
+  const [exceptionForm, setExceptionForm] = useState(null) // { reason, note } while editing
+
+  // Recorded as an exception with who and when; no itinerary or flight record is created. The audit trail keeps the history.
+  async function saveException(next) {
+    await updateProfile.mutateAsync({
+      id: participant.id,
+      fields: next
+        ? {
+            flight_not_required_reason: next.reason,
+            flight_not_required_note: next.note.trim() || null,
+            flight_not_required_by: authProfile?.id ?? null,
+            flight_not_required_at: new Date().toISOString(),
+          }
+        : { flight_not_required_reason: null, flight_not_required_note: null, flight_not_required_by: null, flight_not_required_at: null },
+    })
+    setExceptionForm(null)
+  }
 
   async function handleSave() {
     const changed = {}
@@ -45,8 +67,57 @@ export default function TravelTab({ participant, canWrite }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <Card icon={Plane} title="Travel Status" action={canWrite && !editing ? <EditButton onClick={() => setEditing(true)} /> : null}>
-        <Row label="Itinerary"><Chip tone={itineraryStatus === 'received' ? 'done' : 'blocked'} label={itineraryStatus === 'received' ? 'Received' : 'Missing'} /></Row>
+        <Row label="Itinerary">
+          {notRequired
+            ? <Chip tone="mute" label="Not required" />
+            : <Chip tone={itineraryStatus === 'received' ? 'done' : 'blocked'} label={itineraryStatus === 'received' ? 'Received' : 'Missing'} />}
+        </Row>
         <Row label="Status"><Chip tone={travelStatus === 'ready' ? 'done' : 'at_risk'} label={travelStatus === 'ready' ? 'Ready' : 'Outstanding'} /></Row>
+      </Card>
+
+      {/* Flight requirement: an exception for people who need no ICPLC flight (for example already in Nigeria) */}
+      <Card icon={NoFlightIcon} title="Flight requirement">
+        {exception && !exception.superseded && exceptionForm === null ? (
+          <div style={{ display: 'grid', gap: 6, fontSize: 13 }}>
+            <div><strong>Flight not required</strong></div>
+            <div>Reason: {exception.label}</div>
+            {exception.note && <div>Note: {exception.note}</div>}
+            <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+              Set{setBy ? ` by ${setBy}` : ''}{exception.at ? ` on ${new Date(exception.at).toLocaleDateString()}` : ''}
+            </div>
+            {canWrite && (
+              <div className="icplc-actions">
+                <button type="button" className="icplc-btn" onClick={() => setExceptionForm({ reason: exception.reason, note: exception.note || '' })}>Change</button>
+                <button type="button" className="icplc-btn" disabled={updateProfile.isPending} onClick={() => saveException(null)}>A flight is needed after all</button>
+              </div>
+            )}
+          </div>
+        ) : exceptionForm ? (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <label className="icplc-label" htmlFor="fnr-reason">Reason</label>
+            <select id="fnr-reason" className="icplc-input" value={exceptionForm.reason} onChange={(e) => setExceptionForm((f) => ({ ...f, reason: e.target.value }))}>
+              {FLIGHT_NOT_REQUIRED_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+            <label className="icplc-label" htmlFor="fnr-note">Note (optional)</label>
+            <input id="fnr-note" className="icplc-input" value={exceptionForm.note} onChange={(e) => setExceptionForm((f) => ({ ...f, note: e.target.value }))} placeholder="e.g. Attending another conference first" />
+            <div className="icplc-actions">
+              <button type="button" className="icplc-btn icplc-btn-primary" disabled={updateProfile.isPending} onClick={() => saveException(exceptionForm)}>Save</button>
+              <button type="button" className="icplc-btn" onClick={() => setExceptionForm(null)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
+            <div>{exception?.superseded ? 'A flight was submitted, so the normal flight workflow applies.' : 'A flight is expected.'}</div>
+            {canWrite && (
+              <div className="icplc-actions">
+                <button type="button" className="icplc-btn" onClick={() => setExceptionForm({ reason: FLIGHT_NOT_REQUIRED_REASONS[0].value, note: '' })}>Mark flight not required</button>
+              </div>
+            )}
+          </div>
+        )}
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+          This never waives registration, and no itinerary is created.
+        </p>
       </Card>
 
       {/* Arrival */}

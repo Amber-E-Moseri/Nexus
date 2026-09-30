@@ -12,6 +12,7 @@ const DEFAULT_FILTERS = {
   visa_process_status: [],
   readiness: [],
   flight_status: [],
+  attention_state: [],
   tags: [],
   tags_mode: 'any',
   subgroup: [],

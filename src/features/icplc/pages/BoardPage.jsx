@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
+import { useICPLCTargets } from '../hooks/useICPLCTargets.js'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import { applyClientFilters, countAttentionCategories } from '../lib/participantFilters.js'
 import { filterParticipantsByWorkingListView } from '../lib/reconciliation.js'
+import { needsAttentionNow } from '../lib/attentionModel.js'
 import { deriveReadiness, readinessLabel } from '../lib/readinessEngine.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import { useQueryClient } from '@tanstack/react-query'
@@ -160,14 +162,17 @@ export default function BoardPage({ canWrite }) {
     subgroup: filters.subgroup,
   })
   const attentionCounts = useMemo(() => countAttentionCategories(allParticipants), [allParticipants])
+  const targets = useICPLCTargets(config?.id)
   const participants = useMemo(() => applyClientFilters(
     filterParticipantsByWorkingListView(
       allParticipants, registrations, registrationMaps, config?.id,
       filters.working_list_view || 'all',
       (participant) => deriveReadiness(participant).readiness,
+      needsAttentionNow,
     ),
     filters,
-  ), [allParticipants, registrations, registrationMaps, config?.id, filters])
+    { targets },
+  ), [allParticipants, registrations, registrationMaps, config?.id, filters, targets])
   const refetch = () => qc.invalidateQueries({ queryKey: ['icplc_participants', config?.id] })
   const updateProfile = useUpdateProfile()
   const [dragged, setDragged] = useState(null)
