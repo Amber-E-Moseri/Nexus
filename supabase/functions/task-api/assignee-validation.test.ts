@@ -11,8 +11,24 @@ import { assertEquals, assertExists, assertRejects } from "https://deno.land/std
  * Idempotency: Duplicate behavior unchanged
  */
 
-const API_URL = "http://localhost:3000/functions/v1/task-api";
+// Local Supabase serves Edge Functions at http://127.0.0.1:54321/functions/v1 (see `supabase status`).
+// Override with TASK_API_URL (the previous default, localhost:3000, is not a Supabase function endpoint).
+const API_URL = Deno.env.get("TASK_API_URL") ?? "http://127.0.0.1:54321/functions/v1/task-api";
 const VALID_API_KEY = Deno.env.get("TEST_API_KEY") || "";
+
+// Optional persistence checks straight from the database (PostgREST) so "persisted" is proven, not inferred
+// from the HTTP response. Only active when TEST_DB_REST_URL and TEST_DB_SERVICE_KEY are set (local stack).
+const DB_REST_URL = Deno.env.get("TEST_DB_REST_URL") ?? "";
+const DB_SERVICE_KEY = Deno.env.get("TEST_DB_SERVICE_KEY") ?? "";
+const HAS_DB = DB_REST_URL !== "" && DB_SERVICE_KEY !== "";
+
+async function dbTasks(filter: string): Promise<Array<Record<string, unknown>>> {
+  const res = await fetch(`${DB_REST_URL}/rest/v1/tasks?select=id,assignee_id,external_unique_key,title&${filter}`, {
+    headers: { apikey: DB_SERVICE_KEY, Authorization: `Bearer ${DB_SERVICE_KEY}` },
+  });
+  if (!res.ok) throw new Error(`db check failed: ${res.status}`);
+  return await res.json();
+}
 
 async function testRequest(
   method: string,
@@ -106,15 +122,12 @@ Deno.test({
 // assertion below always runs.
 Deno.test({
   name: "A02/A07: valid assignee_id → 201, task.id present, task.assignee_id matches",
+  // Reported as IGNORED (never as a passing no-op) when no live assignee fixture is configured.
+  ignore: !Deno.env.get("TEST_ASSIGNEE_ID"),
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
     const assigneeId = Deno.env.get("TEST_ASSIGNEE_ID") || "";
-    if (!assigneeId) {
-      // No live user configured — skip live DB check.
-      // Source-contract is covered by A02-SRC below.
-      return;
-    }
 
     const { status, data } = await testRequest("POST", "/tasks", {
       title: "A02 test: valid assignee assignment",
@@ -129,6 +142,13 @@ Deno.test({
     assertEquals(typeof data.task.id, "string");
     // A07: assignee_id in response matches submitted UUID
     assertEquals(data.task.assignee_id, assigneeId);
+
+    // Persisted row (local DB) carries the same assignee
+    if (HAS_DB) {
+      const rows = await dbTasks(`id=eq.${data.task.id}`);
+      assertEquals(rows.length, 1);
+      assertEquals(rows[0].assignee_id, assigneeId);
+    }
   },
 });
 
@@ -186,31 +206,65 @@ Deno.test({
   },
 });
 
+// A05 — idempotency: the same external_unique_key must return the canonical existing task.
+// Protects the RSO retry / TIMEOUT_UNKNOWN reconciliation contract.
 Deno.test({
   name: "IDEMPOTENCY: Same external_unique_key returns existing task",
-  ignore: true, // Requires test fixture with first task already created
+  ignore: !Deno.env.get("TEST_API_KEY"),
+  sanitizeOps: false,
+  sanitizeResources: false,
   fn: async () => {
-    // This test requires:
-    // 1. POST /tasks with external_unique_key = X, assignee_id = A
-    // 2. POST /tasks with external_unique_key = X, assignee_id = A (duplicate)
-    // 3. Expect 200 with duplicate: true, same task ID
-    // 4. Verify no new task created
-    // 5. Verify assignee_id unchanged
+    const key = `a05-${crypto.randomUUID()}`;
+    const first = await testRequest("POST", "/tasks", {
+      title: "A05 idempotency", priority: "medium", external_unique_key: key,
+    }, VALID_API_KEY);
+    assertEquals(first.status, 201, JSON.stringify(first.data));
+    assertExists(first.data.task.id);
+    assertEquals(first.data.duplicate, undefined);
 
-    // Skipped for now; requires sequential test setup
+    const second = await testRequest("POST", "/tasks", {
+      title: "A05 idempotency (retry)", priority: "medium", external_unique_key: key,
+    }, VALID_API_KEY);
+    assertEquals(second.status, 200, JSON.stringify(second.data));
+    assertEquals(second.data.duplicate, true);
+    assertEquals(second.data.task.id, first.data.task.id, "duplicate must return the same canonical task id");
+
+    if (HAS_DB) {
+      const rows = await dbTasks(`external_unique_key=eq.${key}`);
+      assertEquals(rows.length, 1, "exactly one task row for the idempotency key");
+    }
   },
 });
 
+// A05b — a duplicate request with a DIFFERENT assignee must not reassign or create a second task.
 Deno.test({
   name: "IDEMPOTENCY: Same key, different assignee doesn't reassign",
-  ignore: true, // Requires test fixture
+  ignore: !Deno.env.get("TEST_API_KEY") || !Deno.env.get("TEST_ASSIGNEE_ID") || !Deno.env.get("TEST_ASSIGNEE_ID_2"),
+  sanitizeOps: false,
+  sanitizeResources: false,
   fn: async () => {
-    // This test requires:
-    // 1. POST /tasks with external_unique_key = X, assignee_id = A
-    // 2. POST /tasks with external_unique_key = X, assignee_id = B (different)
-    // 3. Expect 200 with duplicate: true, same task ID
-    // 4. Verify task still assigned to A (not reassigned to B)
+    const userA = Deno.env.get("TEST_ASSIGNEE_ID")!;
+    const userB = Deno.env.get("TEST_ASSIGNEE_ID_2")!;
+    assertEquals(userA !== userB, true, "fixtures must be two distinct users");
+    const key = `a05b-${crypto.randomUUID()}`;
 
-    // Skipped for now; requires sequential test setup
+    const first = await testRequest("POST", "/tasks", {
+      title: "A05b idempotency", priority: "medium", external_unique_key: key, assignee_id: userA,
+    }, VALID_API_KEY);
+    assertEquals(first.status, 201, JSON.stringify(first.data));
+    assertEquals(first.data.task.assignee_id, userA);
+
+    const second = await testRequest("POST", "/tasks", {
+      title: "A05b idempotency (retry, other assignee)", priority: "medium", external_unique_key: key, assignee_id: userB,
+    }, VALID_API_KEY);
+    assertEquals(second.status, 200, JSON.stringify(second.data));
+    assertEquals(second.data.duplicate, true);
+    assertEquals(second.data.task.id, first.data.task.id, "duplicate must return the same canonical task id");
+
+    if (HAS_DB) {
+      const rows = await dbTasks(`external_unique_key=eq.${key}`);
+      assertEquals(rows.length, 1, "no second task created");
+      assertEquals(rows[0].assignee_id, userA, "original assignment preserved; duplicate must not reassign to user B");
+    }
   },
 });
