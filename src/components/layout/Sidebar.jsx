@@ -357,7 +357,7 @@ export default function Sidebar({ isMobileDrawer = false }) {
   // been added to a specific sprint (RLS scopes displayedSprints to theirs).
   const isGroupMember = role === 'group_member'
   // ICPLC event system.
-  const canSeeICPLC = ['super_admin', 'regional_secretary', 'pastor'].includes(role)
+  const canSeeICPLC = ['super_admin', 'regional_secretary', 'pastor', 'programs'].includes(role)
   const hasAnyPlatformAccess =
     showAdminPlatform ||
     role === 'pastor' ||
