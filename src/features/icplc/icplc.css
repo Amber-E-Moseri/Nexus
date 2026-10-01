@@ -98,6 +98,31 @@
   flex-shrink: 0;
 }
 
+.icplc-header-link {
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--icplc-purple);
+  background: var(--icplc-purple-bg);
+  border: 1px solid #DDD6F3;
+  border-radius: 6px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.icplc-header-link:hover {
+  background: #E8E0FA;
+  color: #3A1F6A;
+}
+
+.icplc-header-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .icplc-header-badge {
   display: inline-flex;
   align-items: center;
