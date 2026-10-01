@@ -1,5 +1,11 @@
 # Supabase Configuration
 
+[functions."task-api"]
+verify_jwt = false
+
+[functions."users"]
+verify_jwt = false
+
 [functions."task-overdue-trigger"]
 verify_jwt = false
 
