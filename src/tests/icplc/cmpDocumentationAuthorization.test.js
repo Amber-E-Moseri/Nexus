@@ -18,9 +18,9 @@ const PG_URL = process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@12
 // Resolved in beforeAll; module-level so invoke() can reference it.
 let functionPort
 
-const EVENT_ID = '00000000-0000-0000-0000-000000009101'
+const EVENT_ID = '00000000-0000-0000-0000-000000009150'
 const PARTICIPANT_ID = '00000000-0000-0000-0000-000000009199'
-const OTHER_EVENT_ID = '00000000-0000-0000-0000-000000009102'
+const OTHER_EVENT_ID = '00000000-0000-0000-0000-000000009151'
 const PASSWORD = 'Local-cmp-cert-123456!'
 
 // When set, the mock CMP API serves exactly these submissions (default: one fresh submission per request).
