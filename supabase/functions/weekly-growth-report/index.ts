@@ -41,7 +41,7 @@ function delta(n: number | null): string {
 
 async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array> {
   const doc  = await PDFDocument.create()
-  const page = doc.addPage([612, 792])
+  let page = doc.addPage([612, 792])
   const { height } = page.getSize()
 
   const regular = await doc.embedFont(StandardFonts.Helvetica)
@@ -360,7 +360,8 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization') ?? ''
     const callerToken = authHeader.replace('Bearer ', '').trim()
     const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    if (callerToken !== svcKey) {
+    const cronSecret = Deno.env.get('CRON_SHARED_SECRET') ?? ''
+    if (callerToken !== svcKey && !(cronSecret && callerToken === cronSecret)) {
       const callerClient = createClient(Deno.env.get('SUPABASE_URL')!, callerToken)
       const { data: { user }, error: authErr } = await callerClient.auth.getUser()
       if (authErr || !user) return json(401, { error: 'Unauthorized' })

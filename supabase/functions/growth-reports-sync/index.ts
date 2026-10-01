@@ -62,7 +62,8 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization') ?? ''
     const callerToken = authHeader.replace('Bearer ', '').trim()
     const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    if (callerToken !== svcKey) {
+    const cronSecret = Deno.env.get('CRON_SHARED_SECRET') ?? ''
+    if (callerToken !== svcKey && !(cronSecret && callerToken === cronSecret)) {
       const callerClient = createClient(Deno.env.get('SUPABASE_URL')!, callerToken)
       const { data: { user }, error: authErr } = await callerClient.auth.getUser()
       if (authErr || !user) return json(401, { error: 'Unauthorized' })
@@ -295,16 +296,14 @@ serve(async (req) => {
       notes: 'Dropped during sync — not in service_center_schedule or host_name_history',
     }))
 
-    await supabase
-      .from('growth_sync_unmatched_hosts')
-      .insert(unmatchedRecords)
-      .then(() => {
-        // Log recorded
-      })
-      .catch((e) => {
-        // If logging fails, don't block the sync
-        console.error('Failed to log unmatched hosts:', e.message)
-      })
+    try {
+      await supabase
+        .from('growth_sync_unmatched_hosts')
+        .insert(unmatchedRecords)
+    } catch (e: unknown) {
+      // If logging fails, don't block the sync
+      console.error('Failed to log unmatched hosts:', (e as Error).message)
+    }
   }
 
   return json(200, {
