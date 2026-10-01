@@ -356,8 +356,8 @@ export default function Sidebar({ isMobileDrawer = false }) {
   // communications, map), no people management, and no Sprints unless they've
   // been added to a specific sprint (RLS scopes displayedSprints to theirs).
   const isGroupMember = role === 'group_member'
-  // ICPLC event system.
-  const canSeeICPLC = ['super_admin', 'regional_secretary', 'pastor', 'programs'].includes(role)
+  // ICPLC event system: super_admin, regional_secretary, pastor, or anyone in Programs department
+  const canSeeICPLC = ['super_admin', 'regional_secretary', 'pastor'].includes(role) || isProgramsMember(profile)
   const hasAnyPlatformAccess =
     showAdminPlatform ||
     role === 'pastor' ||
