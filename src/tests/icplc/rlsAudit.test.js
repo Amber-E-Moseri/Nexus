@@ -21,7 +21,7 @@ describe('RLS Audit (release gate)', () => {
   beforeAll(async () => {
     adminSupabase = createClient(
       process.env.SUPABASE_URL ?? 'http://localhost:54321',
-      process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'test-service-role-key',
+      process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU',
     )
 
     // Ensure a test event and participant exist

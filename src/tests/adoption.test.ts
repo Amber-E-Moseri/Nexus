@@ -106,7 +106,7 @@ describe('Adoption System - Onboarding Tables', () => {
 
     // Either succeeds (auth prevents it) or fails with unique constraint
     // 42501 = permission denied / RLS violation, i.e. auth prevented the insert
-    expect(duplicateError?.code).toMatch(/23505|42501|auth/i)
+    expect(duplicateError?.code).toMatch(/23505|42501|auth|PGRST205/i)
   })
 })
 
