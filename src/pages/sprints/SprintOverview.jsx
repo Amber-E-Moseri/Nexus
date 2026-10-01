@@ -21,7 +21,7 @@ import FileList from '../../components/files/FileList'
 import SprintGoalsPanel from '../../features/sprints/components/SprintGoalsPanel'
 import SprintMeetingsPanel from '../../features/sprints/components/SprintMeetingsPanel'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
-import { hasSpaceRole } from '../../lib/permissions'
+import { hasSpaceRole, isProgramsMember } from '../../lib/permissions'
 
 const TABS = ['Overview', 'Tasks', 'Calendar', 'Meetings', 'Teams', 'Members', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
@@ -203,7 +203,7 @@ export default function SprintOverview() {
     (member) => member.user?.id === profile?.id && ['owner', 'manager'].includes(member.role),
   )
   const isMember = detail?.members?.some((member) => (member.user_id ?? member.user?.id) === profile?.id)
-  const canCreateTask = canManage || isMember
+  const canCreateTask = canManage || isMember || isProgramsMember(profile)
   const canAssignPrivilegedSprintRoles = role === 'super_admin' || hasSpaceRole(profile, null, 'dept_lead') || hasSpaceRole(profile, null, 'programs') || detail?.members?.some(
     (member) => member.user?.id === profile?.id && member.role === 'owner',
   )
