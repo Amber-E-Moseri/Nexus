@@ -47,3 +47,33 @@ verify_jwt = false
 
 [functions."cmp-documentation-discovery"]
 verify_jwt = false
+
+# Push dispatcher authenticates trusted internal callers itself (service-role key or
+# CRON_SHARED_SECRET). The gateway JWT check would admit the public anon key, so it is
+# disabled and the function fails closed instead. See supabase/functions/_shared/pushCore.ts.
+[functions."send-task-push-notification"]
+verify_jwt = false
+
+# Cron-invoked functions authenticate with CRON_SHARED_SECRET (Authorization: Bearer) inside the
+# function via _shared/internalAuth.ts. A non-JWT Bearer would be rejected by the gateway's JWT
+# check, so it is disabled; each function fails closed on its own. The `apikey` header sent by the
+# cron wrapper still satisfies gateway admission (same pattern as the Growth functions).
+[functions."delegated-task-reminders"]
+verify_jwt = false
+
+[functions."task-notification-email-batch"]
+verify_jwt = false
+
+[functions."meeting-reminders"]
+verify_jwt = false
+
+[functions."due-date-reminders"]
+verify_jwt = false
+
+[functions."daily-digest"]
+verify_jwt = false
+
+# Notification email dispatcher authenticates trusted internal callers itself (CRON_SHARED_SECRET or
+# service-role key); the gateway JWT check would admit the public anon key. See _shared/emailCore.ts.
+[functions."send-notification-email"]
+verify_jwt = false

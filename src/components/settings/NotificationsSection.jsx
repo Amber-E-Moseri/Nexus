@@ -156,7 +156,7 @@ export default function NotificationsSection({ prefs = {}, role, onTogglePref })
     setTestLoading(true)
     setMessage('')
     try {
-      const result = await testPushNotifications(user.id)
+      const result = await testPushNotifications()
       if (result.error) {
         setMessage(`Test failed: ${result.error}`)
       } else {

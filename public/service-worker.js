@@ -226,6 +226,45 @@ function htmlFirstStrategy(request) {
     });
 }
 
+// <safe-link>
+// Defense in depth: only approved internal Nexus destinations may be opened from a
+// notification. Mirrors validateInternalLink() in supabase/functions/_shared/pushCore.ts
+// (src/tests/push-link-parity.test.ts asserts both agree). Returns a same-origin
+// path(+query) or null.
+function nexusSafeLink(raw) {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 300) return null;
+  if (raw.charAt(0) !== '/' || raw.indexOf('//') === 0) return null;
+  if (/[\\\u0000-\u0020\u007f]/.test(raw)) return null;
+  var u;
+  try { u = new URL(raw, 'https://nexus.invalid'); } catch (e) { return null; }
+  if (u.origin !== 'https://nexus.invalid' || u.hash) return null;
+  if (u.pathname.indexOf('//') !== -1) return null;
+  var ID = '[A-Za-z0-9_-]{1,64}';
+  var PATHS = [
+    /^\/inbox$/, /^\/notifications$/, /^\/dashboard$/, /^\/my-tasks$/, /^\/my-tasks\/[a-z-]{1,32}$/,
+    /^\/personal-list$/, /^\/meetings$/, new RegExp('^/meetings/' + ID + '$'), /^\/sprints$/,
+    new RegExp('^/sprints/' + ID + '$'), /^\/spaces$/, new RegExp('^/spaces/' + ID + '$'),
+    /^\/dept\/[A-Za-z0-9_%-]{1,64}$/, /^\/calendar$/, /^\/calendar\/review$/, /^\/growth-tracking$/,
+    /^\/icplc$/, /^\/registration$/
+  ];
+  var ok = false;
+  for (var i = 0; i < PATHS.length; i++) if (PATHS[i].test(u.pathname)) ok = true;
+  if (!ok) return null;
+  var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var QUERY = { task: UUID, participant: UUID, week: /^\d{4}-\d{2}-\d{2}$/, tab: /^[a-z-]{1,32}$/ };
+  var seen = {};
+  var parts = [];
+  var bad = false;
+  u.searchParams.forEach(function (v, k) {
+    if (!QUERY[k] || !QUERY[k].test(v) || seen[k]) { bad = true; return; }
+    seen[k] = true;
+    parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+  });
+  if (bad) return null;
+  return parts.length ? u.pathname + '?' + parts.join('&') : u.pathname;
+}
+// </safe-link>
+
 // Push notification: handle incoming push events
 self.addEventListener('push', (event) => {
   if (!event.data) return;
@@ -248,7 +287,7 @@ self.addEventListener('push', (event) => {
     requireInteraction: data.requireInteraction || false,
     vibrate: [200, 100, 200],
     data: {
-      url: data.url || '/',
+      url: nexusSafeLink(data.url) || '/inbox',
       timestamp: Date.now(),
       type: data.type,
     },
@@ -277,7 +316,9 @@ self.addEventListener('notificationclick', (event) => {
     return;
   }
 
-  const urlToOpen = event.notification.data.url || '/';
+  // Never trust the payload: re-validate, fall back to the inbox, open same-origin only.
+  const safePath = nexusSafeLink(event.notification.data && event.notification.data.url) || '/inbox';
+  const urlToOpen = new URL(safePath, self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

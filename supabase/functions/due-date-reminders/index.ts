@@ -11,6 +11,7 @@
 // );
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { isTrustedInternalCaller } from '../_shared/internalAuth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -28,14 +29,10 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
+// Trusted internal callers only: CRON_SHARED_SECRET (canonical hosted pattern) or the
+// service-role key. See _shared/internalAuth.ts for why comparing to the env key alone fails.
 async function verifyServiceRole(req: Request): Promise<boolean> {
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader) return false
-
-  const token = authHeader.replace('Bearer ', '')
-  const expectedToken = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-
-  return token === expectedToken
+  return isTrustedInternalCaller(req)
 }
 
 Deno.serve(async (req) => {

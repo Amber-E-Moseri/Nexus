@@ -20,6 +20,7 @@
 // Or replace current_setting calls with literal values from your project settings.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { isTrustedInternalCaller } from '../_shared/internalAuth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -194,8 +195,7 @@ Deno.serve(async (req) => {
 
   // Only callable with the service role key (cron or admin).
   const authHeader = req.headers.get('Authorization') ?? ''
-  const token = authHeader.replace('Bearer ', '')
-  if (token !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+  if (!isTrustedInternalCaller(req)) {
     return jsonResponse(401, { error: 'Unauthorized' })
   }
 

@@ -11,7 +11,6 @@ import {
   getActivityInitials,
 } from '../../../lib/activityLog'
 import { createTask, deleteTask, updateTask } from '../../tasks'
-import { dispatchPush } from '../../notifications'
 import { supabase } from '../../../lib/supabase'
 import {
   getTaskStatusId,
