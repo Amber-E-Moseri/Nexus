@@ -28,6 +28,11 @@ export const FIELD_LABELS = {
   departure_date: 'Departure date',
   departure_time: 'Departure time',
   departure_flight: 'Departure flight',
+  documentation_assistance_requested: 'Documentation assistance',
+  flight_not_required_reason: 'Flight not required (reason)',
+  flight_not_required_note: 'Flight not required (note)',
+  documentation_review_at: 'Documentation review',
+  documentation_review_fingerprint: 'Reviewed missing-information state',
 }
 
 const humanize = (v) => {
@@ -58,16 +63,20 @@ export function formatValue(field, value) {
 
 /**
  * @param {object} entry  activity_log row (metadata jsonb, optional joined `users`)
- * @returns {{ title: string, actor: string, automatic: boolean, reason: string|null, changes: {label:string, from:string, to:string}[] }}
+ * @returns {{ title: string, actor: string, automatic: boolean, bulk: boolean, reason: string|null, changes: {label:string, from:string, to:string}[] }}
  */
 export function describeActivity(entry) {
   const meta = entry?.metadata || {}
   const automatic = meta.source === 'automatic'
+  const bulk = meta.source === 'bulk_action'
   const system = meta.source === 'system'
   const user = entry?.users
+  const person = user?.name || user?.email
   const actor = automatic
-    ? `Automatic${user?.name || user?.email ? ` (triggered by ${user.name || user.email})` : ''}`
-    : user?.name || user?.email || (system || !meta.actor_id ? 'System' : 'Unknown user')
+    ? `Automatic${person ? ` (triggered by ${person})` : ''}`
+    : person
+      ? (bulk ? `${person} (bulk action)` : person)
+      : (system || !meta.actor_id ? 'System' : 'Unknown user')
 
   const changes = Object.entries(meta.changes || {}).map(([field, { from, to }]) => ({
     label: FIELD_LABELS[field] || humanize(field),
@@ -78,10 +87,12 @@ export function describeActivity(entry) {
   let title
   switch (entry?.action) {
     case 'participant_created': title = 'Added to the list'; break
+    case 'participant_tag_added': title = `Tag added: ${meta.tag_name || 'tag'}`; break
+    case 'participant_tag_removed': title = `Tag removed: ${meta.tag_name || 'tag'}`; break
     case 'participant_updated': title = changes.length === 1 ? `${changes[0].label} changed` : `${changes.length} fields changed`; break
     case 'import_applied': title = 'Import applied'; break
     case 'import_no_change': title = 'Import checked, no changes'; break
     default: title = humanize(entry?.action || 'activity')
   }
-  return { title, actor, automatic, reason: meta.reason || null, changes }
+  return { title, actor, automatic, bulk, reason: meta.reason || null, changes }
 }

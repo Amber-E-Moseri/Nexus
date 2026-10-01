@@ -73,6 +73,9 @@ export default function ActivityTab({ participant, canWrite }) {
                 <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 2 }}>
                   <strong>{info.title}</strong>
                   <span style={{ color: 'var(--text-secondary)' }}> · {info.actor}</span>
+                  {info.bulk && (
+                    <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', background: '#EEE8F8', color: '#4C2A92', borderRadius: 8, padding: '1px 6px' }}>Bulk</span>
+                  )}
                   {info.automatic && (
                     <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', background: '#E3EEFB', color: '#1D5FB4', borderRadius: 8, padding: '1px 6px' }}>Auto</span>
                   )}

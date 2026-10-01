@@ -14,8 +14,9 @@ import {
  * Working List participants with registration state DERIVED from the identity map
  * (registration_link_status), plus the registrations that still need review.
  * Registration never changes participation status.
+ * `promote: false` skips the Ready => Confirmed write (read-only consumers such as the bulk bar's export).
  */
-export function useICPLCWorkingList(eventId, filters = {}) {
+export function useICPLCWorkingList(eventId, filters = {}, { promote = true } = {}) {
   const participantsQ = useICPLCParticipants(eventId, filters)
   const registrationsQ = useQuery({
     queryKey: ['icplc_wl_registrations', eventId],
@@ -68,7 +69,7 @@ export function useICPLCWorkingList(eventId, filters = {}) {
   const qc = useQueryClient()
   const promoted = useRef(new Set())
   useEffect(() => {
-    if (!eventId || !participants) return
+    if (!promote || !eventId || !participants) return
     const ids = participants
       .filter((p) => (p.participation_status === 'tracking' || p.participation_status === 'likely')
         && !promoted.current.has(p.id)
@@ -95,7 +96,7 @@ export function useICPLCWorkingList(eventId, filters = {}) {
         if (error) ids.forEach((id) => promoted.current.delete(id))
         else qc.invalidateQueries({ queryKey: ['icplc_participants', eventId] })
       })
-  }, [eventId, participants, qc])
+  }, [promote, eventId, participants, qc])
 
   return {
     ...derived,

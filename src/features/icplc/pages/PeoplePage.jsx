@@ -7,6 +7,9 @@ import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
 import { useICPLCTargets } from '../hooks/useICPLCTargets.js'
 import { useUpdateProfile } from '../hooks/useICPLCProfile.js'
 import WorkingListTable from '../components/WorkingListTable.jsx'
+import BulkActionBar from '../components/BulkActionBar.jsx'
+import { useRowSelection } from '../hooks/useRowSelection.js'
+import { applyAbsentVisibility } from '../lib/bulkSelection.js'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import StatusKey from '../components/StatusKey.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
@@ -20,6 +23,8 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
+  // Operational People view hides Not Attending by default, like Needs Attention, Documentation and Travel.
+  const [showAbsent, setShowAbsent] = useState(false)
   const updateProfile = useUpdateProfile()
 
   // Same hook (and cache keys) as the Overview, so opening the Working List after the Overview
@@ -45,7 +50,7 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
 
   const targets = useICPLCTargets(eventId)
 
-  const displayedParticipants = useMemo(() => applyClientFilters(
+  const filteredParticipants = useMemo(() => applyClientFilters(
     filterParticipantsByWorkingListView(
       participantsWithRegistrationCoverage,
       registrations,
@@ -58,6 +63,20 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
     filters,
     { targets },
   ), [eventId, filters, participantsWithRegistrationCoverage, registrationMaps, registrations, targets])
+
+  // Asking for Not Attending in the Participation filter is an explicit request and is honoured.
+  const explicitlyAbsent = (filters.participation_status || []).includes('not_attending')
+  const absentCount = useMemo(
+    () => filteredParticipants.filter((p) => p.participation_status === 'not_attending').length,
+    [filteredParticipants],
+  )
+  const displayedParticipants = useMemo(
+    () => applyAbsentVisibility(filteredParticipants, { showAbsent, participationFilter: filters.participation_status }),
+    [filteredParticipants, showAbsent, filters.participation_status],
+  )
+
+  // Any material filter change (including the Not Attending toggle and switching view) clears the selection.
+  const selection = useRowSelection({ resetKey: JSON.stringify([filters, showAbsent, view]) })
 
   const viewToggle = (
     <div
@@ -125,8 +144,15 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
 
       {/* Count */}
       <div style={{ marginBottom: 12 }}>
-        <div role="status" style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>
-          {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div role="status" style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>
+            {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
+          </div>
+          {absentCount > 0 && !explicitlyAbsent && (
+            <button type="button" className="icplc-chip" aria-pressed={showAbsent} onClick={() => setShowAbsent((v) => !v)}>
+              {showAbsent ? 'Hiding not attending' : `Include not attending (${absentCount})`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -147,7 +173,10 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
         loading={loading}
         onOpen={openProfile}
         onToggleAbsent={canWrite ? (p) => updateProfile.mutate({ id: p.id, fields: { participation_status: p.participation_status === 'not_attending' ? 'tracking' : 'not_attending' } }) : undefined}
+        selection={selection}
       />
+
+      <BulkActionBar eventId={eventId} selection={selection} context="people" canWrite={canWrite} filteredRows={displayedParticipants} />
 
       {activeProfileId && (
         <ParticipantProfileDrawer

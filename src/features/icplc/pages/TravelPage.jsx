@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import { deriveItineraryStatus, deriveTravelStatus } from '../lib/readinessEngine.js'
@@ -10,9 +10,14 @@ import { isTravelLocked, useTravelLock } from '../hooks/useTravelLock.js'
 import { useAuth } from '../../../hooks/useAuth'
 import { Lock, Printer, RefreshCw, Unlock } from 'lucide-react'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
+import BulkActionBar from '../components/BulkActionBar.jsx'
+import SelectCheckbox from '../components/SelectCheckbox.jsx'
+import { useRowSelection } from '../hooks/useRowSelection.js'
 import { rowOpenProps } from '../components/ParticipantTable.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
 import FlightSyncBlock from '../components/FlightSyncBlock.jsx'
+
+const EMPTY_ROWS = []
 
 export default function TravelPage({ canWrite }) {
   const { config, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
@@ -52,6 +57,12 @@ export default function TravelPage({ canWrite }) {
       return (a.full_name || '').localeCompare(b.full_name || '')
     })
   }, [participants])
+  // Selection exists on the manifest table only (the by-day sections list a person under several days). It follows exactly
+  // the manifest rows; changing subgroup, Not Attending or view clears it. Travel exposes tags and export only.
+  const selection = useRowSelection({ resetKey: JSON.stringify([subgroupFilter, showAbsent, view]) })
+  const syncShown = selection.syncShown
+  const shownManifest = view === 'manifest' ? manifestParticipants : EMPTY_ROWS
+  useEffect(() => { syncShown(shownManifest) }, [syncShown, shownManifest])
   const toggleLock = (p) => lockMutation.mutate({ participant: p, lock: !isTravelLocked(p), userId: authProfile?.id })
 
   const byArrival = useMemo(
@@ -187,6 +198,14 @@ export default function TravelPage({ canWrite }) {
           <table className="icplc-table">
             <thead>
               <tr>
+                <th scope="col" className="icplc-wl-select">
+                  <SelectCheckbox
+                    checked={selection.allShownSelected}
+                    indeterminate={selection.someSelected}
+                    onChange={selection.toggleAllShown}
+                    label={`Select all ${manifestParticipants.length} shown`}
+                  />
+                </th>
                 <th scope="col">Participant</th>
                 <th scope="col">Itinerary</th>
                 <th scope="col">Travel status</th>
@@ -203,6 +222,13 @@ export default function TravelPage({ canWrite }) {
                 const travel = deriveTravelStatus(p)
                 return (
                   <tr key={p.id} {...rowOpenProps(p.full_name, () => openProfile(p.id, 'travel'))}>
+                    <td className="icplc-wl-select">
+                      <SelectCheckbox
+                        checked={selection.isSelected(p.id)}
+                        onChange={() => selection.toggle(p.id)}
+                        label={`Select ${p.full_name}`}
+                      />
+                    </td>
                     <td data-primary>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{p.full_name}</div>
                       {p.subgroup && <div className="icplc-cell-sub">{p.subgroup}</div>}
@@ -279,6 +305,10 @@ export default function TravelPage({ canWrite }) {
             </div>
           )}
         </div>
+      )}
+
+      {view === 'manifest' && (
+        <BulkActionBar eventId={config?.id} selection={selection} context="travel" canWrite={canWrite} filteredRows={manifestParticipants} />
       )}
 
       {activeProfileId && (

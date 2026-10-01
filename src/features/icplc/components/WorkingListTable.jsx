@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, XCircle, ArrowUp, ArrowDown, X, UserX, UserCheck } from 'lucide-react'
 import { rowOpenProps } from './ParticipantTable.jsx'
+import SelectCheckbox from './SelectCheckbox.jsx'
 import { attentionCategoryKeys } from '../lib/documentationRules.js'
 import { groupForSubgroup } from '../lib/subgroups.js'
 import { registrationState, REGISTRATION_STATE, REGISTRATION_STATE_LABELS } from '../lib/documentationRules.js'
@@ -39,7 +40,7 @@ const COLUMNS = {
  * Compact Working List table. Click a header to sort; click a Subgroup / Campus /
  * Registered / Attention value to filter to it (click again, or the chip, to clear).
  */
-export default function WorkingListTable({ participants, loading, onOpen, onToggleAbsent }) {
+export default function WorkingListTable({ participants, loading, onOpen, onToggleAbsent, selection }) {
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
   const [cellFilters, setCellFilters] = useState([]) // [{ column, value }]
 
@@ -62,11 +63,16 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
     return list
   }, [participants, cellFilters, sort])
 
+  // Selection follows exactly the rows rendered here (after the column filters below), never the unfiltered list.
+  const syncShown = selection?.syncShown
+  useEffect(() => { syncShown?.(rows) }, [syncShown, rows])
+
   function toggleSort(key) {
     setSort((s) => (s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }))
   }
 
   function toggleFilter(column, value) {
+    selection?.clear() // a column filter changes what is shown; do not carry the old selection over
     setCellFilters((cur) => (
       cur.some((f) => f.column === column && f.value === value)
         ? cur.filter((f) => !(f.column === column && f.value === value))
@@ -123,7 +129,7 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
               {COLUMNS[column].label}: {value} <X size={12} aria-hidden style={{ marginLeft: 4 }} />
             </button>
           ))}
-          <button type="button" onClick={() => setCellFilters([])}
+          <button type="button" onClick={() => { selection?.clear(); setCellFilters([]) }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>
             Clear
           </button>
@@ -134,6 +140,16 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
         <table className="icplc-wl-table">
           <thead>
             <tr>
+              {selection && (
+                <th scope="col" className="icplc-wl-select">
+                  <SelectCheckbox
+                    checked={selection.allShownSelected}
+                    indeterminate={selection.someSelected}
+                    onChange={selection.toggleAllShown}
+                    label={`Select all ${rows.length} shown`}
+                  />
+                </th>
+              )}
               <th scope="col" className="icplc-wl-num">#</th>
               <Th k="name" />
               <Th k="group" />
@@ -148,7 +164,7 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={onToggleAbsent ? 10 : 9} style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>No participants match these column filters.</td></tr>
+              <tr><td colSpan={(onToggleAbsent ? 10 : 9) + (selection ? 1 : 0)} style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>No participants match these column filters.</td></tr>
             )}
             {rows.map((p, i) => {
               const registered = isRegistered(p)
@@ -162,6 +178,15 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
                   {...rowOpenProps(p.full_name, () => onOpen(p.id))}
                   className={`icplc-row icplc-wl-row ${registered ? 'is-registered' : 'is-unregistered'}${isAbsent(p) ? ' is-absent' : ''}`}
                 >
+                  {selection && (
+                    <td className="icplc-wl-select">
+                      <SelectCheckbox
+                        checked={selection.isSelected(p.id)}
+                        onChange={() => selection.toggle(p.id)}
+                        label={`Select ${p.full_name}`}
+                      />
+                    </td>
+                  )}
                   <td className="icplc-wl-num">{i + 1}</td>
                   <td className="icplc-wl-name">{p.full_name}</td>
                   <td className="icplc-wl-muted">{groupOf(p) ? <FilterCell column="group" value={groupOf(p)} /> : DASH}</td>
