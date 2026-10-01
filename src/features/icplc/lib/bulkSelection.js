@@ -55,3 +55,20 @@ export function applyAbsentVisibility(rows, { showAbsent = false, participationF
   if (showAbsent || explicit) return rows || []
   return (rows || []).filter((p) => p?.participation_status !== 'not_attending')
 }
+
+/**
+ * Feedback for the per-row Absent toggle on People. With Not Attending hidden the row disappears at once, so say
+ * what happened and how to get the person back. (Restoring sets Tracking, as the toggle always has.)
+ */
+export function absentToggleNotice(participant, nextStatus, absentVisible) {
+  const name = participant?.full_name || 'Participant'
+  if (nextStatus === 'not_attending') {
+    return {
+      ok: true,
+      text: absentVisible
+        ? `Marked ${name} Not Attending.`
+        : `Marked ${name} Not Attending. They are now hidden from this list; turn on "Include not attending" to see or restore them.`,
+    }
+  }
+  return { ok: true, text: `Restored ${name} to Tracking.` }
+}

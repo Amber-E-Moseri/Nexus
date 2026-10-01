@@ -1,6 +1,12 @@
 /**
  * ICPLC bulk operations against the local database (migration 20271001000005).
  * Every test runs in a transaction that is rolled back, impersonating real roles (anon / authenticated).
+ *
+ * DB-test policy (no false green):
+ *   - CI (CI=true) or ICPLC_REQUIRE_DB=1: the database MUST be reachable and the migration MUST be applied,
+ *     otherwise the whole suite FAILS. CI never auto-applies the migration; it is already in the chain.
+ *   - Otherwise, with no database: every case is an explicit SKIP with a visible reason (never a silent pass).
+ *   - DB-0 / DB-Z are positive proof that the database cases actually executed.
  *   - icplc_bulk_mark_documentation_reviewed: authorization (fail closed, NULL auth), optimistic concurrency,
  *     per-participant results, ONLY the review columns written, audit rows with source = bulk_action
  *   - icplc_bulk_set_tag: idempotent add / remove, other tags untouched, tag audit, authorization
@@ -9,6 +15,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
+import {
+  attentionCategoryKeys,
+  documentationReviewFingerprint,
+  isDocumentationReviewAcknowledged,
+} from '../../features/icplc/lib/documentationRules.js'
+import { needsAttentionNow } from '../../features/icplc/lib/attentionModel.js'
+import { REVIEW_BUCKET, buildReviewItems, classifyForReview } from '../../features/icplc/lib/bulkReview.js'
 
 const PG_URL = process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
 const EVENT = 'bbbbbbbb-2222-0000-0000-000000000001'
@@ -29,25 +42,40 @@ const TAG_Y = 'dddddddd-2222-0000-0000-000000000002'
 const TAG_OTHER_EVENT = 'dddddddd-2222-0000-0000-000000000003'
 const FP = 'form_not_received'
 
+const REQUIRE_DB = process.env.ICPLC_REQUIRE_DB === '1' || process.env.CI === 'true'
+const SKIP_REASON = 'no local Supabase database reachable (set ICPLC_REQUIRE_DB=1 to make this a failure)'
+const MIN_DB_CASES = 26
+
 let pool
 let available = false
+let executed = 0
+let fullSchema = false
 const migration = readFileSync(new URL('../../../supabase/migrations/20271001000005_icplc_bulk_documentation_review_and_tag_audit.sql', import.meta.url), 'utf8')
 
 beforeAll(async () => {
   pool = new pg.Pool({ connectionString: PG_URL, max: 1 })
+  let probe
   try {
-    const have = await pool.query("select to_regprocedure('public.icplc_bulk_mark_documentation_reviewed(jsonb)') as f, to_regprocedure('public.icplc_merge_participants(uuid,uuid,jsonb)') as m")
-    available = !!have.rows[0].m
-    // A local database built before this migration needs it applied once (local only; never run against a remote).
-    if (available && !have.rows[0].f) await pool.query(migration)
-  } catch {
-    available = false
+    probe = await pool.query("select to_regprocedure('public.icplc_bulk_mark_documentation_reviewed(jsonb)') as f, to_regprocedure('public.icplc_bulk_set_tag(uuid[],uuid,text)') as t, to_regprocedure('public.icplc_merge_participants(uuid,uuid,jsonb)') as m")
+  } catch (err) {
+    if (REQUIRE_DB) throw new Error(`ICPLC bulk DB suite requires a database but none is reachable: ${err.message}`)
+    return
   }
+  const { f, t, m } = probe.rows[0]
+  if (REQUIRE_DB && !(f && t)) {
+    throw new Error('ICPLC bulk DB suite: migration 20271001000005 is not applied to the test database')
+  }
+  available = !!m
+  // A developer's stale local database may predate this migration; apply it there (never in CI / required mode).
+  if (available && !(f && t)) await pool.query(migration)
+  const cols = await pool.query("select count(*)::int n from information_schema.columns where table_schema = 'public' and table_name = 'icplc_participants' and column_name in ('passport_readiness','visa_requirement','visa_process_status','canada_residency_status','source_values','registration_status')")
+  fullSchema = cols.rows[0].n === 6
 })
 afterAll(async () => { await pool?.end() })
 
 async function inTx(fn) {
   const client = await pool.connect()
+  executed += 1
   try {
     await client.query('begin')
     for (const [id, role] of Object.values(USERS)) {
@@ -115,17 +143,52 @@ async function expectDenied(client, promise) {
   await client.query('rollback to savepoint s')
 }
 
+describe('DB-0 database proof', () => {
+  it('DB-0 the suite is connected to a Supabase database with the migration applied', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
+    const r = await pool.query(
+      `select to_regprocedure('auth.uid()') as uid,
+              (select relrowsecurity from pg_class where oid = 'public.icplc_participants'::regclass) as rls,
+              to_regprocedure('public.icplc_bulk_mark_documentation_reviewed(jsonb)') as review,
+              to_regprocedure('public.icplc_bulk_set_tag(uuid[],uuid,text)') as tag`)
+    expect(r.rows[0].uid).not.toBeNull()
+    expect(r.rows[0].rls).toBe(true)
+    expect(r.rows[0].review).not.toBeNull()
+    expect(r.rows[0].tag).not.toBeNull()
+    if (REQUIRE_DB) {
+      // In CI the chain is built by `supabase start`; the migration must be in the real ledger.
+      const ledger = await pool.query("select count(*)::int n from supabase_migrations.schema_migrations where version = '20271001000005'")
+      expect(ledger.rows[0].n).toBe(1)
+    }
+  })
+
+  const SIGS = ['public.icplc_bulk_mark_documentation_reviewed(jsonb)', 'public.icplc_bulk_set_tag(uuid[], uuid, text)']
+  it('PRIV-1 PUBLIC and anon cannot execute the bulk functions; authenticated can', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
+    for (const sig of SIGS) {
+      const anon = await pool.query('select has_function_privilege($1, $2, $3) as ok', ['anon', sig, 'EXECUTE'])
+      expect(anon.rows[0].ok).toBe(false)
+      const pub = await pool.query(
+        `select count(*)::int n from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+          where p.oid = $1::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'`, [sig])
+      expect(pub.rows[0].n).toBe(0)
+      const authed = await pool.query('select has_function_privilege($1, $2, $3) as ok', ['authenticated', sig, 'EXECUTE'])
+      expect(authed.rows[0].ok).toBe(true)
+    }
+  })
+})
+
 describe('bulk review authorization', () => {
-  it('AUTH-1 anon cannot execute either function', async () => {
-    if (!available) return
+  it('AUTH-1 anon cannot execute either function', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await expectDenied(c, as(c, 'anon', REVIEW, [JSON.stringify([])]))
       await expectDenied(c, as(c, 'anon', TAG, [[P.a], TAG_X, 'add']))
     })
   })
 
-  it('AUTH-2 NULL auth (authenticated role, no user) fails closed', async () => {
-    if (!available) return
+  it('AUTH-2 NULL auth (authenticated role, no user) fails closed', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await expectDenied(c, as(c, null, REVIEW, [JSON.stringify([{ id: P.a, fingerprint: FP, expected_updated_at: await stamp(c, P.a) }])]))
       await expectDenied(c, as(c, null, TAG, [[P.a], TAG_X, 'add']))
@@ -134,8 +197,8 @@ describe('bulk review authorization', () => {
     })
   })
 
-  it('AUTH-3 an authenticated user without ICPLC write access is denied and nothing changes', async () => {
-    if (!available) return
+  it('AUTH-3 an authenticated user without ICPLC write access is denied and nothing changes', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await expectDenied(c, as(c, 'member', REVIEW, [JSON.stringify([await item(c, P.a)])]))
       await expectDenied(c, as(c, 'member', TAG, [[P.a], TAG_X, 'add']))
@@ -146,8 +209,8 @@ describe('bulk review authorization', () => {
     })
   })
 
-  it('AUTH-4 an authorized writer succeeds', async () => {
-    if (!available) return
+  it('AUTH-4 an authorized writer succeeds', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const res = await as(c, 'writer', REVIEW, [JSON.stringify([await item(c, P.a)])])
       expect(byId(res)[P.a].status).toBe('updated')
@@ -156,8 +219,8 @@ describe('bulk review authorization', () => {
 })
 
 describe('bulk documentation review', () => {
-  it('REV-1 updates an eligible participant: by, at and fingerprint only', async () => {
-    if (!available) return
+  it('REV-1 updates an eligible participant: by, at and fingerprint only', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const before = (await c.query('select * from public.icplc_participants where id = $1', [P.a])).rows[0]
       const res = await as(c, 'writer', REVIEW, [JSON.stringify([await item(c, P.a, 'canadian_status,form_not_received')])])
@@ -172,8 +235,8 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-2 reviewing the same state again is already_reviewed', async () => {
-    if (!available) return
+  it('REV-2 reviewing the same state again is already_reviewed', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await as(c, 'writer', REVIEW, [JSON.stringify([await item(c, P.a)])])
       const res = await as(c, 'writer', REVIEW, [JSON.stringify([await item(c, P.a)])])
@@ -181,8 +244,8 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-3 a stale review (different stored fingerprint) can be reviewed again', async () => {
-    if (!available) return
+  it('REV-3 a stale review (different stored fingerprint) can be reviewed again', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await as(c, 'writer', REVIEW, [JSON.stringify([await item(c, P.a, 'passport_status')])])
       const res = await as(c, 'writer', REVIEW, [JSON.stringify([await item(c, P.a, 'form_not_received,passport_status')])])
@@ -192,8 +255,8 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-4 a row that changed since it was loaded is skipped_stale and left alone', async () => {
-    if (!available) return
+  it('REV-4 a row that changed since it was loaded is skipped_stale and left alone', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       // Within one transaction now() is constant, so a real concurrent edit is simulated by presenting the
       // updated_at the page saw BEFORE that edit. The comparison the RPC makes is identical.
@@ -205,16 +268,16 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-4b a missing expected_updated_at is never trusted', async () => {
-    if (!available) return
+  it('REV-4b a missing expected_updated_at is never trusted', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const res = await as(c, 'writer', REVIEW, [JSON.stringify([{ id: P.a, fingerprint: FP }])])
       expect(byId(res)[P.a]).toMatchObject({ status: 'skipped_stale' })
     })
   })
 
-  it('REV-5 Not Attending, not-yet-committed and empty-fingerprint rows are ineligible', async () => {
-    if (!available) return
+  it('REV-5 Not Attending, not-yet-committed and empty-fingerprint rows are ineligible', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const res = await as(c, 'writer', REVIEW, [JSON.stringify([
         await item(c, P.absent), await item(c, P.tracking), await item(c, P.b, ''),
@@ -228,8 +291,8 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-6 results are per participant: one bad row does not undo the others', async () => {
-    if (!available) return
+  it('REV-6 results are per participant: one bad row does not undo the others', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const res = await as(c, 'writer', REVIEW, [JSON.stringify([
         await item(c, P.a), { id: 'not-a-uuid', fingerprint: FP, expected_updated_at: null }, await item(c, P.c),
@@ -243,8 +306,8 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-7 duplicate ids are processed once', async () => {
-    if (!available) return
+  it('REV-7 duplicate ids are processed once', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const i = await item(c, P.a)
       const res = await as(c, 'writer', REVIEW, [JSON.stringify([i, i])])
@@ -254,8 +317,8 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-8 each changed participant gets their own activity row: actor, source = bulk_action, reason, batch', async () => {
-    if (!available) return
+  it('REV-8 each changed participant gets their own activity row: actor, source = bulk_action, reason, batch', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const res = await as(c, 'writer', REVIEW, [JSON.stringify([await item(c, P.a), await item(c, P.b)])])
       const batch = res.rows[0].r.batch_id
@@ -275,8 +338,8 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-9 the bulk context does not leak into later writes in the same session', async () => {
-    if (!available) return
+  it('REV-9 the bulk context does not leak into later writes in the same session', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await as(c, 'writer', REVIEW, [JSON.stringify([await item(c, P.a)])])
       await c.query("update public.icplc_participants set region = 'Later Edit' where id = $1", [P.c])
@@ -287,8 +350,8 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-10 creates no notification', async () => {
-    if (!available) return
+  it('REV-10 creates no notification', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const count = async () => (await c.query('select count(*)::int n from public.notifications')).rows[0].n
       const before = await count()
@@ -298,8 +361,8 @@ describe('bulk documentation review', () => {
     })
   })
 
-  it('REV-11 rejects an oversized request', async () => {
-    if (!available) return
+  it('REV-11 rejects an oversized request', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const items = Array.from({ length: 1001 }, () => ({ id: P.a, fingerprint: FP, expected_updated_at: null }))
       await c.query('savepoint s')
@@ -313,8 +376,8 @@ describe('bulk tags', () => {
   const tagNames = async (c, id) => (await c.query(
     `select t.name from public.icplc_participant_tags pt join public.icplc_tags t on t.id = pt.tag_id where pt.participant_id = $1 order by t.name`, [id])).rows.map((r) => r.name)
 
-  it('TAG-1 add is idempotent and never replaces existing tags', async () => {
-    if (!available) return
+  it('TAG-1 add is idempotent and never replaces existing tags', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await c.query('insert into public.icplc_participant_tags(participant_id, tag_id) values ($1, $2)', [P.a, TAG_Y])
       const first = await as(c, 'writer', TAG, [[P.a, P.b], TAG_X, 'add'])
@@ -326,8 +389,8 @@ describe('bulk tags', () => {
     })
   })
 
-  it('TAG-2 remove removes only that tag and is idempotent', async () => {
-    if (!available) return
+  it('TAG-2 remove removes only that tag and is idempotent', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await c.query('insert into public.icplc_participant_tags(participant_id, tag_id) values ($1, $2), ($1, $3)', [P.a, TAG_X, TAG_Y])
       const res = await as(c, 'writer', TAG, [[P.a, P.b], TAG_X, 'remove'])
@@ -336,8 +399,8 @@ describe('bulk tags', () => {
     })
   })
 
-  it('TAG-3 tag changes are audited with actor, source = bulk_action and batch id', async () => {
-    if (!available) return
+  it('TAG-3 tag changes are audited with actor, source = bulk_action and batch id', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const res = await as(c, 'writer', TAG, [[P.a], TAG_X, 'add'])
       await as(c, 'writer', TAG, [[P.a], TAG_X, 'remove'])
@@ -353,8 +416,8 @@ describe('bulk tags', () => {
     })
   })
 
-  it('TAG-4 an idempotent no-op writes no audit row', async () => {
-    if (!available) return
+  it('TAG-4 an idempotent no-op writes no audit row', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await as(c, 'writer', TAG, [[P.a], TAG_X, 'add'])
       await as(c, 'writer', TAG, [[P.a], TAG_X, 'add'])
@@ -363,8 +426,8 @@ describe('bulk tags', () => {
     })
   })
 
-  it('TAG-5 a tag from another event is not attached', async () => {
-    if (!available) return
+  it('TAG-5 a tag from another event is not attached', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       const res = await as(c, 'writer', TAG, [[P.a], TAG_OTHER_EVENT, 'add'])
       expect(res.rows[0].r.results[0]).toMatchObject({ status: 'skipped_ineligible', reason: 'tag_not_for_event' })
@@ -372,8 +435,8 @@ describe('bulk tags', () => {
     })
   })
 
-  it('TAG-6 invalid action and unknown tag are rejected', async () => {
-    if (!available) return
+  it('TAG-6 invalid action and unknown tag are rejected', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await c.query('savepoint s')
       await expect(as(c, 'writer', TAG, [[P.a], TAG_X, 'replace'])).rejects.toThrow(/add or remove/)
@@ -383,13 +446,114 @@ describe('bulk tags', () => {
     })
   })
 
-  it('TAG-7 deleting a participant (cascade) does not write tag audit noise', async () => {
-    if (!available) return
+  it('TAG-7 deleting a participant (cascade) does not write tag audit noise', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
     await inTx(async (c) => {
       await as(c, 'writer', TAG, [[P.c], TAG_X, 'add'])
       await c.query('delete from public.icplc_participants where id = $1', [P.c])
       const { rows } = await c.query(`select count(*)::int n from public.activity_log where entity_id = $1 and action = 'participant_tag_removed'`, [P.c])
       expect(rows[0].n).toBe(0)
     })
+  })
+})
+
+describe('canonical attention logic against real database rows', () => {
+  // Real icplc_participants rows run through the SAME canonical functions the app uses. Needs the full participant
+  // schema (any real Supabase has it); a minimal stand-in database is skipped with a reason.
+  const insertFull = (c, id, name, extra = {}) => {
+    const cols = {
+      id, event_id: EVENT, full_name: name, email: `${id}@bulk.test`,
+      participation_status: 'confirmed', registration_status: 'registered', canada_residency_status: 'CANADIAN_CITIZEN',
+      passport_country: 'Ghana', passport_readiness: 'ready', visa_requirement: 'required', visa_process_status: 'approved',
+      arrival_date: '2027-01-15', arrival_flight: 'AC1', departure_date: '2027-01-25', departure_flight: 'AC2',
+      ...extra,
+    }
+    const keys = Object.keys(cols)
+    return c.query(`insert into public.icplc_participants (${keys.join(',')}) values (${keys.map((_, i) => `$${i + 1}`).join(',')})`, Object.values(cols))
+  }
+  const load = async (c, id, link = 'registered') => {
+    const row = (await c.query('select * from public.icplc_participants where id = $1', [id])).rows[0]
+    return { ...row, updated_at: await stamp(c, id), registration_link_status: link }
+  }
+  const IDS = {
+    only: 'cccccccc-2222-0000-0000-0000000000a1',
+    passport: 'cccccccc-2222-0000-0000-0000000000a2',
+    reg: 'cccccccc-2222-0000-0000-0000000000a3',
+  }
+  const bulkReview = async (c, rows) => (await as(c, 'writer', REVIEW, [JSON.stringify(buildReviewItems(rows))])).rows[0].r.results
+
+  it('ATT-1 bulk stores the SAME fingerprint an individual review writes, and the review is then acknowledged', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
+    if (!fullSchema) return ctx.skip('full icplc_participants schema not present')
+    await inTx(async (c) => {
+      await insertFull(c, IDS.only, 'Only Missing Info')
+      const before = await load(c, IDS.only)
+      const fp = documentationReviewFingerprint(before)
+      expect(fp).not.toBe('')
+      expect(classifyForReview(before).bucket).toBe(REVIEW_BUCKET.ELIGIBLE)
+      expect(needsAttentionNow(before)).toBe(true)
+      const [res] = await bulkReview(c, [before])
+      expect(res.status).toBe('updated')
+      const after = await load(c, IDS.only)
+      expect(after.documentation_review_fingerprint).toBe(fp)
+      expect(after.documentation_review_by).toBe(USERS.writer[0])
+      expect(isDocumentationReviewAcknowledged(after)).toBe(true)
+      // Only missing information was outstanding, so recalculation clears Needs Attention.
+      expect(needsAttentionNow(after)).toBe(false)
+      expect(classifyForReview(after).bucket).toBe(REVIEW_BUCKET.ALREADY)
+    })
+  })
+
+  it('ATT-2 known blockers and a missing registration stay in Needs Attention after a successful bulk review', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
+    if (!fullSchema) return ctx.skip('full icplc_participants schema not present')
+    await inTx(async (c) => {
+      await insertFull(c, IDS.passport, 'Passport Issue', { passport_readiness: 'issue' })
+      await insertFull(c, IDS.reg, 'No Registration', { registration_status: 'not_registered' })
+      const passport = await load(c, IDS.passport)
+      const reg = await load(c, IDS.reg, 'not_registered')
+      const results = await bulkReview(c, [passport, reg])
+      expect(results.map((r) => r.status)).toEqual(['updated', 'updated'])
+      const passportAfter = await load(c, IDS.passport)
+      const regAfter = await load(c, IDS.reg, 'not_registered')
+      expect(isDocumentationReviewAcknowledged(passportAfter)).toBe(true)
+      expect(needsAttentionNow(passportAfter)).toBe(true)
+      expect(attentionCategoryKeys(passportAfter)).toContain('passport_incomplete')
+      expect(isDocumentationReviewAcknowledged(regAfter)).toBe(true)
+      expect(needsAttentionNow(regAfter)).toBe(true)
+      expect(attentionCategoryKeys(regAfter).some((k) => k === 'not_registered' || k === 'registration_missing')).toBe(true)
+    })
+  })
+
+  it('ATT-3 the review expires when contributing documentation state changes', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
+    if (!fullSchema) return ctx.skip('full icplc_participants schema not present')
+    await inTx(async (c) => {
+      await insertFull(c, IDS.only, 'Expiring Review')
+      await bulkReview(c, [await load(c, IDS.only)])
+      expect(isDocumentationReviewAcknowledged(await load(c, IDS.only))).toBe(true)
+
+      // A new gap appears (passport status becomes unknown): the stored fingerprint no longer matches.
+      await c.query("update public.icplc_participants set passport_readiness = 'unknown' where id = $1", [IDS.only])
+      const changed = await load(c, IDS.only)
+      expect(isDocumentationReviewAcknowledged(changed)).toBe(false)
+      expect(needsAttentionNow(changed)).toBe(true)
+      expect(classifyForReview(changed).bucket).toBe(REVIEW_BUCKET.ELIGIBLE)
+
+      // The Immigration Form then arrives: nothing is missing, so there is nothing for the old review to cover.
+      await c.query(
+        "update public.icplc_participants set passport_readiness = 'ready', source_values = $2::jsonb where id = $1",
+        [IDS.only, JSON.stringify({ cmp_documentation: { submission_id: 'form-1' } })])
+      const resolved = await load(c, IDS.only)
+      expect(documentationReviewFingerprint(resolved)).toBe('')
+      expect(isDocumentationReviewAcknowledged(resolved)).toBe(false)
+    })
+  })
+})
+
+describe('DB-Z execution proof', () => {
+  it('DB-Z the database cases above actually executed', async (ctx) => {
+    if (!available) return ctx.skip(SKIP_REASON)
+    expect(executed).toBeGreaterThanOrEqual(MIN_DB_CASES)
   })
 })

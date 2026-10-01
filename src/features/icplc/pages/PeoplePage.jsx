@@ -9,7 +9,7 @@ import { useUpdateProfile } from '../hooks/useICPLCProfile.js'
 import WorkingListTable from '../components/WorkingListTable.jsx'
 import BulkActionBar from '../components/BulkActionBar.jsx'
 import { useRowSelection } from '../hooks/useRowSelection.js'
-import { applyAbsentVisibility } from '../lib/bulkSelection.js'
+import { absentToggleNotice, applyAbsentVisibility } from '../lib/bulkSelection.js'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import StatusKey from '../components/StatusKey.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
@@ -26,6 +26,7 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
   // Operational People view hides Not Attending by default, like Needs Attention, Documentation and Travel.
   const [showAbsent, setShowAbsent] = useState(false)
   const updateProfile = useUpdateProfile()
+  const [notice, setNotice] = useState(null) // { ok, text } feedback for the per-row Absent toggle
 
   // Same hook (and cache keys) as the Overview, so opening the Working List after the Overview
   // reuses the already-fetched participants, registrations and identity maps instead of refetching.
@@ -74,6 +75,17 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
     () => applyAbsentVisibility(filteredParticipants, { showAbsent, participationFilter: filters.participation_status }),
     [filteredParticipants, showAbsent, filters.participation_status],
   )
+
+  function toggleAbsent(p) {
+    const next = p.participation_status === 'not_attending' ? 'tracking' : 'not_attending'
+    updateProfile.mutate(
+      { id: p.id, fields: { participation_status: next } },
+      {
+        onSuccess: () => setNotice(absentToggleNotice(p, next, showAbsent || explicitlyAbsent)),
+        onError: (err) => setNotice({ ok: false, text: `Could not update ${p.full_name}: ${err?.message || 'save failed'}` }),
+      },
+    )
+  }
 
   // Any material filter change (including the Not Attending toggle and switching view) clears the selection.
   const selection = useRowSelection({ resetKey: JSON.stringify([filters, showAbsent, view]) })
@@ -168,11 +180,18 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
         </div>
       )}
 
+      {notice && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, marginBottom: 8, color: notice.ok ? 'var(--icplc-text, inherit)' : 'var(--icplc-red, #B42318)' }}>
+          <span>{notice.text}</span>
+          <button type="button" className="icplc-btn" aria-label="Dismiss message" onClick={() => setNotice(null)}>×</button>
+        </div>
+      )}
+
       <WorkingListTable
         participants={displayedParticipants}
         loading={loading}
         onOpen={openProfile}
-        onToggleAbsent={canWrite ? (p) => updateProfile.mutate({ id: p.id, fields: { participation_status: p.participation_status === 'not_attending' ? 'tracking' : 'not_attending' } }) : undefined}
+        onToggleAbsent={canWrite ? toggleAbsent : undefined}
         selection={selection}
       />
 

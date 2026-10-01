@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import {
+  absentToggleNotice,
   allShownSelected,
   applyAbsentVisibility,
   pruneToVisible,
@@ -67,6 +68,24 @@ describe('selection helpers', () => {
     const rows = [row('a'), row('b', 'not_attending')]
     expect(applyAbsentVisibility(rows, { showAbsent: true }).map((r) => r.id)).toEqual(['a', 'b'])
     expect(applyAbsentVisibility(rows, { participationFilter: ['not_attending'] }).map((r) => r.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('Absent toggle feedback', () => {
+  const ada = { id: 'a', full_name: 'Ada' }
+  it('SEL-12 marking Not Attending while hidden explains where they went and how to recover them', () => {
+    const n = absentToggleNotice(ada, 'not_attending', false)
+    expect(n.text).toMatch(/Marked Ada Not Attending/)
+    expect(n.text).toMatch(/Include not attending/)
+  })
+  it('SEL-13 no hint is needed when Not Attending people are visible; restore says what it did', () => {
+    expect(absentToggleNotice(ada, 'not_attending', true).text).toBe('Marked Ada Not Attending.')
+    expect(absentToggleNotice(ada, 'tracking', true).text).toBe('Restored Ada to Tracking.')
+  })
+  it('SEL-14 turning Include not attending on makes a hidden participant recoverable (selectable again)', () => {
+    const rows = [row('a'), row('b', 'not_attending')]
+    expect(applyAbsentVisibility(rows, { showAbsent: false }).map((r) => r.id)).toEqual(['a'])
+    expect(applyAbsentVisibility(rows, { showAbsent: true }).map((r) => r.id)).toEqual(['a', 'b'])
   })
 })
 
