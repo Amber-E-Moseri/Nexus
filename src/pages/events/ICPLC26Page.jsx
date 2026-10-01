@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import { trackEvent } from '@/lib/analytics'
+import { isProgramsMember } from '@/lib/permissions'
 
 // Public ICPLC 2026 Canada help centre (no auth to view). Every string is
 // editable in place by super_admin / regional_secretary; overrides live in
@@ -266,7 +267,7 @@ export default function ICPLC26Page() {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
   const [editMode, setEditMode] = useState(false)
-  const canEdit = profile?.role === 'super_admin' || profile?.role === 'regional_secretary' || EXTRA_EDITOR_USER_IDS.includes(profile?.id)
+  const canEdit = profile?.role === 'super_admin' || profile?.role === 'regional_secretary' || isProgramsMember(profile) || EXTRA_EDITOR_USER_IDS.includes(profile?.id)
 
   const { data: content } = useQuery({
     queryKey: ['icplc26_content'],
