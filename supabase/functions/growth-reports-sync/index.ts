@@ -296,16 +296,14 @@ serve(async (req) => {
       notes: 'Dropped during sync — not in service_center_schedule or host_name_history',
     }))
 
-    await supabase
-      .from('growth_sync_unmatched_hosts')
-      .insert(unmatchedRecords)
-      .then(() => {
-        // Log recorded
-      })
-      .catch((e) => {
-        // If logging fails, don't block the sync
-        console.error('Failed to log unmatched hosts:', e.message)
-      })
+    try {
+      await supabase
+        .from('growth_sync_unmatched_hosts')
+        .insert(unmatchedRecords)
+    } catch (e: unknown) {
+      // If logging fails, don't block the sync
+      console.error('Failed to log unmatched hosts:', (e as Error).message)
+    }
   }
 
   return json(200, {

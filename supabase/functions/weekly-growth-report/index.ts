@@ -41,7 +41,7 @@ function delta(n: number | null): string {
 
 async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array> {
   const doc  = await PDFDocument.create()
-  const page = doc.addPage([612, 792])
+  let page = doc.addPage([612, 792])
   const { height } = page.getSize()
 
   const regular = await doc.embedFont(StandardFonts.Helvetica)
