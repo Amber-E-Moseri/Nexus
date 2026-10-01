@@ -210,7 +210,9 @@ describe('F-1. icplc_resolve_unmatched_row', () => {
     const msg = (error?.message ?? error?.code ?? '').toLowerCase()
     // Expected: 42501 from IS NOT TRUE guard (service_role has auth.uid()=NULL →
     // helper returns NULL → IS NOT TRUE fires) or PostgREST access error.
-    expect(msg).toMatch(/permission denied|not allowed|42501|no suitable key/)
+    // The F-1/F-3 RAISE message is "Insufficient authorization: ..." (not "permission denied"),
+    // so that phrase must be included. error.message takes ?? priority over error.code.
+    expect(msg).toMatch(/permission denied|not allowed|42501|no suitable key|insufficient authorization/)
   })
 
   it('CL-1d. authorized admin can skip an unmatched row', async () => {
@@ -342,7 +344,8 @@ describe('F-3. icplc_backfill_participants_from_import', () => {
     })
     expect(error).not.toBeNull()
     const msg = (error?.message ?? error?.code ?? '').toLowerCase()
-    expect(msg).toMatch(/permission denied|not allowed|42501|no suitable key/)
+    // Same guard message as F-1: "Insufficient authorization: ..." — include it in the pattern.
+    expect(msg).toMatch(/permission denied|not allowed|42501|no suitable key|insufficient authorization/)
   })
 
   it('CL-3d. authorized admin can call backfill (returns integer row count)', async () => {
