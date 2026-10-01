@@ -182,6 +182,25 @@ Deno.test({
 });
 
 // ---------------------------------------------------------------------------
+// A04-SRC-DB-ERR — DB error must not be collapsed into 400 (source contract)
+// ---------------------------------------------------------------------------
+Deno.test({
+  name: "A04-SRC-DB-ERR: DB error is not conflated with not-found (source)",
+  fn: () => {
+    const src = new TextDecoder().decode(
+      Deno.readFileSync(new URL("./index.ts", import.meta.url)),
+    );
+    // If collapsed: `if (assigneeError || !assignee)` → both cases return 400.
+    // Correct: assigneeError must throw (propagate to outer catch → 500); only !assignee → 400.
+    const hasCollapsed = /if\s*\(\s*assigneeError\s*\|\|\s*!assignee\s*\)/.test(src);
+    assertEquals(hasCollapsed, false, "DB error and not-found must not share the same 400 branch");
+
+    const throwsOnDbError = /if\s*\(\s*assigneeError\s*\)\s*throw/.test(src);
+    assertEquals(throwsOnDbError, true, "assigneeError must throw so the outer catch returns 500");
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Auth — missing/invalid API key still rejected
 // ---------------------------------------------------------------------------
 Deno.test({

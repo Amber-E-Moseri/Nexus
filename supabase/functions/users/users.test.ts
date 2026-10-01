@@ -4,7 +4,7 @@
  * U01 — response shape contract (derived from U02)
  * U02 — source selects 'name' not 'full_name'
  * U03 — source filters status = 'active'
- * U04 — missing/wrong Bearer rejected (loopback; falls back gracefully if server down)
+ * U04 — missing/wrong Bearer rejected (live; ignored without NEXUS_API_KEY; connection failure is a FAIL)
  * U05-LIVE — valid Bearer → 200, real schema, active-only  (ignored without NEXUS_API_KEY)
  * U06-LIVE — missing/wrong Bearer rejected by the handler  (ignored without NEXUS_API_KEY)
  */
@@ -13,6 +13,20 @@ import { assertEquals } from "jsr:@std/assert";
 // Local Supabase serves at http://127.0.0.1:54321/functions/v1 (see `supabase status`).
 // Override with USERS_FN_URL for non-default setups.
 const USERS_FN_URL = Deno.env.get("USERS_FN_URL") ?? "http://127.0.0.1:54321/functions/v1/users";
+
+// Live-integration gate: tests requiring a running endpoint are gated on NEXUS_API_KEY.
+// When NEXUS_API_KEY is set, a live endpoint is assumed reachable — connection failures are FAIL.
+const LIVE_BEARER = Deno.env.get("NEXUS_API_KEY") ?? "";
+const DB_REST_URL = Deno.env.get("TEST_DB_REST_URL") ?? "";
+const DB_SERVICE_KEY = Deno.env.get("TEST_DB_SERVICE_KEY") ?? "";
+
+async function dbUserIds(filter: string): Promise<string[]> {
+  const res = await fetch(`${DB_REST_URL}/rest/v1/users?select=id&${filter}`, {
+    headers: { apikey: DB_SERVICE_KEY, Authorization: `Bearer ${DB_SERVICE_KEY}` },
+  });
+  if (!res.ok) throw new Error(`db check failed: ${res.status}`);
+  return (await res.json()).map((r: { id: string }) => r.id);
+}
 
 // ---------------------------------------------------------------------------
 // U02 — source selects 'name', not 'full_name'
@@ -48,47 +62,6 @@ Deno.test({
 });
 
 // ---------------------------------------------------------------------------
-// U04 — missing/wrong Bearer rejected (loopback; graceful fallback if server down)
-// ---------------------------------------------------------------------------
-Deno.test({
-  name: "U04a: missing Authorization → 401",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    let res: Response;
-    try {
-      res = await fetch(USERS_FN_URL, { method: "GET" });
-    } catch {
-      // Server not running — source contract verified above (U02/U03)
-      return;
-    }
-    assertEquals(res.status, 401);
-    const body = await res.json();
-    assertEquals(typeof body.error, "string");
-  },
-});
-
-Deno.test({
-  name: "U04b: wrong Bearer token → 401",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    let res: Response;
-    try {
-      res = await fetch(USERS_FN_URL, {
-        method: "GET",
-        headers: { Authorization: "Bearer wrong-token-xyz" },
-      });
-    } catch {
-      return;
-    }
-    assertEquals(res.status, 401);
-    const body = await res.json();
-    assertEquals(typeof body.error, "string");
-  },
-});
-
-// ---------------------------------------------------------------------------
 // U01 — response shape (source-derived; correctness follows from U02)
 // ---------------------------------------------------------------------------
 Deno.test({
@@ -101,20 +74,41 @@ Deno.test({
 });
 
 // ---------------------------------------------------------------------------
+// U04 — missing/wrong Bearer rejected (live; gated on NEXUS_API_KEY)
+// When NEXUS_API_KEY is set the endpoint is assumed reachable; ECONNREFUSED is a FAIL.
+// ---------------------------------------------------------------------------
+Deno.test({
+  name: "U04a: missing Authorization → 401",
+  ignore: LIVE_BEARER === "",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const res = await fetch(USERS_FN_URL, { method: "GET" });
+    assertEquals(res.status, 401);
+    const body = await res.json();
+    assertEquals(typeof body.error, "string");
+  },
+});
+
+Deno.test({
+  name: "U04b: wrong Bearer token → 401",
+  ignore: LIVE_BEARER === "",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const res = await fetch(USERS_FN_URL, {
+      method: "GET",
+      headers: { Authorization: "Bearer wrong-token-xyz" },
+    });
+    assertEquals(res.status, 401);
+    const body = await res.json();
+    assertEquals(typeof body.error, "string");
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Live tests — gated on NEXUS_API_KEY; connection failure is a FAIL (not a skip)
 // ---------------------------------------------------------------------------
-const LIVE_BEARER = Deno.env.get("NEXUS_API_KEY") ?? "";
-const DB_REST_URL = Deno.env.get("TEST_DB_REST_URL") ?? "";
-const DB_SERVICE_KEY = Deno.env.get("TEST_DB_SERVICE_KEY") ?? "";
-
-async function dbUserIds(filter: string): Promise<string[]> {
-  const res = await fetch(`${DB_REST_URL}/rest/v1/users?select=id&${filter}`, {
-    headers: { apikey: DB_SERVICE_KEY, Authorization: `Bearer ${DB_SERVICE_KEY}` },
-  });
-  if (!res.ok) throw new Error(`db check failed: ${res.status}`);
-  return (await res.json()).map((r: { id: string }) => r.id);
-}
-
 Deno.test({
   name: "U05-LIVE: valid Bearer → 200, {id,name,email} per user, active only",
   ignore: LIVE_BEARER === "",

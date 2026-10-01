@@ -233,7 +233,8 @@ Deno.serve(async (request) => {
           .eq('id', body.assignee_id)
           .maybeSingle()
 
-        if (assigneeError || !assignee) {
+        if (assigneeError) throw assigneeError
+        if (!assignee) {
           return jsonResponse(400, { error: 'assignee not found' })
         }
         // assignee eligibility is governed by Nexus set_task_assignees() RPC authorization
