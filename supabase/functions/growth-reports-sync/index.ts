@@ -62,7 +62,8 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization') ?? ''
     const callerToken = authHeader.replace('Bearer ', '').trim()
     const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    if (callerToken !== svcKey) {
+    const cronSecret = Deno.env.get('CRON_SHARED_SECRET') ?? ''
+    if (callerToken !== svcKey && !(cronSecret && callerToken === cronSecret)) {
       const callerClient = createClient(Deno.env.get('SUPABASE_URL')!, callerToken)
       const { data: { user }, error: authErr } = await callerClient.auth.getUser()
       if (authErr || !user) return json(401, { error: 'Unauthorized' })
