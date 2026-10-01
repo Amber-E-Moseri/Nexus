@@ -116,6 +116,9 @@ async function processOverdueTasks(supabase: ReturnType<typeof createClient>): P
     )
     .lt('due_date', todayStr)
     .in('task_status_definitions.category', ['open', 'in_progress'])
+    // Never fire automations for deleted or archived tasks (category open/in_progress already excludes completed/cancelled).
+    .is('deleted_at', null)
+    .is('archived_at', null)
 
   if (tasksError) {
     console.error('Error fetching overdue tasks:', tasksError)
@@ -159,7 +162,7 @@ async function processOverdueTasks(supabase: ReturnType<typeof createClient>): P
 
   const { data: existingRuns, error: runsError } = await supabase
     .from('automation_run_log')
-    .select('id, trigger_payload->>task_id')
+    .select('id, task_id:trigger_payload->>task_id') // explicit alias: PostgREST names a JSON-path column by its key
     .eq('trigger_type', 'task_overdue')
     .gte('ran_at', oneDayAgo.toISOString())
 
@@ -170,7 +173,7 @@ async function processOverdueTasks(supabase: ReturnType<typeof createClient>): P
 
   const alreadyTriggeredTaskIds = new Set(
     (existingRuns || [])
-      .map((r) => r['trigger_payload->>task_id'])
+      .map((r) => r.task_id)
       .filter((id) => id)
   )
 

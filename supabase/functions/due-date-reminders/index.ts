@@ -12,6 +12,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isTrustedInternalCaller } from '../_shared/internalAuth.ts'
+import { isActionableTask, type TaskActionabilityRow } from '../_shared/taskActionable.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -72,14 +73,22 @@ Deno.serve(async (req) => {
 
   // Evening mode: only tasks due tomorrow.
   // Morning mode: overdue + due today + due within 3 days.
+  // Only actionable work: not deleted, archived or completed, and status category not
+  // completed/cancelled. (The previous query embedded a non-existent `status_definition` relation and
+  // used an embedded-resource filter that never excluded parent rows, so this function could not run
+  // correctly; it has created zero notifications to date.)
   const query = supabase
     .from('tasks')
-    .select('id, title, assignee_id, due_date, status_definition!status_id(category)')
-    .neq('status_definition.category', 'completed')
+    .select('id, title, assignee_id, due_date, deleted_at, archived_at, completed_at, status_def:task_status_definitions!status_id(category)')
+    .is('deleted_at', null)
+    .is('archived_at', null)
+    .is('completed_at', null)
 
-  const { data: tasks, error: tasksError } = isEvening
+  const { data: rawTasks, error: tasksError } = isEvening
     ? await query.eq('due_date', tomorrowStr)
     : await query.lte('due_date', inThreeDaysStr)
+  // Defense in depth: category exclusion (completed / cancelled) is applied here as well.
+  const tasks = (rawTasks ?? []).filter((t) => isActionableTask(t as TaskActionabilityRow))
 
   if (tasksError) {
     return jsonResponse(500, { error: tasksError.message })
@@ -120,13 +129,13 @@ Deno.serve(async (req) => {
 
   const { data: existingNotifications } = await supabase
     .from('notifications')
-    .select('id, user_id, payload->>task_id')
+    .select('id, user_id, task_id:payload->>task_id') // explicit alias: PostgREST names a JSON-path column by its key
     .in('user_id', uniqueAssigneeIds)
     .eq('type', 'task_due_soon')
     .gte('created_at', dedupCutoff.toISOString())
 
   const existingPairs = new Set(
-    (existingNotifications || []).map((n) => `${n['payload->>task_id']}:${n.user_id}`)
+    (existingNotifications || []).map((n) => `${n.task_id}:${n.user_id}`)
   )
 
   // Build notifications for tasks that don't already have one
