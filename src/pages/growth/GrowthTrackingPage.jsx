@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { TrendingUp, Trash2, ToggleLeft, ToggleRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { isIsoDate, resolveSelectedWeek } from './growthWeek'
 import { useAuth } from '../../hooks/useAuth'
 
 // ── Design tokens (matches Registration ecosystem) ─────────────────────────────
@@ -340,7 +342,7 @@ async function exportProfessionalPDF(activeWeek, activeRows, growthData, network
       firstTimers: networkFT,
       reportingCenters: reportingCount,
       totalCenters,
-      reportingPercentage: Math.round((reportingCount / totalCenters) * 100),
+      reportingPercentage: totalCenters > 0 ? Math.round((reportingCount / totalCenters) * 100) : 0,
       trend: trendData,
       centers: activeRows.map(r => ({
         church_name: r.church_name,
@@ -385,7 +387,7 @@ async function exportProfessionalPDF(activeWeek, activeRows, growthData, network
 
 // ── Dashboard tab ──────────────────────────────────────────────────────────────
 
-function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
+function Dashboard({ growthData, loading, selectedWeek, onWeekChange, reportingWeek, summary }) {
   const [selectedCenter, setSelectedCenter] = useState('all')
   const [weekCount, setWeekCount] = useState(12)
   const [isExporting, setIsExporting] = useState(false)
@@ -415,7 +417,10 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
   const showAll = selectedCenter === 'all'
 
   // Resolve which week the table/stats show
-  const activeWeek = selectedWeek ?? allWeeks[allWeeks.length - 1]
+  // selectedWeek is resolved by the page from ?week= / the DB's canonical reporting week
+  // (growth_reporting_week). Never default to the newest row: after Sunday-night ET that is the
+  // empty in-progress week.
+  const activeWeek = selectedWeek ?? reportingWeek ?? allWeeks[allWeeks.length - 1]
   const activeWeekIdx = allWeeks.indexOf(activeWeek)
   const isLatest = activeWeek === allWeeks[allWeeks.length - 1]
   const isOldest = activeWeek === allWeeks[0]
@@ -439,7 +444,6 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
   const networkTotal   = activeRows.filter(r => r.status === 'reported').reduce((s, r) => s + r.total_attendance, 0)
   const networkFT      = activeRows.filter(r => r.status === 'reported').reduce((s, r) => s + r.first_timers, 0)
   const networkDelta   = activeRows.filter(r => r.status === 'reported').reduce((s, r) => s + (r.wow_delta ?? 0), 0)
-  const reportingCount = activeRows.filter(r => r.status === 'reported').length
   const maxAttendance  = Math.max(...activeRows.filter(r => r.status === 'reported').map(r => r.total_attendance), 1)
 
   // The ReferenceLine xAxisId value must match the XAxis dataKey label
@@ -473,12 +477,12 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
         >
           {[...allWeeks].reverse().map(w => (
             <option key={w} value={w}>
-              Week of {formatWeekFull(w)}{w === allWeeks[allWeeks.length - 1] ? ' (current)' : ''}
+              Week of {formatWeekFull(w)}{w === reportingWeek ? ' (reporting week)' : w === allWeeks[allWeeks.length - 1] ? ' (in progress)' : ''}
             </option>
           ))}
         </select>
         {navBtn(isLatest, () => onWeekChange(allWeeks[activeWeekIdx + 1]), <ChevronRight size={16} />)}
-        {!isLatest && (
+        {reportingWeek && activeWeek !== reportingWeek && (
           <button
             onClick={() => onWeekChange(null)}
             style={{
@@ -487,7 +491,7 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
               fontSize: 12, fontWeight: 600, fontFamily: 'Inter', cursor: 'pointer',
             }}
           >
-            Back to current
+            Back to reporting week
           </button>
         )}
         {/* Export Professional PDF via Puppeteer renderer */}
@@ -499,7 +503,7 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
             exportInFlightRef.current = true
             setIsExporting(true)
             try {
-              await exportProfessionalPDF(activeWeek, activeRows, growthData, networkTotal, networkFT, reportingCount, allWeeks.length)
+              await exportProfessionalPDF(activeWeek, activeRows, growthData, networkTotal, networkFT, summary?.received ?? 0, summary?.expected ?? 0)
             } finally {
               exportInFlightRef.current = false
               setIsExporting(false)
@@ -528,18 +532,20 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
         <Card className="gt-stat-card" style={{ padding: '18px 22px', flex: '1 1 140px', position: 'relative', overflow: 'hidden' }}>
           <Label>Reporting</Label>
           <div className="gt-stat-value" style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: C.ink, marginTop: 6 }}>
-            {reportingCount}
-            <span style={{ fontSize: 18, color: C.mute, fontWeight: 400 }}> / {activeRows.length}</span>
+            {summary ? summary.received : '—'}
+            <span style={{ fontSize: 18, color: C.mute, fontWeight: 400 }}> / {summary ? summary.expected : '—'}</span>
           </div>
-          <div style={{ fontSize: 12, color: C.mute, marginTop: 3, fontFamily: 'Inter' }}>service centers</div>
+          <div style={{ fontSize: 12, color: C.mute, marginTop: 3, fontFamily: 'Inter' }}>
+            service centers{summary && summary.outstanding > 0 ? ` · ${summary.outstanding} outstanding` : ''}
+          </div>
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0, height: 4,
             background: C.line, borderRadius: '0 0 14px 14px',
           }}>
             <div style={{
               height: '100%',
-              width: `${activeRows.length > 0 ? Math.round((reportingCount / activeRows.length) * 100) : 0}%`,
-              background: reportingCount === activeRows.length ? C.green : C.purple,
+              width: `${summary && summary.expected > 0 ? Math.round((summary.received / summary.expected) * 100) : 0}%`,
+              background: summary && summary.outstanding === 0 && summary.received === summary.expected ? C.green : C.purple,
               borderRadius: '0 0 0 14px',
               transition: 'width .4s ease',
             }} />
@@ -612,7 +618,7 @@ function Dashboard({ growthData, loading, selectedWeek, onWeekChange }) {
           Week of {formatWeekFull(activeWeek)}
         </div>
         <div style={{ fontSize: 12, color: C.mute, fontFamily: 'Inter' }}>
-          {reportingCount} of {activeRows.length} reporting
+          {summary ? `${summary.received} of ${summary.expected} reporting` : ''}
         </div>
       </div>
       <Card style={{ overflow: 'hidden' }}>
@@ -696,11 +702,12 @@ function Settings({ schedule, recipients, weekStatuses, onRefresh, onSync, synci
   const [gapFilling, setGapFilling] = useState(false)
   const [gapResult, setGapResult] = useState(null)
 
+  // Default flag week = the canonical reporting week from the DB (America/Toronto), not a
+  // browser-clock Monday.
   useEffect(() => {
-    const d = new Date()
-    const day = d.getDay()
-    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
-    setFlagWeek(d.toISOString().split('T')[0])
+    let live = true
+    supabase.rpc('growth_reporting_week').then(({ data }) => { if (live && data) setFlagWeek(data) })
+    return () => { live = false }
   }, [])
 
   async function toggleActive(id, current) {
@@ -1218,7 +1225,47 @@ export default function GrowthTrackingPage({ embedded = false }) {
   const [syncResult, setSyncResult] = useState(null)
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState(null)
-  const [selectedWeek, setSelectedWeek] = useState(null)
+  // Week selection lives in the URL (?week=YYYY-MM-DD) so a notification/deep link opens the intended
+  // week. The default is the DB's canonical reporting week (America/Toronto), never "newest row".
+  const [searchParams, setSearchParams] = useSearchParams()
+  const weekParam = searchParams.get('week')
+  const [reportingWeek, setReportingWeek] = useState(null)
+  const [normalizedParamWeek, setNormalizedParamWeek] = useState(null)
+  const [summary, setSummary] = useState(null)
+  const allWeeks = useMemo(() => [...new Set(growthData.map(r => r.week_start_date))].sort(), [growthData])
+  const selectedWeek = resolveSelectedWeek({
+    explicit: weekParam,
+    normalizedExplicit: normalizedParamWeek,
+    reportingWeek,
+    allWeeks,
+  })
+  const handleWeekChange = useCallback((week) => {
+    const next = new URLSearchParams(searchParams)
+    if (week) next.set('week', week)
+    else next.delete('week')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    let live = true
+    supabase.rpc('growth_reporting_week').then(({ data }) => { if (live) setReportingWeek(data ?? null) })
+    return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    let live = true
+    if (!isIsoDate(weekParam)) { setNormalizedParamWeek(null); return undefined }
+    supabase.rpc('growth_week_start', { p_date: weekParam }).then(({ data }) => { if (live) setNormalizedParamWeek(data ?? null) })
+    return () => { live = false }
+  }, [weekParam])
+
+  // Canonical completeness counts for the displayed week — the same SQL the weekly email uses.
+  useEffect(() => {
+    if (!selectedWeek) { setSummary(null); return undefined }
+    let live = true
+    supabase.rpc('growth_week_summary', { p_week: selectedWeek }).then(({ data }) => { if (live) setSummary(data?.[0] ?? null) })
+    return () => { live = false }
+  }, [selectedWeek, growthData])
 
   const load = useCallback(async () => {
     const [{ data: growth }, { data: sched }, { data: recip }, { data: flags }, { data: syncedAt }] = await Promise.all([
@@ -1440,7 +1487,7 @@ export default function GrowthTrackingPage({ embedded = false }) {
 
       {/* Tab content */}
       <div className="gt-body" style={{ padding: '28px 32px 64px', maxWidth: 1100, margin: '0 auto' }}>
-        {tab === 'dashboard' && <Dashboard growthData={growthData} loading={loading} selectedWeek={selectedWeek} onWeekChange={setSelectedWeek} />}
+        {tab === 'dashboard' && <Dashboard growthData={growthData} loading={loading} selectedWeek={selectedWeek} onWeekChange={handleWeekChange} reportingWeek={reportingWeek} summary={summary} />}
         {tab === 'month-end' && <MonthEnd growthData={growthData} schedule={schedule} onRefresh={load} />}
         {tab === 'settings' && (
           <Settings
