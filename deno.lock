@@ -5,6 +5,7 @@
     "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.110.3",
     "https://esm.sh/@supabase/supabase-js@2?target=deno": "https://esm.sh/@supabase/supabase-js@2.112.4?target=deno",
     "https://esm.sh/bufferutil@^4.0.1?target=denonext": "https://esm.sh/bufferutil@4.1.0?target=denonext",
+    "https://esm.sh/iceberg-js@^0.8.1?target=denonext": "https://esm.sh/iceberg-js@0.8.1?target=denonext",
     "https://esm.sh/node-gyp-build@^4.3.0?target=denonext": "https://esm.sh/node-gyp-build@4.8.4?target=denonext",
     "https://esm.sh/tr46@~0.0.3?target=denonext": "https://esm.sh/tr46@0.0.3?target=denonext",
     "https://esm.sh/utf-8-validate@%3E=5.0.2?target=denonext": "https://esm.sh/utf-8-validate@6.0.6?target=denonext",
@@ -24,24 +25,34 @@
     "https://deno.land/std@0.168.0/async/retry.ts": "e8e5173623915bbc0ddc537698fa418cf875456c347eda1ed453528645b42e67",
     "https://deno.land/std@0.168.0/async/tee.ts": "3a47cc4e9a940904fd4341f0224907e199121c80b831faa5ec2b054c6d2eff5e",
     "https://deno.land/std@0.168.0/http/server.ts": "e99c1bee8a3f6571ee4cdeb2966efad465b8f6fe62bec1bdb59c1f007cc4d155",
+    "https://esm.sh/@supabase/auth-js@2.110.3/denonext/auth-js.mjs": "2cdf33a39eb2d146eb15c01a6e869f80dc0c169eed5f0253bf822f7d0d65627a",
     "https://esm.sh/@supabase/auth-js@2.70.0/denonext/auth-js.mjs": "51f137a91dc64489abf1a500582918ee5042e1e0b64c167f26a3b6d2f807f43c",
+    "https://esm.sh/@supabase/functions-js@2.110.3/denonext/functions-js.mjs": "6a431a8337e04f91c6db0deba28599d954bdf6a4f0e0e980e851873dd8092a5b",
     "https://esm.sh/@supabase/functions-js@2.4.4/denonext/functions-js.mjs": "7adeb257410ef3c4a8a1eb9b4ff416c0075d1c32860ca04913c8a9dace1de6a6",
     "https://esm.sh/@supabase/node-fetch@2.6.15/denonext/node-fetch.mjs": "0bae9052231f4f6dbccc7234d05ea96923dbf967be12f402764580b6bf9f713d",
     "https://esm.sh/@supabase/node-fetch@2.6.15?target=denonext": "4d28c4ad97328403184353f68434f2b6973971507919e9150297413664919cf3",
+    "https://esm.sh/@supabase/phoenix@0.4.4/denonext/phoenix.mjs": "2c4954292d10fd9137d66a1b7abd73bf24f9771a444c3d4e267b12e1e2b132c8",
     "https://esm.sh/@supabase/postgrest-js@1.19.4/denonext/postgrest-js.mjs": "2073b5552ba10c7a8302bffffae771e3aede1daf833382355dae239fb0ab2576",
+    "https://esm.sh/@supabase/postgrest-js@2.110.3/denonext/postgrest-js.mjs": "fd9169645e63aa4a861a74febd64264efa6c35243f58d7296a4546e196e76cfb",
     "https://esm.sh/@supabase/realtime-js@2.11.10/denonext/realtime-js.mjs": "42c599d4edc40fa95209d309bacc391910c0e242cd3fddbaac3aeeafc4b81b17",
+    "https://esm.sh/@supabase/realtime-js@2.110.3/denonext/realtime-js.mjs": "d481d2e02956d633c35e041fe2fc9d1c142789f222da264d8d48d8495ade1f24",
+    "https://esm.sh/@supabase/storage-js@2.110.3/denonext/storage-js.mjs": "dbb82dfee5a546a9048bae6d889451ba58c5d019aaa1749e3d6ebc6dbef3c8c6",
     "https://esm.sh/@supabase/storage-js@2.7.1/denonext/storage-js.mjs": "73ac8cdc95cfcd794fe603dbd7ce06d539ab51538ae6467eabe0f9cc26c993aa",
     "https://esm.sh/@supabase/supabase-js@2.110.3": "3d98c7276d7a5937f1562973e97ce458f8daaa38e2b63a084820702e53c1a358",
+    "https://esm.sh/@supabase/supabase-js@2.110.3/denonext/supabase-js.mjs": "f83c5d2f5dea3eda2fff41914bb60d585e8595adcf8fc4713fcc489ee7ceac89",
     "https://esm.sh/@supabase/supabase-js@2.112.4?target=deno": "606f8c21b01cc03ea41a3f28dc785041099fbf61f9b039b6427d5dce541cc65f",
     "https://esm.sh/@supabase/supabase-js@2.50.0": "08871b551234bdcaf766bf2f864b8c00b6d7f92a66d23045596624e4b6c5d762",
     "https://esm.sh/@supabase/supabase-js@2.50.0/denonext/supabase-js.mjs": "f123d5a83e021b6ddd0ab4b3795c5ba5d3d27117d2e5844298ce5f9ba216311c",
     "https://esm.sh/@supabase/supabase-js@2.50.0?target=deno": "d9e4f5525718644106172c2e7fb57818ef906d18c92ec4ec771a63f4e510bab3",
     "https://esm.sh/bufferutil@4.1.0/denonext/bufferutil.mjs": "9b6e81087bdc57848ad1de1f8618ebbace98ebd9ff6cab51260b48c2a045a9c9",
     "https://esm.sh/bufferutil@4.1.0?target=denonext": "aaa2a112199593ccc40da1aedf5124779862ea166afb0a8529f04f907001428a",
+    "https://esm.sh/iceberg-js@0.8.1/denonext/iceberg-js.mjs": "d839d81a2e3966500ca2cdd0c1cb458e9608bacfc91f7bb67a69b2e878dcdb4f",
+    "https://esm.sh/iceberg-js@0.8.1?target=denonext": "58c849d7fe2bf4eca4a84eb501e83c161a7d8c34ca1bec15a962b3bec3062633",
     "https://esm.sh/node-gyp-build@4.8.4/denonext/node-gyp-build.mjs": "9a86f2d044fc77bd60aaa3d697c2ba1b818da5fb1b9aaeedec59a40b8e908803",
     "https://esm.sh/node-gyp-build@4.8.4?target=denonext": "261a6cedf1fdbf159798141ba1e2311ac1510682c5c8b55dacc8cf5fdee4aa06",
     "https://esm.sh/tr46@0.0.3/denonext/tr46.mjs": "5753ec0a99414f4055f0c1f97691100f13d88e48a8443b00aebb90a512785fa2",
     "https://esm.sh/tr46@0.0.3?target=denonext": "19cb9be0f0d418a0c3abb81f2df31f080e9540a04e43b0f699bce1149cba0cbb",
+    "https://esm.sh/tslib@2.8.1/denonext/tslib.mjs": "c38da5dd6da6281964435002ce204cd586634fe3bdfb24a0ee116f48cf3292e9",
     "https://esm.sh/utf-8-validate@6.0.6/denonext/utf-8-validate.mjs": "4a41983aa887625615f52a52b53c223d8f16c74e52a6bd41b2c361894c07f878",
     "https://esm.sh/utf-8-validate@6.0.6?target=denonext": "8afa4e097093160323f232f971ca61474d22ccafdac8025e4e4f66ab4e07b2c4",
     "https://esm.sh/webidl-conversions@3.0.1/denonext/webidl-conversions.mjs": "238cd0743827707cbc1c2d7c2cf1027dbc536fb53ec9a3fde0ff8026a3ac5385",
@@ -74,6 +85,7 @@
         "npm:@tiptap/starter-kit@^3.29.2",
         "npm:@types/node@^26.1.2",
         "npm:@typescript-eslint/parser@^8.63.0",
+        "npm:@vercel/analytics@^2.0.1",
         "npm:@vitejs/plugin-react@^5.2.0",
         "npm:date-fns@^4.4.0",
         "npm:esbuild@~0.28.1",
@@ -106,7 +118,23 @@
         "npm:zod@^4.4.3"
       ],
       "overrides": {
-        "esbuild": "^0.28.1"
+        "esbuild": "^0.28.1",
+        "fast-uri": "^3.1.8",
+        "hono": "^4.13.12",
+        "ip-address": "^10.7.2",
+        "brace-expansion": "5.0.12",
+        "@eslint/config-array": {
+          "brace-expansion": "1.1.21"
+        },
+        "@eslint/eslintrc": {
+          "brace-expansion": "1.1.21"
+        },
+        "eslint": {
+          "brace-expansion": "1.1.21"
+        },
+        "eslint-plugin-react": {
+          "brace-expansion": "1.1.21"
+        }
       }
     }
   }

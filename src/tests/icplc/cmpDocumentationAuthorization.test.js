@@ -1,10 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { spawn } from 'node:child_process'
-import fs from 'node:fs'
 import http from 'node:http'
-import os from 'node:os'
-import path from 'node:path'
+import net from 'node:net'
 import pg from 'pg'
 import { CMP_FIELD_IDS } from '../../features/icplc/lib/cmpDocumentation.js'
 
@@ -13,14 +11,16 @@ import { CMP_FIELD_IDS } from '../../features/icplc/lib/cmpDocumentation.js'
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
 
 const API_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321'
-const FUNCTIONS_URL = process.env.SUPABASE_FUNCTIONS_URL || `${API_URL}/functions/v1`
 const ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'
 const PG_URL = process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
 
-const EVENT_ID = '00000000-0000-0000-0000-000000009101'
+// Resolved in beforeAll; module-level so invoke() can reference it.
+let functionPort
+
+const EVENT_ID = '00000000-0000-0000-0000-000000009150'
 const PARTICIPANT_ID = '00000000-0000-0000-0000-000000009199'
-const OTHER_EVENT_ID = '00000000-0000-0000-0000-000000009102'
+const OTHER_EVENT_ID = '00000000-0000-0000-0000-000000009151'
 const PASSWORD = 'Local-cmp-cert-123456!'
 
 // When set, the mock CMP API serves exactly these submissions (default: one fresh submission per request).
@@ -144,45 +144,38 @@ async function removeAddedParticipants() {
 }
 
 async function invoke(token, action = 'apply', extra = {}, eventId = EVENT_ID) {
-  return fetch(`${FUNCTIONS_URL}/cmp-documentation-sync`, {
+  return fetch(`http://127.0.0.1:${functionPort}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      apikey: ANON_KEY,
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ action, event_id: eventId, ...extra }),
   })
 }
 
-// `functions serve` replaces the previous run's edge container, and that container bakes
-// CMP_DOCUMENTATION_FORM_URL (this run's random mock port) into its env. A stale container can still answer
-// requests, so readiness means: a super_admin preview succeeds, i.e. the function reached THIS run's mock
-// server, and it keeps succeeding for a short window (the old container may vanish right after answering).
-async function waitForFunction(token, getLogs = () => '') {
-  const deadline = Date.now() + 90_000
-  const STABLE_MS = 3_000
-  let stableSince = null
+const freePort = () => new Promise((resolve, reject) => {
+  const s = net.createServer()
+  s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)) })
+  s.on('error', reject)
+})
+
+// Wait until the Deno process is accepting connections (no-auth request returns 401).
+async function waitForFunction(getLogs = () => '') {
+  const deadline = Date.now() + 60_000
   let last = 'no response'
   while (Date.now() < deadline) {
-    let ok = false
     try {
-      const res = await invoke(token, 'preview')
+      const res = await fetch(`http://127.0.0.1:${functionPort}`, { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } })
       const text = await res.text()
-      ok = res.status === 200
-      last = `${res.status} ${text.slice(0, 300)}`
+      last = `${res.status} ${text.slice(0, 200)}`
+      if (res.status === 401) return
     } catch (err) {
-      last = String(err).slice(0, 300)
+      last = String(err).slice(0, 200)
     }
-    if (ok) {
-      stableSince ??= Date.now()
-      if (Date.now() - stableSince >= STABLE_MS) return
-    } else {
-      stableSince = null
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 300))
   }
-  throw new Error(`cmp-documentation-sync local function did not become ready. Last response: ${last}\n${getLogs().slice(-2000)}`)
+  throw new Error(`cmp-documentation-sync did not start. Last: ${last}\n${getLogs().slice(-2000)}`)
 }
 
 describe('CMP documentation sync edge authorization', () => {
@@ -190,7 +183,6 @@ describe('CMP documentation sync edge authorization', () => {
   let mockServer
   let mockUrl
   let functionProcess
-  let envPath
   let functionLogs = ''
   const tokens = {}
 
@@ -255,31 +247,26 @@ describe('CMP documentation sync edge authorization', () => {
     })
     await new Promise((resolve, reject) => {
       mockServer.once('error', reject)
-      mockServer.listen(0, '0.0.0.0', resolve)
+      mockServer.listen(0, '127.0.0.1', resolve)
     })
-    mockUrl = `http://host.docker.internal:${mockServer.address().port}/submissions`
+    mockUrl = `http://127.0.0.1:${mockServer.address().port}/submissions`
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmp-doc-auth-'))
-    envPath = path.join(tmpDir, 'edge.env')
-    fs.writeFileSync(envPath, [
-      'LEADERS_PLATFORM_TOKEN=local-cert-token',
-      `CMP_DOCUMENTATION_FORM_URL=${mockUrl}`,
-      '',
-    ].join('\n'))
-
-    functionProcess = spawn('supabase', ['functions', 'serve', 'cmp-documentation-sync', '--env-file', envPath], {
+    functionPort = await freePort()
+    functionProcess = spawn('deno', ['run', '-A', 'supabase/functions/cmp-documentation-sync/index.ts'], {
       cwd: process.cwd(),
-      shell: process.platform === 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
+        DENO_SERVE_ADDRESS: `tcp:127.0.0.1:${functionPort}`,
         SUPABASE_URL: API_URL,
         SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
+        LEADERS_PLATFORM_TOKEN: 'local-cert-token',
+        CMP_DOCUMENTATION_FORM_URL: mockUrl,
       },
     })
     functionProcess.stdout?.on('data', (chunk) => { functionLogs += chunk.toString() })
     functionProcess.stderr?.on('data', (chunk) => { functionLogs += chunk.toString() })
-    await waitForFunction(tokens.superAdmin, () => functionLogs)
+    await waitForFunction(() => functionLogs)
   }, 120_000)
 
   afterAll(async () => {

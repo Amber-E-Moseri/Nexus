@@ -87,6 +87,11 @@ jobs:
       # DB-backed suites run against an isolated local Supabase built from THIS commit's migrations.
       # They must never use the repository's remote Supabase secrets: those are production credentials
       # (the same secrets drive deactivate-temp-sprint-members.yml) and the suites write fixtures.
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
