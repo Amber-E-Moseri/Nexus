@@ -920,6 +920,11 @@ describe('ICPLC Registration CSV — Certification Matrix', () => {
         await pgExec('DELETE FROM public.sprint_teams WHERE sprint_id = $1', [sprintId])
         await pgExec('DELETE FROM public.sprints WHERE id = $1', [sprintId])
       }
+      // Remove any ICPLC rows referencing SPRINT_EVENT_ID before dropping the event_config (FK)
+      await pgExec('DELETE FROM public.icplc_email_claims   WHERE event_id = $1', [SPRINT_EVENT_ID])
+      await pgExec('DELETE FROM public.icplc_identity_maps  WHERE event_id = $1', [SPRINT_EVENT_ID])
+      await pgExec('DELETE FROM public.icplc_import_batches WHERE event_id = $1', [SPRINT_EVENT_ID])
+      await pgExec('DELETE FROM public.icplc_participants   WHERE event_id = $1', [SPRINT_EVENT_ID])
       await pgExec('DELETE FROM public.event_configs WHERE id = $1', [SPRINT_EVENT_ID])
 
       // Delete auth users (cascade deletes public.users rows)

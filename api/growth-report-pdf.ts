@@ -1,25 +1,40 @@
-// Vercel Serverless Function: Growth Report PDF Rendering
+// Vercel Serverless Function: Growth Report PDF Generation
 // POST /api/growth-report-pdf
-// Orchestrates Chromium PDF generation using the canonical renderer.
+//
+// Requires authenticated user with role: super_admin | regional_secretary.
+// Returns a PDF blob on success.
+// All error responses carry a requestId for server-log correlation.
+// Internal details (paths, stacks, keys) are never surfaced to the client.
 
+import { randomUUID } from 'crypto'
 import { readFileSync, existsSync } from 'fs'
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
+import { join } from 'path'
+import type { IncomingMessage, ServerResponse } from 'http'
 import puppeteer from 'puppeteer-core'
+import { createClient } from '@supabase/supabase-js'
 import { renderGrowthReportHTMLWithTemplate } from '../src/lib/growthReportRenderer.js'
 import type { GrowthReport } from '../src/lib/reportModels.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
+const ALLOWED_ROLES = new Set(['super_admin', 'regional_secretary'])
+
+type VercelRequest  = IncomingMessage & { body?: unknown }
+type VercelResponse = ServerResponse & {
+  status(code: number): VercelResponse
+  setHeader(name: string, value: string): VercelResponse
+  json(body: unknown): void
+  send(body: unknown): void
+  end(): void
+}
+
+// ── Template ─────────────────────────────────────────────────────────────────
 
 function loadTemplate(): string {
-  const templatePath = join(__dirname, '../src/lib/growthReportTemplate.html')
-  try {
-    return readFileSync(templatePath, 'utf-8')
-  } catch (err) {
-    throw new Error(`Cannot load report template at ${templatePath}: ${err instanceof Error ? err.message : String(err)}`)
-  }
+  // process.cwd() is /var/task on Vercel; includeFiles puts the template there.
+  const templatePath = join(process.cwd(), 'src/lib/growthReportTemplate.html')
+  return readFileSync(templatePath, 'utf-8') // throws on failure; caller logs
 }
+
+// ── Chrome ───────────────────────────────────────────────────────────────────
 
 function findLocalChrome(): string {
   const candidates = [
@@ -33,7 +48,7 @@ function findLocalChrome(): string {
   for (const p of candidates) {
     if (existsSync(p)) return p
   }
-  throw new Error('No local Chrome/Chromium found for local PDF generation. Install Chrome or deploy to Vercel.')
+  throw new Error('No local Chrome found — install Chrome or deploy to Vercel.')
 }
 
 async function getBrowserArgs() {
@@ -47,7 +62,6 @@ async function getBrowserArgs() {
       headless: chromium.default.headless as true,
     }
   }
-  // Local development: find system Chrome
   return {
     executablePath: findLocalChrome(),
     headless: true as const,
@@ -55,42 +69,101 @@ async function getBrowserArgs() {
   }
 }
 
-// Minimal request/response shapes (type-only; avoids a dependency on @vercel/node types)
-interface VercelRequest { method?: string; body?: unknown }
-interface VercelResponse {
-  status(code: number): VercelResponse
-  setHeader(name: string, value: string): VercelResponse
-  json(body: unknown): VercelResponse
-  send(body: unknown): VercelResponse
-  end(): VercelResponse
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+async function resolveIdentity(
+  token: string,
+  requestId: string,
+): Promise<{ userId: string; role: string } | null> {
+  const supabaseUrl    = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error(`[${requestId}] Missing SUPABASE env vars — cannot authorize`)
+    return null
+  }
+
+  const admin = createClient(supabaseUrl, serviceRoleKey)
+
+  // Validate the caller's JWT against Supabase Auth
+  const { data: { user }, error: authErr } = await admin.auth.getUser(token)
+  if (authErr || !user) return null
+
+  // Fetch role via service-role client (bypasses RLS)
+  const { data: ur } = await admin
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  if (!ur) return null
+
+  return { userId: user.id, role: ur.role as string }
 }
 
+// ── Handler ──────────────────────────────────────────────────────────────────
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const requestId = randomUUID()
+
   if (req.method === 'OPTIONS') {
     return res.status(200).setHeader('Access-Control-Allow-Origin', '*').end()
   }
-
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
+    return res.status(405).json({ error: 'Method not allowed', requestId })
   }
 
-  const report = req.body as GrowthReport
-
-  if (!report?.reportingWeek || report.networkAttendance === undefined) {
-    return res.status(400).json({ error: 'Missing required report fields' })
+  // ── Authentication ─────────────────────────────────────────────────────────
+  const authHeader = (req.headers['authorization'] ?? '') as string
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required', requestId })
   }
 
-  let browser = null
+  let identity: { userId: string; role: string } | null
   try {
+    identity = await resolveIdentity(token, requestId)
+  } catch (e) {
+    console.error(`[${requestId}] Auth resolution error:`, e)
+    return res.status(500).json({ error: 'Server configuration error', requestId })
+  }
+  if (!identity) {
+    return res.status(401).json({ error: 'Invalid or expired session', requestId })
+  }
+
+  // ── Authorization ──────────────────────────────────────────────────────────
+  if (!ALLOWED_ROLES.has(identity.role)) {
+    return res.status(403).json({ error: 'Growth Tracking access required', requestId })
+  }
+
+  // ── Payload validation (before Chromium launches) ──────────────────────────
+  const report = req.body as GrowthReport
+  if (!report || typeof report !== 'object') {
+    return res.status(400).json({ error: 'Invalid request body', requestId })
+  }
+  if (!report.reportingWeek || report.networkAttendance === undefined) {
+    return res.status(400).json({ error: 'Missing required report fields', requestId })
+  }
+  if (!Array.isArray(report.centers)) {
+    return res.status(400).json({ error: 'Report centers must be an array', requestId })
+  }
+
+  // ── PDF generation ─────────────────────────────────────────────────────────
+  let browser = null
+  let stage = 'init'
+  try {
+    stage = 'template-load'
     const templateStr = loadTemplate()
+
+    stage = 'html-render'
     const html = renderGrowthReportHTMLWithTemplate(report, templateStr)
 
+    stage = 'browser-launch'
     const launchArgs = await getBrowserArgs()
     browser = await puppeteer.launch(launchArgs)
 
+    stage = 'pdf-render'
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'load' })
-
     const pdfBuffer = await page.pdf({
       format: 'Letter',
       margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' },
@@ -102,18 +175,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`)
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-
     return res.status(200).send(pdfBuffer)
+
   } catch (error) {
-    console.error('Growth report PDF error:', error)
-    const isProduction = !!process.env.VERCEL
+    // Full detail server-side only — paths, stacks, context — never in the response
+    console.error(
+      `[${requestId}] PDF failed stage=${stage} user=${identity.userId} week=${report?.reportingWeek}:`,
+      error,
+    )
     return res.status(500).json({
-      error: 'Failed to generate PDF',
-      ...(isProduction ? {} : { details: error instanceof Error ? error.message : String(error) }),
+      error:     'Failed to generate growth report PDF',
+      requestId, // matches the server log entry above
     })
   } finally {
     if (browser) {
-      await browser.close().catch(e => console.error('Browser close error:', e))
+      await browser.close().catch(e => console.error(`[${requestId}] Browser close error:`, e))
     }
   }
 }
