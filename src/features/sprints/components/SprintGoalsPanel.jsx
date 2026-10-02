@@ -191,9 +191,14 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
           </span>
         </button>
         {!collapsed && (
-          <button onClick={openCreateForm} style={{ ...styles.button, backgroundColor: '#4C2A92' }}>
-            <Plus size={16} aria-hidden="true" /> Add goal
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {!loading && goals.length === 0 && (
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No goals added yet</span>
+            )}
+            <button onClick={openCreateForm} style={{ ...styles.button, backgroundColor: '#4C2A92' }}>
+              <Plus size={16} aria-hidden="true" /> Add goal
+            </button>
+          </div>
         )}
       </div>
 
@@ -377,12 +382,29 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
           {loading && <div style={styles.loading}>Loading goals...</div>}
 
           {!loading && goals.length === 0 && !showForm && (
-            <div style={styles.empty}>
-              <div>
-                <span style={styles.emptyTitle}>No goals added</span>
-                <span> Add an outcome when the team is ready to track one.</span>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={openCreateForm}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '10px 14px',
+                border: '1.5px dashed var(--border)',
+                borderRadius: 10,
+                background: 'transparent',
+                cursor: 'pointer',
+                color: 'var(--text-tertiary)',
+                fontSize: 13,
+                transition: 'border-color 0.12s, color 0.12s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-tertiary)' }}
+            >
+              <Plus size={14} aria-hidden="true" />
+              <span>Add the first outcome for this sprint…</span>
+            </button>
           )}
 
           {goals.length > 0 && (

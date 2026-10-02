@@ -257,23 +257,25 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-        <div className="flex items-center gap-2 rounded-[10px] bg-[var(--surface-secondary)] p-[3px]">
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottom: '1px solid var(--border)', padding: '10px 20px' }}>
+        {/* View switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, borderRadius: 10, background: 'var(--surface-secondary)', padding: 3 }}>
           {['kanban', 'list', 'review'].map((option) => (
             <button
               key={option}
               type="button"
               onClick={() => setView(option)}
               style={{
-                padding: '4px 12px',
+                padding: '5px 14px',
                 fontSize: 12,
-                fontWeight: 500,
+                fontWeight: view === option ? 600 : 400,
                 borderRadius: 8,
                 cursor: 'pointer',
                 border: 'none',
                 background: view === option ? 'white' : 'transparent',
                 color: view === option ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                boxShadow: view === option ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
+                boxShadow: view === option ? '0 1px 3px rgba(20,20,43,0.08)' : 'none',
+                transition: 'all 0.12s',
               }}
             >
               {option === 'kanban' ? 'Board' : option === 'list' ? 'List' : 'Review'}
@@ -281,44 +283,32 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Right controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {view !== 'review' && <TaskSearchInput value={taskSearch} onChange={setTaskSearch} />}
           {hasTeams && view !== 'review' ? (
-            <div className="flex items-center gap-1 rounded-[10px] bg-[var(--surface-secondary)] p-[3px]">
-              <button
-                type="button"
-                onClick={() => setTeamView('my')}
-                style={{
-                  padding: '4px 12px',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  border: 'none',
-                  background: teamView === 'my' ? 'white' : 'transparent',
-                  color: teamView === 'my' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  boxShadow: teamView === 'my' ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
-                }}
-              >
-                My Team
-              </button>
-              <button
-                type="button"
-                onClick={() => setTeamView('all')}
-                style={{
-                  padding: '4px 12px',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  border: 'none',
-                  background: teamView === 'all' ? 'white' : 'transparent',
-                  color: teamView === 'all' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  boxShadow: teamView === 'all' ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
-                }}
-              >
-                All Teams
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 1, borderRadius: 10, background: 'var(--surface-secondary)', padding: 3 }}>
+              {[['my', 'My Team'], ['all', 'All Teams']].map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setTeamView(val)}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontWeight: teamView === val ? 600 : 400,
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    border: 'none',
+                    background: teamView === val ? 'white' : 'transparent',
+                    color: teamView === val ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    boxShadow: teamView === val ? '0 1px 3px rgba(20,20,43,0.08)' : 'none',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           ) : null}
           <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
@@ -326,7 +316,20 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
             <button
               type="button"
               onClick={() => setModal({ mode: 'create', defaultStatus: defaultStatusId })}
-              className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
+              style={{
+                padding: '7px 14px',
+                fontSize: 13,
+                fontWeight: 600,
+                borderRadius: 10,
+                border: 'none',
+                background: 'var(--accent)',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                whiteSpace: 'nowrap',
+              }}
             >
               + New task
             </button>

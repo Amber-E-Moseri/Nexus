@@ -656,7 +656,7 @@ export default function SprintOverview() {
             type="button"
             onClick={() => setActiveTab(tab)}
             style={{
-              padding: '8px 16px',
+              padding: '9px 16px',
               fontSize: 13,
               fontWeight: activeTab === tab ? 600 : 400,
               color: activeTab === tab ? 'var(--accent)' : 'var(--text-secondary)',
@@ -666,7 +666,11 @@ export default function SprintOverview() {
               cursor: 'pointer',
               marginBottom: -1,
               borderRadius: 0,
+              transition: 'color 0.12s',
+              letterSpacing: activeTab === tab ? '-0.01em' : 0,
             }}
+            onMouseEnter={(e) => { if (activeTab !== tab) e.currentTarget.style.color = 'var(--text-primary)' }}
+            onMouseLeave={(e) => { if (activeTab !== tab) e.currentTarget.style.color = 'var(--text-secondary)' }}
           >
             {tab}
           </button>
