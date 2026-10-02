@@ -14,7 +14,8 @@ BEGIN
   LIMIT 1;
 
   IF v_jason_id IS NULL THEN
-    RAISE EXCEPTION 'User matching "Jason Ikeokwu" not found in users table';
+    RAISE NOTICE 'User matching "Jason Ikeokwu" not found in users table; skipping PFCC/Pastors assignment';
+    RETURN;
   END IF;
 
   SELECT id INTO v_pastors
