@@ -201,30 +201,30 @@ function SpaceHeader({ space, members, canManage, canManageStatuses, onOpenStatu
   const accentColor = space.color ? `#${space.color}` : (SPACE_TYPE_BG[space.space_type] ?? '#5B34C7')
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+    <div className="flex flex-wrap items-start justify-between gap-4">
       {/* Left: icon + name */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, minWidth: 0, flex: 1 }}>
-        <SpaceIconLarge space={space} size={52} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-            <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>
+      <div className="flex min-w-0 flex-1 items-start gap-4">
+        <SpaceIconLarge space={space} size={48} />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="m-0 text-2xl font-bold leading-tight tracking-tight sm:text-[32px]" style={{ color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
               {space.name}
             </h1>
             <span style={{
               fontSize: 11, fontWeight: 700, color: accentColor,
               background: `${accentColor}18`, borderRadius: 7, padding: '3px 9px',
-              border: `1px solid ${accentColor}28`,
+              border: `1px solid ${accentColor}28`, whiteSpace: 'nowrap',
             }}>
               {SPACE_TYPE_LABELS[space.space_type] ?? space.space_type}
             </span>
             {space.status === 'archived' ? (
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', background: '#F3F4F6', borderRadius: 7, padding: '3px 9px' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', background: '#F3F4F6', borderRadius: 7, padding: '3px 9px', whiteSpace: 'nowrap' }}>
                 Archived
               </span>
             ) : null}
           </div>
           {description ? (
-            <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.55, maxWidth: 560 }}>
+            <p className="mt-1.5 text-sm leading-relaxed text-[var(--text-secondary)]" style={{ maxWidth: 560 }}>
               {description}
             </p>
           ) : null}
@@ -232,9 +232,9 @@ function SpaceHeader({ space, members, canManage, canManageStatuses, onOpenStatu
       </div>
 
       {/* Right: members + settings */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+      <div className="flex items-center gap-3 flex-shrink-0">
         {visibleMembers.length > 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div className="hidden sm:flex items-center">
             {visibleMembers.map((member, index) => (
               <div
                 key={member.id}
