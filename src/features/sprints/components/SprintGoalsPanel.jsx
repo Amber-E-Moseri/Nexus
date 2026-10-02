@@ -51,7 +51,6 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA)
   const [saving, setSaving] = useState(false)
   const [editingGoalId, setEditingGoalId] = useState(null)
-  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     loadGoals()
@@ -166,45 +165,39 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
   ) / (goals.length || 1)
 
   return (
-    <div style={{ ...styles.container, paddingBottom: collapsed ? 0 : 20 }}>
-      {/* Header — always visible */}
-      <div style={{ ...styles.header, marginBottom: collapsed ? 0 : 16 }}>
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: 0 }}
-        >
-          <span style={{
-            fontSize: 11,
-            color: 'var(--text-tertiary)',
-            display: 'inline-block',
-            transition: 'transform 0.15s',
-            transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+    <div style={styles.container}>
+      {/* Header */}
+      <div style={{ ...styles.header, marginBottom: goals.length > 0 ? 16 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: 10,
+            background: 'var(--accent-light, #EDE8F9)',
+            color: 'var(--accent)',
+            flexShrink: 0,
           }}>
-            ▼
-          </span>
-          <span style={styles.headingGroup}>
-            <Target size={18} aria-hidden="true" />
-            <span>
-              <h3 style={styles.title}>Sprint goals</h3>
-              <span style={styles.subtitle}>{goals.length ? `${goals.length} goal${goals.length === 1 ? '' : 's'} in this sprint` : 'Set the outcomes this sprint should deliver'}</span>
-            </span>
-          </span>
-        </button>
-        {!collapsed && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {!loading && goals.length === 0 && (
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No goals added yet</span>
-            )}
-            <button onClick={openCreateForm} style={{ ...styles.button, backgroundColor: '#4C2A92' }}>
-              <Plus size={16} aria-hidden="true" /> Add goal
-            </button>
+            <Target size={17} aria-hidden="true" />
           </div>
-        )}
+          <div>
+            <h3 style={styles.title}>Sprint goals</h3>
+            <span style={styles.subtitle}>
+              {loading ? 'Loading…' : goals.length > 0
+                ? `${goals.filter((g) => g.status === 'completed').length} of ${goals.length} goal${goals.length === 1 ? '' : 's'} completed`
+                : 'Set the outcomes this sprint should deliver'}
+            </span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {!loading && goals.length === 0 && (
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No goals added yet</span>
+          )}
+          <button onClick={openCreateForm} style={{ ...styles.button, backgroundColor: 'var(--accent, #4C2A92)' }}>
+            <Plus size={15} aria-hidden="true" /> Add goal
+          </button>
+        </div>
       </div>
 
-      {/* Body — hidden when collapsed */}
-      {!collapsed && (
-        <div>
+      <div>
           {error && !showForm && <div style={styles.error}>{error}</div>}
 
           <Dialog.Root open={showForm} onOpenChange={(open) => { if (!open) closeForm() }}>
@@ -381,31 +374,6 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
 
           {loading && <div style={styles.loading}>Loading goals...</div>}
 
-          {!loading && goals.length === 0 && !showForm && (
-            <button
-              type="button"
-              onClick={openCreateForm}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                width: '100%',
-                padding: '10px 14px',
-                border: '1.5px dashed var(--border)',
-                borderRadius: 10,
-                background: 'transparent',
-                cursor: 'pointer',
-                color: 'var(--text-tertiary)',
-                fontSize: 13,
-                transition: 'border-color 0.12s, color 0.12s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-tertiary)' }}
-            >
-              <Plus size={14} aria-hidden="true" />
-              <span>Add the first outcome for this sprint…</span>
-            </button>
-          )}
 
           {goals.length > 0 && (
             <div style={styles.goalsList}>
@@ -475,14 +443,13 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
             </div>
           )}
         </div>
-      )}
     </div>
   )
 }
 
 const styles = {
   container: {
-    padding: '4px 0 0',
+    padding: '4px 0 16px',
     backgroundColor: 'transparent',
     marginBottom: 0,
     border: 'none',

@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
-import { UsersRound } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { SlidersHorizontal, UsersRound } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth'
 import { canAssignOrgWide } from '../../../lib/permissions'
 import AssignedToMeToggle from '../../tasks/components/AssignedToMeToggle'
@@ -87,6 +87,16 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
   }, [statuses])
   const [view, setView] = useState('kanban')
   const [teamView, setTeamView] = useState(canEdit ? 'my' : 'all')
+  const [showFilters, setShowFilters] = useState(false)
+  const filterRef = useRef(null)
+  useEffect(() => {
+    if (!showFilters) return
+    function handleClickOutside(e) {
+      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showFilters])
   const [modal, setModal] = useState(null)
   const [taskSearch, setTaskSearch] = useState('')
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks, {
@@ -311,6 +321,65 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
               ))}
             </div>
           ) : null}
+          {view !== 'review' && (
+            <div ref={filterRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  borderRadius: 20,
+                  border: `1px solid ${hasActiveFilters() ? 'var(--accent)' : 'var(--border)'}`,
+                  background: hasActiveFilters() ? 'var(--accent-light)' : showFilters ? 'var(--surface-secondary)' : 'white',
+                  color: hasActiveFilters() ? 'var(--accent)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <SlidersHorizontal size={13} />
+                Filter
+                {hasActiveFilters() ? (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--accent)', color: 'white', borderRadius: 999, padding: '1px 5px' }}>
+                    {Object.values(filters).flat().filter(Boolean).length}
+                  </span>
+                ) : null}
+              </button>
+              {showFilters && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  zIndex: 60,
+                  background: 'white',
+                  border: '1px solid var(--border)',
+                  borderRadius: 14,
+                  boxShadow: '0 8px 32px rgba(14,14,30,0.14)',
+                  padding: '16px 18px',
+                  minWidth: 300,
+                  maxWidth: 380,
+                  maxHeight: '70vh',
+                  overflowY: 'auto',
+                }}>
+                  <TaskFilters
+                    filters={filters}
+                    setFilters={setFilters}
+                    clearFilters={clearFilters}
+                    hasActiveFilters={hasActiveFilters}
+                    members={members}
+                    statuses={statuses}
+                    tasks={tasks}
+                    showDateClosedFilter
+                    forceExpanded
+                  />
+                </div>
+              )}
+            </div>
+          )}
           <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
           {canEdit ? (
             <button
@@ -337,18 +406,6 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
         </div>
       </div>
 
-      <div className="px-5">
-        <TaskFilters
-          filters={filters}
-          setFilters={setFilters}
-          clearFilters={clearFilters}
-          hasActiveFilters={hasActiveFilters}
-          members={members}
-          statuses={statuses}
-          tasks={tasks}
-          showDateClosedFilter
-        />
-      </div>
 
       {view !== 'review' ? (
         <BulkTasksBanner

@@ -23,7 +23,7 @@ import SprintMeetingsPanel from '../../features/sprints/components/SprintMeeting
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 import { hasSpaceRole, isProgramsMember } from '../../lib/permissions'
 
-const TABS = ['Overview', 'Tasks', 'Calendar', 'Meetings', 'Teams', 'Members', 'Files', 'Review']
+const TABS = ['Overview', 'Tasks', 'Participants', 'Calendar', 'Meetings', 'Teams', 'Members', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
 
 function ArchivedSprintBanner({ sprint, onRestore, userRole }) {
@@ -785,6 +785,22 @@ export default function SprintOverview() {
             onDayClick={(date) => { setCalendarDefaultDate(date); setShowEventModal(true) }}
             onAddEvent={() => setShowEventModal(true)}
             readOnly={!canManage || isArchived}
+          />
+        </div>
+      )}
+
+      {/* Participants Tab */}
+      {activeTab === 'Participants' && (
+        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <SprintMemberPanel
+            sprintId={detail.sprint.id}
+            sprintName={detail.sprint.name}
+            sprintEndDate={detail.sprint.end_date}
+            members={detail.members ?? []}
+            teams={detail.teams ?? []}
+            canEdit={false}
+            isArchived={Boolean(isArchived)}
+            onChanged={reloadTeamsAndMembers}
           />
         </div>
       )}
