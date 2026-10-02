@@ -332,6 +332,16 @@ export async function updateSprintTeam(teamId, updates) {
 }
 
 export async function deleteSprintTeam(teamId) {
+  // sprint_team_members RLS write policy does a subquery on sprint_teams to
+  // check can_manage_sprint. During ON DELETE CASCADE the parent row is already
+  // gone, causing that policy to fail and block the whole delete. Pre-deleting
+  // members explicitly (while the sprint_teams row still exists) avoids this.
+  const { error: membersError } = await supabase
+    .from('sprint_team_members')
+    .delete()
+    .eq('team_id', teamId)
+  if (membersError) throw membersError
+
   const { error } = await supabase.from('sprint_teams').delete().eq('id', teamId)
   if (error) throw error
 }
