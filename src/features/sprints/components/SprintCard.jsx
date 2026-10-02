@@ -103,7 +103,7 @@ export default function SprintCard({
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {!hasAccess ? '🔒 ' : isArchived ? '📦 ' : shouldAutoStartSprint(sprint) ? '⚡ ' : ''}{sprint.name}
+            {!hasAccess ? '🔒 ' : ''}{sprint.name}
           </div>
           {(sprint.department_name || sprint.category) && (
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
@@ -125,9 +125,9 @@ export default function SprintCard({
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid #E9E4D8' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>📅 {dateRange}</span>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid #E9E4D8', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0, flex: 1 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{dateRange}</span>
           {taskCount > 0 && (
             <>
               <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
