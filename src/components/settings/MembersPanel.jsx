@@ -333,6 +333,24 @@ export default function MembersPanel() {
     }
   }
 
+  async function handleReactivate(userId) {
+    setSaving(true)
+    try {
+      await updateUserMembership({
+        userId,
+        status: 'active',
+        reason: 'Reactivated from settings',
+      })
+      showToast('Member reactivated.', { tone: 'success' })
+      setActiveTab('Active')
+      await loadData()
+    } catch (error) {
+      showToast(error.message, { tone: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleResend(invitationId) {
     setSaving(true)
     try {
@@ -532,6 +550,15 @@ export default function MembersPanel() {
                           </button>
                         ) : null}
                       </div>
+                    ) : canManage && activeTab === 'Inactive' ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => handleReactivate(entry.id)}
+                        style={{ border: '1px solid #EDE8DC', background: '#FFFFFF', color: '#4C2A92', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
+                      >
+                        Reactivate
+                      </button>
                     ) : (
                       <span style={{ fontSize: 12, color: '#9E9488' }}>View only</span>
                     )}
