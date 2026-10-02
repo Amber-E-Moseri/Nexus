@@ -23,6 +23,7 @@ const cardEnter = {
 }
 
 const FILTERS = ['all', 'active', 'planning', 'completed', 'review', 'archived']
+const FILTER_LABELS = { all: 'All status', active: 'Active', planning: 'Planning', completed: 'Completed', review: 'In Review', archived: 'Archived' }
 const CATEGORY_FILTERS = ['all', 'group', 'regional']
 const CATEGORY_LABELS = { all: 'All categories', group: 'Group', regional: 'Regional' }
 const EMPTY_STATE = {
@@ -261,9 +262,7 @@ export default function SprintsList() {
           style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)' }}
         >
           {FILTERS.map((option) => (
-            <option key={option} value={option}>
-              {option.charAt(0).toUpperCase() + option.slice(1)}
-            </option>
+            <option key={option} value={option}>{FILTER_LABELS[option]}</option>
           ))}
         </select>
         <select
