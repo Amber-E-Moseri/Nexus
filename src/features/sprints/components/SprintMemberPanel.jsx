@@ -37,29 +37,86 @@ const ROLE_COLORS = {
   viewer: '#9E9488',
 }
 
+const ROLE_LABELS = {
+  owner: 'Owner',
+  manager: 'Manager',
+  contributor: 'Contributor',
+  viewer: 'Viewer',
+}
+
 function selectedValuesFromOptions(options) {
   return Array.from(options)
     .filter((option) => option.selected)
     .map((option) => option.value)
 }
 
-function badgeColorForRole(role) {
-  if (role === 'owner') return '#5B34C7'
-  if (role === 'manager') return '#1B72E8'
-  if (role === 'viewer') return '#9E9488'
-  return '#E8A020'
+function MemberAvatar({ name, role }) {
+  const initial = (name || '?')[0].toUpperCase()
+  const color = ROLE_COLORS[role] || ROLE_COLORS.contributor
+  return (
+    <div
+      style={{
+        width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+        background: `${color}18`, color, border: `1.5px solid ${color}35`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 15, fontWeight: 700, fontFamily: 'DM Sans, system-ui, sans-serif',
+        userSelect: 'none',
+      }}
+    >
+      {initial}
+    </div>
+  )
+}
+
+function RolePill({ role }) {
+  const color = ROLE_COLORS[role] || ROLE_COLORS.contributor
+  return (
+    <span
+      style={{
+        fontSize: 11, padding: '2px 7px', borderRadius: 999, fontWeight: 600,
+        background: `${color}16`, color,
+        border: `1px solid ${color}30`,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {ROLE_LABELS[role] ?? role}
+    </span>
+  )
 }
 
 function EmptyState({ icon, title, subtitle }) {
   return (
     <div style={{ textAlign: 'center', padding: '3rem 1rem', color: TOKENS.textTertiary, fontSize: 13 }}>
       <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontWeight: 500, color: TOKENS.textSecondary, marginBottom: 4 }}>
-        {title}
-      </div>
+      <div style={{ fontWeight: 500, color: TOKENS.textSecondary, marginBottom: 4 }}>{title}</div>
       <div>{subtitle}</div>
     </div>
   )
+}
+
+const selectStyle = {
+  borderRadius: 10,
+  border: `1px solid ${TOKENS.border}`,
+  background: 'white',
+  padding: '8px 12px',
+  fontSize: 13,
+  color: TOKENS.textPrimary,
+  fontFamily: 'DM Sans, system-ui, sans-serif',
+  cursor: 'pointer',
+}
+
+const smallBtnStyle = {
+  borderRadius: 8,
+  border: `1px solid ${TOKENS.border}`,
+  background: 'white',
+  padding: '7px 12px',
+  fontSize: 12,
+  color: TOKENS.textSecondary,
+  fontWeight: 500,
+  cursor: 'pointer',
+  fontFamily: 'DM Sans, system-ui, sans-serif',
+  transition: 'background 0.12s',
+  whiteSpace: 'nowrap',
 }
 
 export default function SprintMemberPanel({
@@ -239,59 +296,37 @@ export default function SprintMemberPanel({
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16 }}>
-      {/* Access Requests Section */}
+
+      {/* Access Requests */}
       {canEdit && pendingAccessRequests.length > 0 && (
         <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
-          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: TOKENS.textPrimary, margin: 0 }}>Access Requests</div>
-              <div style={{ fontSize: 14, color: TOKENS.textSecondary, margin: '6px 0 0' }}>
-                People asking to join this sprint.
-              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: TOKENS.textPrimary }}>Access Requests</div>
+              <div style={{ fontSize: 13, color: TOKENS.textSecondary, marginTop: 2 }}>People asking to join this sprint.</div>
             </div>
             <Badge tone="planning">{pendingAccessRequests.length} pending</Badge>
           </div>
-
-          <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
             {pendingAccessRequests.map((request) => (
               <div
                 key={request.id}
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                  gap: 12,
-                  borderRadius: 16,
-                  border: `1px solid ${TOKENS.border}`,
-                  background: TOKENS.surfaceTertiary,
-                  padding: '12px 16px',
-                }}
+                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, borderRadius: 12, border: `1px solid ${TOKENS.border}`, background: TOKENS.surfaceTertiary, padding: '12px 14px' }}
               >
+                <MemberAvatar name={request.user?.name} role="contributor" />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {request.user?.name ?? request.user?.email ?? '—'}
                   </div>
                   <div style={{ fontSize: 12, color: TOKENS.textTertiary }}>
                     Requested {new Date(request.requested_at).toLocaleDateString()}
                   </div>
                 </div>
-
                 <button
                   type="button"
                   onClick={() => handleApproveRequest(request)}
                   disabled={respondingRequestId === request.id}
-                  style={{
-                    borderRadius: 10,
-                    border: 'none',
-                    background: TOKENS.primary,
-                    padding: '8px 14px',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: 'white',
-                    cursor: respondingRequestId === request.id ? 'not-allowed' : 'pointer',
-                    opacity: respondingRequestId === request.id ? 0.6 : 1,
-                    fontFamily: 'DM Sans, system-ui, sans-serif',
-                  }}
+                  style={{ ...smallBtnStyle, background: TOKENS.primary, color: 'white', border: 'none', fontWeight: 600, opacity: respondingRequestId === request.id ? 0.6 : 1, cursor: respondingRequestId === request.id ? 'not-allowed' : 'pointer' }}
                 >
                   Approve
                 </button>
@@ -299,18 +334,7 @@ export default function SprintMemberPanel({
                   type="button"
                   onClick={() => handleRejectRequest(request)}
                   disabled={respondingRequestId === request.id}
-                  style={{
-                    borderRadius: 10,
-                    border: `1px solid ${TOKENS.border}`,
-                    background: 'white',
-                    padding: '8px 14px',
-                    fontSize: 13,
-                    color: TOKENS.textSecondary,
-                    fontWeight: 500,
-                    cursor: respondingRequestId === request.id ? 'not-allowed' : 'pointer',
-                    opacity: respondingRequestId === request.id ? 0.6 : 1,
-                    fontFamily: 'DM Sans, system-ui, sans-serif',
-                  }}
+                  style={{ ...smallBtnStyle, opacity: respondingRequestId === request.id ? 0.6 : 1, cursor: respondingRequestId === request.id ? 'not-allowed' : 'pointer' }}
                 >
                   Reject
                 </button>
@@ -320,80 +344,44 @@ export default function SprintMemberPanel({
         </div>
       )}
 
-      {/* Pending Invitations Section */}
+      {/* Pending Invitations */}
       {pendingInvitations.length > 0 && (
         <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
-          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: TOKENS.textPrimary, margin: 0 }}>Pending Invitations</div>
-              <div style={{ fontSize: 14, color: TOKENS.textSecondary, margin: '6px 0 0' }}>
-                Awaiting acceptance from invited members.
-              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: TOKENS.textPrimary }}>Pending Invitations</div>
+              <div style={{ fontSize: 13, color: TOKENS.textSecondary, marginTop: 2 }}>Awaiting acceptance from invited members.</div>
             </div>
             <Badge tone="planning">{pendingInvitations.length} pending</Badge>
           </div>
-
-          <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
             {pendingInvitations.map((invitation) => (
               <div
                 key={invitation.user_id}
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                  gap: 12,
-                  borderRadius: 16,
-                  border: `1px solid ${TOKENS.border}`,
-                  background: TOKENS.surfaceTertiary,
-                  padding: '12px 16px',
-                }}
+                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, borderRadius: 12, border: `1px solid ${TOKENS.border}`, background: TOKENS.surfaceTertiary, padding: '12px 14px' }}
               >
+                <MemberAvatar name={invitation.user?.name} role={invitation.role ?? 'contributor'} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {invitation.user?.name ?? invitation.user?.email ?? '—'}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        padding: '2px 8px',
-                        background: '#FEF3C7',
-                        color: '#92400E',
-                        borderRadius: '999px',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      Invitation pending
+                    </span>
+                    <span style={{ fontSize: 11, padding: '2px 7px', background: '#FEF3C7', color: '#92400E', borderRadius: 999, whiteSpace: 'nowrap' }}>
+                      Invited
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {invitation.user?.email}
                   </div>
-                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 4 }}>
-                    Invited {new Date(invitation.joined_at).toLocaleDateString()}
-                  </div>
                 </div>
-
-                <Badge tone="planning">{invitation.role}</Badge>
-
+                <RolePill role={invitation.role ?? 'contributor'} />
                 {canEdit && !isArchived && (
                   <button
                     type="button"
                     onClick={() => handleRemovePendingInvitation(invitation.user_id)}
-                    style={{
-                      borderRadius: 10,
-                      border: `1px solid ${TOKENS.border}`,
-                      background: 'white',
-                      padding: '8px 12px',
-                      fontSize: 13,
-                      color: TOKENS.textSecondary,
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      fontFamily: 'DM Sans, system-ui, sans-serif',
-                      transition: 'all 0.12s',
-                    }}
-                    onMouseEnter={(e) => { e.target.style.background = TOKENS.background }}
-                    onMouseLeave={(e) => { e.target.style.background = 'white' }}
+                    style={smallBtnStyle}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = TOKENS.background }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'white' }}
                   >
                     Cancel
                   </button>
@@ -404,142 +392,134 @@ export default function SprintMemberPanel({
         </div>
       )}
 
-      {/* Existing Members Section */}
-      <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, minWidth: 0, maxWidth: '100%', boxSizing: 'border-box', boxShadow: TOKENS.cardShadow }}>
-        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      {/* Members List */}
+      <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, minWidth: 0, boxSizing: 'border-box', boxShadow: TOKENS.cardShadow }}>
+        {/* Header */}
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 600, color: TOKENS.textPrimary, margin: 0 }}>Sprint Members</div>
-            <div style={{ fontSize: 14, color: TOKENS.textSecondary, margin: '6px 0 0' }}>
-              Cross-functional members assigned to this sprint.
+            <div style={{ fontSize: 15, fontWeight: 600, color: TOKENS.textPrimary }}>
+              Sprint Members
+              <span style={{ marginLeft: 8, fontSize: 12, padding: '2px 8px', borderRadius: 999, background: TOKENS.surfaceTertiary, color: TOKENS.textSecondary, fontWeight: 500 }}>
+                {members.length}
+              </span>
             </div>
+            <div style={{ fontSize: 13, color: TOKENS.textSecondary, marginTop: 2 }}>Cross-functional members assigned to this sprint.</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {isPastor && isMember && !isArchived && (
               <button
+                type="button"
                 onClick={handleAddGroup}
                 disabled={addingGroup}
-                style={{
-                  padding: '8px 16px',
-                  background: TOKENS.accent,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: addingGroup ? 'not-allowed' : 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  fontFamily: 'DM Sans, system-ui, sans-serif',
-                  opacity: addingGroup ? 0.7 : 1,
-                  transition: 'all 0.12s',
-                }}
+                style={{ ...smallBtnStyle, background: TOKENS.accent, color: 'white', border: 'none', fontWeight: 600, opacity: addingGroup ? 0.7 : 1, cursor: addingGroup ? 'not-allowed' : 'pointer' }}
               >
                 {addingGroup ? 'Adding…' : '+ Add my group'}
               </button>
             )}
             {(canEdit || isMember) && !isArchived && (
               <button
+                type="button"
                 onClick={() => setShowInviteModal(true)}
-                style={{
-                  padding: '8px 16px',
-                  background: TOKENS.primary,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  fontFamily: 'DM Sans, system-ui, sans-serif',
-                  transition: 'all 0.12s',
-                }}
-                onMouseEnter={(e) => { e.target.style.opacity = '0.9' }}
-                onMouseLeave={(e) => { e.target.style.opacity = '1' }}
+                style={{ ...smallBtnStyle, background: TOKENS.primary, color: 'white', border: 'none', fontWeight: 600 }}
+                onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.88' }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
               >
                 + Invite external
               </button>
             )}
-            <Badge tone={isArchived ? 'archived' : 'active'}>{members.length} members</Badge>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 12 }}>
+        {/* Member rows */}
+        <div style={{ display: 'grid', gap: 8 }}>
           {members.map((member) => {
             const expiringMemberships = member.team_memberships?.filter(
-              (membership) => membership.membership_end_date && new Date(membership.membership_end_date) > new Date()
+              (m) => m.membership_end_date && new Date(m.membership_end_date) > new Date()
             ) ?? []
+            const roleColor = ROLE_COLORS[member.role] || ROLE_COLORS.contributor
 
             return (
               <div
                 key={member.user?.id}
                 style={{
-                  display: 'flex', boxSizing: 'border-box', maxWidth: '100%',
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
+                  display: 'flex',
+                  alignItems: 'flex-start',
                   gap: 12,
                   borderRadius: 12,
                   border: `1px solid ${TOKENS.border}`,
-                  borderLeft: `4px solid ${ROLE_COLORS[member.role] || ROLE_COLORS.contributor}`,
+                  borderLeft: `3px solid ${roleColor}`,
                   background: 'white',
-                  padding: '12px 16px',
+                  padding: '12px 14px',
                   boxShadow: TOKENS.cardShadow,
-                  transition: 'all 0.2s ease',
-                  cursor: 'default',
+                  transition: 'box-shadow 0.15s, transform 0.15s',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(28,22,16,0.12)'
-                  e.currentTarget.style.transform = 'translateY(-2px)'
+                  e.currentTarget.style.boxShadow = '0 4px 14px rgba(28,22,16,0.11)'
+                  e.currentTarget.style.transform = 'translateY(-1px)'
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.boxShadow = TOKENS.cardShadow
                   e.currentTarget.style.transform = 'translateY(0)'
                 }}
               >
-                <div style={{ flex: '1 1 180px', minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <MemberAvatar name={member.user?.name} role={member.role} />
+
+                {/* Info block */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
                       {member.user?.name ?? member.user?.email ?? '—'}
-                    </div>
+                    </span>
+                    <RolePill role={member.role} />
                     {member.is_temporary && (
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          padding: '2px 8px',
-                          background: '#FFF2D9',
-                          color: '#C47E0A',
-                          borderRadius: '999px',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        Temporary
-                      </span>
+                      <span style={{ fontSize: 11, padding: '2px 7px', background: '#FFF2D9', color: '#C47E0A', borderRadius: 999 }}>Temp</span>
                     )}
                   </div>
-                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+
+                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {member.user?.email}
                   </div>
-                  {member.user?.space?.name && (
-                    <div style={{ fontSize: 11, color: TOKENS.textTertiary, fontWeight: 500, padding: '2px 6px', background: TOKENS.background, borderRadius: 4 }}>
-                      {member.user.space.name}
+
+                  {/* Teams (read mode) */}
+                  {!canEdit && member.sprint_teams?.length > 0 && (
+                    <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                      {member.sprint_teams.map((team) => {
+                        const teamRole = member.team_member_roles?.[team.id] || member.role || 'contributor'
+                        const tColor = ROLE_COLORS[teamRole] || ROLE_COLORS.contributor
+                        return (
+                          <span
+                            key={team.id}
+                            style={{ fontSize: 11, padding: '2px 7px', background: `${tColor}12`, color: tColor, border: `1px solid ${tColor}28`, borderRadius: 6, fontWeight: 500 }}
+                          >
+                            {team.name}
+                          </span>
+                        )
+                      })}
                     </div>
                   )}
+
+                  {/* Expiry */}
                   {member.is_temporary && member.membership_end_date && (
-                    <div style={{ marginTop: 4, fontSize: 12, color: '#DC2626' }}>
-                      Expires: {new Date(`${member.membership_end_date}T00:00:00`).toLocaleDateString()}
+                    <div style={{ marginTop: 4, fontSize: 11, color: '#DC2626' }}>
+                      Expires {new Date(`${member.membership_end_date}T00:00:00`).toLocaleDateString()}
                       {daysUntilExpiration(member.membership_end_date) <= 7 && (
                         <span style={{ marginLeft: 4, color: '#C47E0A' }}>
-                          ({daysUntilExpiration(member.membership_end_date)} days)
+                          ({daysUntilExpiration(member.membership_end_date)}d)
                         </span>
                       )}
                     </div>
                   )}
                   {expiringMemberships.length > 0 && !member.is_temporary && (
-                    <div style={{ marginTop: 4, fontSize: 12, color: '#DC2626' }}>
-                      Expires: {expiringMemberships.map((m) => new Date(`${m.membership_end_date}T00:00:00`).toLocaleDateString()).join(', ')}
+                    <div style={{ marginTop: 4, fontSize: 11, color: '#DC2626' }}>
+                      Expires {expiringMemberships.map((m) => new Date(`${m.membership_end_date}T00:00:00`).toLocaleDateString()).join(', ')}
                     </div>
                   )}
                 </div>
 
+                {/* Controls */}
                 {canEdit && !isArchived ? (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
-                    {member.sprint_teams?.length
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
+                    {member.sprint_teams?.length > 0
                       ? member.sprint_teams.map((team) => {
                           const teamRole = member.team_member_roles?.[team.id] || 'contributor'
                           return (
@@ -547,137 +527,60 @@ export default function SprintMemberPanel({
                               key={team.id}
                               value={teamRole}
                               onChange={(e) => handleTeamRoleChange(member.user.id, team.id, e.target.value)}
-                              style={{
-                                borderRadius: 8,
-                                border: `1px solid ${TOKENS.border}`,
-                                background: 'white',
-                                padding: '6px 10px',
-                                fontSize: 12,
-                                color: TOKENS.textPrimary,
-                                fontFamily: 'DM Sans, system-ui, sans-serif',
-                                cursor: 'pointer',
-                                fontWeight: 500,
-                              }}
+                              style={{ ...selectStyle, padding: '6px 10px', fontSize: 12 }}
                               title={team.name}
                             >
-                              {ROLE_OPTIONS.map((role) => (
-                                <option key={role} value={role}>{team.name.slice(0, 12)} — {role}</option>
+                              {ROLE_OPTIONS.map((r) => (
+                                <option key={r} value={r}>{team.name.slice(0, 10)} — {r}</option>
                               ))}
                             </select>
                           )
                         })
                       : (
+                        <select
+                          value={member.role}
+                          onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
+                          style={{ ...selectStyle, minWidth: 110 }}
+                        >
+                          {ROLE_OPTIONS.map((r) => (
+                            <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                          ))}
+                        </select>
+                      )
+                    }
+
+                    {teams.length > 0 && (
                       <select
-                        value={member.role}
-                        onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
-                        style={{
-                          borderRadius: 10,
-                          border: `1px solid ${TOKENS.border}`,
-                          background: 'white',
-                          padding: '8px 12px',
-                          fontSize: 13,
-                          color: TOKENS.textPrimary,
-                          fontFamily: 'DM Sans, system-ui, sans-serif',
-                          cursor: 'pointer',
-                        }}
+                        multiple
+                        value={member.sprint_team_ids ?? []}
+                        onChange={(e) => handleTeamChange(member.user.id, selectedValuesFromOptions(e.target.options))}
+                        style={{ ...selectStyle, minWidth: 120 }}
+                        title="Assign to team(s)"
                       >
-                        {ROLE_OPTIONS.map((role) => (
-                          <option key={role} value={role}>{role}</option>
+                        {teams.map((team) => (
+                          <option key={team.id} value={team.id}>{team.name}</option>
                         ))}
                       </select>
                     )}
 
-                    <select
-                      multiple
-                      value={member.sprint_team_ids ?? []}
-                      onChange={(e) => handleTeamChange(member.user.id, selectedValuesFromOptions(e.target.options))}
-                      style={{
-                        minWidth: 140,
-                        borderRadius: 10,
-                        border: `1px solid ${TOKENS.border}`,
-                        background: 'white',
-                        padding: '8px 12px',
-                        fontSize: 13,
-                        color: TOKENS.textPrimary,
-                        fontFamily: 'DM Sans, system-ui, sans-serif',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {teams.map((team) => (
-                        <option key={team.id} value={team.id}>{team.name}</option>
-                      ))}
-                    </select>
-
                     <button
                       type="button"
                       onClick={() => handleRemove(member.user.id)}
-                      style={{
-                        borderRadius: 10,
-                        border: `1px solid ${TOKENS.border}`,
-                        background: 'white',
-                        padding: '8px 12px',
-                        fontSize: 13,
-                        color: TOKENS.textSecondary,
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        fontFamily: 'DM Sans, system-ui, sans-serif',
-                        transition: 'all 0.12s',
-                      }}
-                      onMouseEnter={(e) => { e.target.style.background = TOKENS.background }}
-                      onMouseLeave={(e) => { e.target.style.background = 'white' }}
+                      style={{ ...smallBtnStyle, color: '#C94830', borderColor: '#F5C6C0' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#FEF2F2' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'white' }}
                     >
                       Remove
                     </button>
                   </div>
                 ) : (
                   <>
-                    {member.sprint_teams?.length ? (
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        {member.sprint_teams.map((team) => {
-                          const teamRole = member.team_member_roles?.[team.id] || member.role || 'contributor'
-                          return (
-                            <span
-                              key={team.id}
-                              style={{
-                                fontSize: 12,
-                                padding: '4px 8px',
-                                background: `${ROLE_COLORS[teamRole] || ROLE_COLORS.contributor}15`,
-                                color: ROLE_COLORS[teamRole] || ROLE_COLORS.contributor,
-                                borderRadius: '6px',
-                                fontWeight: 500,
-                                border: `1px solid ${ROLE_COLORS[teamRole] || ROLE_COLORS.contributor}30`,
-                              }}
-                            >
-                              {team.name} — {teamRole}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 12, color: TOKENS.textTertiary }}>No team</span>
-                    )}
-                    {member.is_temporary && (
-                      <Badge tone="archived">Temp member</Badge>
-                    )}
-                    {expiringMemberships.length > 0 && !member.is_temporary && (
-                      <Badge tone="archived">Temp member</Badge>
-                    )}
                     {member.is_temporary && member.user?.status === 'inactive' && profile?.role === 'super_admin' && (
                       <button
+                        type="button"
                         onClick={() => handleReactivate(member.user.id)}
                         disabled={reactivating === member.user.id}
-                        style={{
-                          padding: '4px 8px',
-                          background: TOKENS.primary,
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: reactivating === member.user.id ? 'not-allowed' : 'pointer',
-                          fontFamily: 'DM Sans, system-ui, sans-serif',
-                          opacity: reactivating === member.user.id ? 0.6 : 1,
-                        }}
+                        style={{ ...smallBtnStyle, background: TOKENS.primary, color: 'white', border: 'none', opacity: reactivating === member.user.id ? 0.6 : 1 }}
                       >
                         {reactivating === member.user.id ? 'Reactivating…' : 'Reactivate'}
                       </button>
@@ -688,139 +591,97 @@ export default function SprintMemberPanel({
             )
           })}
 
-          {members.length === 0 ? (
-            <EmptyState icon="👥" title="No members yet" subtitle="Add members to get started" />
-          ) : null}
+          {members.length === 0 && (
+            <EmptyState icon="👥" title="No members yet" subtitle="Invite team members to get started" />
+          )}
         </div>
       </div>
 
       {/* Add Member Form — super_admin only */}
-      {isSuperAdmin && !isArchived ? (
+      {isSuperAdmin && !isArchived && (
         <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
-          <div style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary }}>Add member</div>
-          {loadingUsers ? (
-            <div style={{ padding: '1rem', color: TOKENS.textTertiary, fontSize: 13 }}>Loading...</div>
-          ) : null}
-          <div style={{ display: 'grid', gap: 12 }}>
-            {/* Add Form Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 0.8fr 1fr auto', gap: 12 }}>
+          <div style={{ marginBottom: 14, fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary }}>Add member directly</div>
+          {loadingUsers
+            ? <div style={{ padding: '8px 0', color: TOKENS.textTertiary, fontSize: 13 }}>Loading users…</div>
+            : null
+          }
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
               <select
                 value={selectedUserId}
                 onChange={(e) => setSelectedUserId(e.target.value)}
-                style={{
-                  borderRadius: 10,
-                  border: `1px solid ${TOKENS.border}`,
-                  background: 'white',
-                  padding: '10px 12px',
-                  fontSize: 13,
-                  color: TOKENS.textPrimary,
-                  fontFamily: 'DM Sans, system-ui, sans-serif',
-                  cursor: 'pointer',
-                }}
+                style={{ ...selectStyle, gridColumn: 'span 2' }}
               >
-                <option value="">Select active user</option>
+                <option value="">Select member to add…</option>
                 {addableUsers.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} — {user.email}
-                  </option>
+                  <option key={user.id} value={user.id}>{user.name} — {user.email}</option>
                 ))}
               </select>
 
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
-                style={{
-                  borderRadius: 10,
-                  border: `1px solid ${TOKENS.border}`,
-                  background: 'white',
-                  padding: '10px 12px',
-                  fontSize: 13,
-                  color: TOKENS.textPrimary,
-                  fontFamily: 'DM Sans, system-ui, sans-serif',
-                  cursor: 'pointer',
-                }}
+                style={selectStyle}
               >
-                {ROLE_OPTIONS.map((role) => (
-                  <option key={role} value={role}>{role}</option>
+                {ROLE_OPTIONS.map((r) => (
+                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                 ))}
               </select>
 
-              <select
-                multiple
-                value={selectedTeamIds}
-                onChange={(e) => setSelectedTeamIds(selectedValuesFromOptions(e.target.options))}
-                style={{
-                  borderRadius: 10,
-                  border: `1px solid ${TOKENS.border}`,
-                  background: 'white',
-                  padding: '10px 12px',
-                  fontSize: 13,
-                  color: TOKENS.textPrimary,
-                  fontFamily: 'DM Sans, system-ui, sans-serif',
-                  cursor: 'pointer',
-                  minHeight: 40,
-                }}
-              >
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>{team.name}</option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                onClick={handleAdd}
-                disabled={!selectedUserId || saving}
-                style={{
-                  borderRadius: 10,
-                  border: 'none',
-                  background: !selectedUserId || saving ? `${TOKENS.accent}99` : TOKENS.accent,
-                  padding: '10px 16px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'white',
-                  cursor: !selectedUserId || saving ? 'not-allowed' : 'pointer',
-                  fontFamily: 'DM Sans, system-ui, sans-serif',
-                  transition: 'all 0.12s',
-                  opacity: !selectedUserId || saving ? 0.6 : 1,
-                }}
-              >
-                {saving ? 'Adding…' : 'Add'}
-              </button>
+              {teams.length > 0 && (
+                <select
+                  multiple
+                  value={selectedTeamIds}
+                  onChange={(e) => setSelectedTeamIds(selectedValuesFromOptions(e.target.options))}
+                  style={{ ...selectStyle, minHeight: 40 }}
+                  title="Assign to team(s)"
+                >
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>{team.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
-            {/* Membership Expiration (Optional) */}
             {selectedTeamIds.length > 0 && (
-              <div style={{ paddingTop: 8 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: TOKENS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: TOKENS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
                   Membership expiration (optional)
                 </label>
-                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <input
                     type="date"
                     value={selectedMembershipEndDate}
                     onChange={(e) => setSelectedMembershipEndDate(e.target.value)}
-                    style={{
-                      borderRadius: 10,
-                      border: `1px solid ${TOKENS.border}`,
-                      background: 'white',
-                      padding: '8px 12px',
-                      fontSize: 13,
-                      color: TOKENS.textPrimary,
-                      fontFamily: 'DM Sans, system-ui, sans-serif',
-                      cursor: 'pointer',
-                    }}
+                    style={selectStyle}
                   />
                   <span style={{ fontSize: 12, color: TOKENS.textTertiary }}>
-                    {selectedMembershipEndDate ? 'Leave empty for permanent membership' : 'Permanent member'}
+                    {selectedMembershipEndDate ? 'Leave empty for permanent' : 'Permanent member'}
                   </span>
                 </div>
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={!selectedUserId || saving}
+              style={{
+                borderRadius: 10, border: 'none',
+                background: !selectedUserId || saving ? `${TOKENS.accent}80` : TOKENS.accent,
+                padding: '10px 20px', fontSize: 13, fontWeight: 600, color: 'white',
+                cursor: !selectedUserId || saving ? 'not-allowed' : 'pointer',
+                fontFamily: 'DM Sans, system-ui, sans-serif',
+                transition: 'opacity 0.12s',
+                width: '100%',
+              }}
+            >
+              {saving ? 'Adding…' : 'Add Member'}
+            </button>
           </div>
         </div>
-      ) : null}
+      )}
 
-      {/* Invite External Modal */}
       {showInviteModal && (
         <InviteExternalModal
           sprintId={sprintId}
