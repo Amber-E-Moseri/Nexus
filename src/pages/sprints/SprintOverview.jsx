@@ -24,7 +24,29 @@ import { hasSpaceRole, isProgramsMember } from '../../lib/permissions'
 
 const STATUS_LABELS = { planning: 'Planning', active: 'Active', completed: 'Completed', review: 'In Review', archived: 'Archived' }
 const STATUS_DOT = { planning: '#9CA3AF', active: '#22C55E', completed: '#3B82F6', review: '#F59E0B', archived: '#9CA3AF' }
+const CATEGORY_EMOJI = { regional: '✈️', group: '👥' }
 const CATEGORY_BG = { regional: '#7C3AED', group: '#0891B2' }
+
+function TwEmoji({ emoji, size = 24 }) {
+  const pts = [...emoji].map((c) => c.codePointAt(0).toString(16)).filter((h) => h !== 'fe0f')
+  const src = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${pts.join('-')}.svg`
+  return <img src={src} alt={emoji} width={size} height={size} style={{ display: 'block', pointerEvents: 'none' }} />
+}
+
+function SprintIcon({ sprint, size = 56 }) {
+  const isArchived = sprint.status === 'archived'
+  const customIcon = sprint.icon || null
+  const emoji = customIcon ? customIcon
+    : isArchived ? '📦'
+    : shouldAutoStartSprint(sprint) ? '⚡'
+    : (CATEGORY_EMOJI[sprint.category] ?? '⚡')
+  const bg = isArchived && !customIcon ? '#E8DDD0' : (CATEGORY_BG[sprint.category] ?? '#7C3AED')
+  return (
+    <div style={{ width: size, height: size, borderRadius: 14, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <TwEmoji emoji={emoji} size={Math.round(size * 0.46)} />
+    </div>
+  )
+}
 
 const TABS = ['Overview', 'Tasks', 'Members', 'Calendar', 'Meetings', 'Teams', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
@@ -587,7 +609,9 @@ export default function SprintOverview() {
     <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
-        <div>
+        <div className="flex items-start gap-3">
+          <SprintIcon sprint={detail.sprint} size={52} />
+          <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 26, letterSpacing: '-0.02em', color: 'var(--ink-1)', margin: 0, lineHeight: 1.2 }}>
               {detail.sprint.name}
@@ -604,6 +628,7 @@ export default function SprintOverview() {
             {detail.sprint.start_date && detail.sprint.end_date
               ? `${new Date(detail.sprint.start_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} – ${new Date(detail.sprint.end_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })} · ${detail.sprint?.department?.name || 'Space'}`
               : 'No dates set'}
+          </div>
           </div>
         </div>
 
