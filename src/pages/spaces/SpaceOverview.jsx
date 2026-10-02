@@ -165,118 +165,187 @@ function StatusSettingsDialog({ open, onOpenChange, space }) {
   )
 }
 
+const SPACE_TYPE_BG = {
+  department: '#1C5FAD',
+  program:    '#6B3FA0',
+  group:      '#0891B2',
+  personal:   '#4A8F6C',
+  sandbox:    '#B45309',
+}
+
+function TwEmoji({ emoji, size = 20 }) {
+  const pts = [...emoji].map((c) => c.codePointAt(0).toString(16)).filter((h) => h !== 'fe0f')
+  const src = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${pts.join('-')}.svg`
+  return <img src={src} alt={emoji} width={size} height={size} style={{ display: 'block', pointerEvents: 'none' }} />
+}
+
+function SpaceIconLarge({ space, size = 52 }) {
+  const emoji = SPACE_TYPE_ICONS[space.space_type] ?? '📁'
+  const bg = space.color ? `#${space.color}` : (SPACE_TYPE_BG[space.space_type] ?? '#5B34C7')
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: Math.round(size * 0.27),
+      background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }}>
+      <TwEmoji emoji={emoji} size={Math.round(size * 0.46)} />
+    </div>
+  )
+}
+
 function SpaceHeader({ space, members, canManage, canManageStatuses, onOpenStatuses, onOpenAutomations, onEdit, onArchive, onRestore }) {
   const mediaSpace = isMediaDepartment(space)
   const visibleMembers = mediaSpace
     ? [getMediaOverviewMember(members)].filter(Boolean)
-    : members.slice(0, 4)
+    : members.slice(0, 5)
   const description = mediaSpace ? null : space.description
+  const accentColor = space.color ? `#${space.color}` : (SPACE_TYPE_BG[space.space_type] ?? '#5B34C7')
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <div
-              className="flex h-[34px] w-[34px] items-center justify-center rounded-[14px] text-lg font-semibold text-white"
-              style={{ background: mediaSpace ? '#7C5C1E' : `#${space.color}` }}
-            >
-              {mediaSpace ? 'M' : getInitials(space.name).slice(0, 1)}
-            </div>
-            <h1 className="text-[40px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">{space.name}</h1>
-            <Badge tone="planning">{SPACE_TYPE_LABELS[space.space_type] ?? space.space_type}</Badge>
-            {space.status === 'archived' ? <Badge tone="archived">Archived</Badge> : null}
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+      {/* Left: icon + name */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, minWidth: 0, flex: 1 }}>
+        <SpaceIconLarge space={space} size={52} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>
+              {space.name}
+            </h1>
+            <span style={{
+              fontSize: 11, fontWeight: 700, color: accentColor,
+              background: `${accentColor}18`, borderRadius: 7, padding: '3px 9px',
+              border: `1px solid ${accentColor}28`,
+            }}>
+              {SPACE_TYPE_LABELS[space.space_type] ?? space.space_type}
+            </span>
+            {space.status === 'archived' ? (
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', background: '#F3F4F6', borderRadius: 7, padding: '3px 9px' }}>
+                Archived
+              </span>
+            ) : null}
           </div>
-          {description ? <p className="mt-3 max-w-4xl text-lg leading-8 text-[var(--text-secondary)]">{description}</p> : null}
+          {description ? (
+            <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.55, maxWidth: 560 }}>
+              {description}
+            </p>
+          ) : null}
         </div>
+      </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center">
+      {/* Right: members + settings */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        {visibleMembers.length > 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center' }}>
             {visibleMembers.map((member, index) => (
               <div
                 key={member.id}
-                className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--surface-primary)] text-[11px] font-semibold text-white"
-                style={{ marginLeft: index === 0 ? 0 : -8, background: member.avatar_color ?? (mediaSpace ? '#7C5C1E' : `#${space.color}`) }}
                 title={member.name ?? member.email}
+                style={{
+                  width: 34, height: 34, borderRadius: '50%',
+                  border: '2px solid var(--surface-primary)',
+                  background: member.avatar_color ?? (mediaSpace ? '#7C5C1E' : accentColor),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 700, color: '#fff',
+                  marginLeft: index === 0 ? 0 : -9, flexShrink: 0,
+                }}
               >
                 {getInitials(member.name ?? member.email)}
               </div>
             ))}
+            {members.length > 5 ? (
+              <div style={{
+                width: 34, height: 34, borderRadius: '50%',
+                border: '2px solid var(--surface-primary)',
+                background: 'var(--surface-secondary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)',
+                marginLeft: -9, flexShrink: 0,
+              }}>
+                +{members.length - 5}
+              </div>
+            ) : null}
           </div>
+        ) : null}
 
-          {(canManageStatuses || canManage) ? (
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild>
-                <button
-                  type="button"
-                  className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"
-                  aria-label="Settings menu"
-                >
-                  <Settings size={20} />
-                </button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                  side="bottom"
-                  align="end"
-                  sideOffset={8}
-                  collisionPadding={8}
-                  className="min-w-[180px] rounded-xl border border-[var(--border)] bg-white shadow-lg"
-                  style={{ zIndex: 50 }}
-                >
-                  {canManageStatuses ? (
-                    <>
+        {(canManageStatuses || canManage) ? (
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  border: '1px solid var(--border)', background: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', color: 'var(--text-secondary)',
+                  transition: 'background 0.12s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-hover)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#fff' }}
+                aria-label="Settings menu"
+              >
+                <Settings size={16} />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                side="bottom"
+                align="end"
+                sideOffset={8}
+                collisionPadding={8}
+                className="min-w-[180px] rounded-xl border border-[var(--border)] bg-white shadow-lg"
+                style={{ zIndex: 50 }}
+              >
+                {canManageStatuses ? (
+                  <>
+                    <DropdownMenu.Item
+                      onSelect={onOpenStatuses}
+                      className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                      <span>Statuses</span>
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      onSelect={onOpenAutomations}
+                      className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                      <span>Automations</span>
+                    </DropdownMenu.Item>
+                  </>
+                ) : null}
+
+                {canManage ? (
+                  <>
+                    <DropdownMenu.Item
+                      onSelect={onEdit}
+                      className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      <span>Edit</span>
+                    </DropdownMenu.Item>
+
+                    {space.status === 'archived' ? (
                       <DropdownMenu.Item
-                        onSelect={onOpenStatuses}
+                        onSelect={onRestore}
+                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--accent)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+                        <span>Restore</span>
+                      </DropdownMenu.Item>
+                    ) : (
+                      <DropdownMenu.Item
+                        onSelect={onArchive}
                         className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
                       >
-                        <span>🎨</span>
-                        <span>Statuses</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                        <span>Archive</span>
                       </DropdownMenu.Item>
-                      <DropdownMenu.Item
-                        onSelect={onOpenAutomations}
-                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
-                      >
-                        <span>⚡️</span>
-                        <span>Automations</span>
-                      </DropdownMenu.Item>
-                    </>
-                  ) : null}
-
-                  {canManage ? (
-                    <>
-                      <DropdownMenu.Item
-                        onSelect={onEdit}
-                        className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
-                      >
-                        <span>✏️</span>
-                        <span>Edit</span>
-                      </DropdownMenu.Item>
-
-                      {space.status === 'archived' ? (
-                        <DropdownMenu.Item
-                          onSelect={onRestore}
-                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--accent)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
-                        >
-                          <span>↩️</span>
-                          <span>Restore</span>
-                        </DropdownMenu.Item>
-                      ) : (
-                        <DropdownMenu.Item
-                          onSelect={onArchive}
-                          className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] focus:bg-[var(--surface-hover)] focus:outline-none"
-                        >
-                          <span>📦</span>
-                          <span>Archive</span>
-                        </DropdownMenu.Item>
-                      )}
-                    </>
-                  ) : null}
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
-          ) : null}
-        </div>
+                    )}
+                  </>
+                ) : null}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        ) : null}
       </div>
     </div>
   )
@@ -611,10 +680,7 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, activity, sprints
 
       {widgetConfig.organizer !== false ? (
         <section className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-1 text-lg font-semibold text-[var(--text-primary)]">Folders &amp; Lists</div>
-          <p className="mb-4 text-sm text-[var(--text-secondary)]">
-            Organize this space: create lists inside folders, drag lists between folders, and control who can see private lists.
-          </p>
+          <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Folders &amp; Lists</div>
           <SpaceOrganizerPanel
             spaceId={space.id}
             selectedListId={selectedList?.id ?? null}
