@@ -113,7 +113,7 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
       // Load all users for the picker — catch silently and show inline error
       const { data: users, error: uErr } = await supabase
         .from('users')
-        .select('id, name, email, avatar_color')
+        .select('id, name, email, avatar_url')
         .order('name')
 
       if (uErr) {
