@@ -151,7 +151,10 @@ export default function SprintMemberPanel({
   const [openMenuId, setOpenMenuId] = useState(null)
   const [makeLeadForId, setMakeLeadForId] = useState(null)
   const [addTeamForId, setAddTeamForId] = useState(null)
+  const [memberInput, setMemberInput] = useState('')
+  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
   const menuRef = useRef(null)
+  const memberSearchRef = useRef(null)
   const existingUserIds = useMemo(() => new Set(members.map((member) => member.user?.id)), [members])
   const pendingAccessRequests = useMemo(
     () => accessRequests.filter((request) => request.status === 'pending' && !existingUserIds.has(request.user_id)),
@@ -185,6 +188,9 @@ export default function SprintMemberPanel({
         setOpenMenuId(null)
         setMakeLeadForId(null)
         setAddTeamForId(null)
+      }
+      if (memberSearchRef.current && !memberSearchRef.current.contains(e.target)) {
+        setMemberDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -252,6 +258,7 @@ export default function SprintMemberPanel({
         })
       }
       setSelectedUserId('')
+      setMemberInput('')
       setSelectedRole('contributor')
       setSelectedTeamIds([])
       setSelectedMembershipEndDate('')
@@ -735,18 +742,80 @@ export default function SprintMemberPanel({
           <div style={{ marginBottom: 16, fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary }}>Add member directly</div>
 
           <div style={{ display: 'grid', gap: 14 }}>
-            {/* Member picker */}
-            <select
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              style={{ ...selectStyle, width: '100%', boxSizing: 'border-box' }}
-              disabled={loadingUsers}
-            >
-              <option value="">{loadingUsers ? 'Loading users…' : 'Select member to add…'}</option>
-              {addableUsers.map((user) => (
-                <option key={user.id} value={user.id}>{user.name} — {user.email}</option>
-              ))}
-            </select>
+            {/* Member picker — typeahead */}
+            <div ref={memberSearchRef} style={{ position: 'relative' }}>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  value={memberInput}
+                  placeholder={loadingUsers ? 'Loading users…' : 'Search member by name or email…'}
+                  disabled={loadingUsers}
+                  onFocus={() => setMemberDropdownOpen(true)}
+                  onChange={(e) => {
+                    setMemberInput(e.target.value)
+                    setSelectedUserId('')
+                    setMemberDropdownOpen(true)
+                  }}
+                  style={{
+                    ...selectStyle,
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    paddingRight: selectedUserId ? 32 : 12,
+                    background: selectedUserId ? `${TOKENS.primary}08` : 'white',
+                    borderColor: selectedUserId ? `${TOKENS.primary}40` : TOKENS.border,
+                    outline: 'none',
+                  }}
+                />
+                {selectedUserId && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedUserId(''); setMemberInput(''); setMemberDropdownOpen(true) }}
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: TOKENS.textTertiary, fontSize: 16, lineHeight: 1, padding: 2 }}
+                  >×</button>
+                )}
+              </div>
+              {memberDropdownOpen && !loadingUsers && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 70,
+                  background: 'white', borderRadius: 10,
+                  border: `1px solid ${TOKENS.border}`,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                  maxHeight: 220, overflowY: 'auto',
+                }}>
+                  {(() => {
+                    const q = memberInput.toLowerCase().trim()
+                    const filtered = q
+                      ? addableUsers.filter((u) => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q))
+                      : addableUsers
+                    if (filtered.length === 0) {
+                      return (
+                        <div style={{ padding: '12px 14px', fontSize: 13, color: TOKENS.textTertiary, textAlign: 'center' }}>
+                          {q ? 'No matching members' : 'All members already added'}
+                        </div>
+                      )
+                    }
+                    return filtered.map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          setSelectedUserId(user.id)
+                          setMemberInput(user.name || user.email)
+                          setMemberDropdownOpen(false)
+                        }}
+                        style={{ display: 'flex', flexDirection: 'column', width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'DM Sans, system-ui, sans-serif' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = TOKENS.surfaceTertiary }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 500, color: TOKENS.textPrimary }}>{user.name || '—'}</span>
+                        <span style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 1 }}>{user.email}</span>
+                      </button>
+                    ))
+                  })()}
+                </div>
+              )}
+            </div>
 
             {/* Role row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
