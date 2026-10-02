@@ -103,7 +103,7 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
     try {
       const [membersData, spacesData] = await Promise.all([
         getGroupSpaceMembers(groupSpaceId),
-        canTransferOwnership ? getMySpaces(profile?.id, role, profile?.department_id) : Promise.resolve([]),
+        canTransferOwnership ? getMySpaces(profile?.id, role, profile?.department_id, profile?.is_programs_member) : Promise.resolve([]),
       ])
       setMembers(membersData)
       if (canTransferOwnership) {

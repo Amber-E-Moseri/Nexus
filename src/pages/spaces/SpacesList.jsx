@@ -92,7 +92,7 @@ export default function SpacesList() {
   const [query, setQuery] = useState('')
 
   async function loadSpaces() {
-    const groups = await getSpacesByType(profile.id, role, profile.department_id)
+    const groups = await getSpacesByType(profile.id, role, profile.department_id, profile.is_programs_member)
     setSpaceGroups(groups)
   }
 

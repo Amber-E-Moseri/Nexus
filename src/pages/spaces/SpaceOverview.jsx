@@ -1729,28 +1729,25 @@ function SpaceMembersTab({ members, spaceId, spaceType, canTransferOwnership, on
 
   // For other spaces, show the standard members list
   return (
-    <div className="overflow-hidden rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]">
-      <div className="divide-y divide-[var(--border)]">
-        {members.map((member) => (
-          <div key={member.id} className="flex items-center justify-between gap-4 px-5 py-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold text-white"
-                style={{ background: member.avatar_color ?? '#5B34C7' }}
-              >
-                {getInitials(member.name ?? member.email)}
-              </div>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-[var(--text-primary)]">{member.name}</div>
-                <div className="truncate text-sm text-[var(--text-tertiary)]">{member.email}</div>
-              </div>
+    <div style={{ overflow: 'hidden', borderRadius: 24, border: '1px solid var(--border)', background: '#fff', boxShadow: 'var(--card-shadow)' }}>
+      {members.length === 0 ? (
+        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>No members found.</div>
+      ) : members.map((member, i) => (
+        <div key={member.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 20px', borderTop: i === 0 ? 'none' : '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: member.avatar_color ?? '#5B34C7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+              {getInitials(member.name ?? member.email)}
             </div>
-            <span className="rounded-full bg-[#EFE7FF] px-3 py-1 text-xs font-semibold text-[#6B3FD4]">
-              {member.space_role ? member.space_role : member.role}
-            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.email}</div>
+            </div>
           </div>
-        ))}
-      </div>
+          <span style={{ borderRadius: 99, background: '#EFE7FF', padding: '3px 12px', fontSize: 12, fontWeight: 600, color: '#6B3FD4', flexShrink: 0 }}>
+            {member.space_role ?? member.role}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }

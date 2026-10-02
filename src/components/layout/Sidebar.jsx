@@ -292,11 +292,12 @@ export default function Sidebar({ isMobileDrawer = false }) {
   // Spaces — shared React Query cache (same key as Dashboard's MySpacesWidget).
   // Sidebar fires first (Shell > Outlet), so the cache is always warm by the
   // time the Dashboard widget mounts.
+  const isProgramsDept = profile?.is_programs_member ?? false
   const { data: rawSpaces = [] } = useQuery({
-    queryKey: ['my-spaces', userId, role ?? null, departmentId],
+    queryKey: ['my-spaces', userId, role ?? null, departmentId, isProgramsDept],
     enabled: Boolean(userId && role),
     staleTime: 5 * 60_000,
-    queryFn: () => getMySpaces(userId, role, departmentId),
+    queryFn: () => getMySpaces(userId, role, departmentId, isProgramsDept),
   })
 
   const spaceGroups = useMemo(() => ({
