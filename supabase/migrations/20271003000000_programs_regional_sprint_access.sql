@@ -1,11 +1,17 @@
 -- Programs department members get write access to all regional sprints (ICPLC, TII, etc.)
 -- They can see, create, edit, and delete tasks in any sprint without team membership.
 --
--- IN-PLACE REPAIR (fix/programs-sprint-migration-ci): original used try_cast(x as uuid)
--- which is not valid PostgreSQL syntax (no such built-in). Replaced with a CASE/regex guard
--- that preserves identical semantics: absent/empty/non-UUID setting → NULL (fails closed),
--- valid UUID string → cast. This is the minimal fix required for fresh migration replay;
--- a forward-only migration cannot remedy a function that never compiled.
+-- IN-PLACE REPAIR (fix/programs-sprint-migration-ci): two syntax errors prevented fresh replay:
+--
+-- 1. try_cast(x as uuid) — not valid PostgreSQL syntax. Replaced with a CASE/regex guard that
+--    preserves identical semantics: absent/empty/non-UUID setting → NULL (fails closed),
+--    valid UUID string → cast. A forward-only migration cannot remedy a function body that
+--    never compiled.
+--
+-- 2. ALTER POLICY "tasks_insert" ... USING (...) — tasks_insert is a FOR INSERT policy;
+--    PostgreSQL rejects USING on INSERT-only policies (SQLSTATE 42601: "only WITH CHECK
+--    expression allowed for INSERT"). Fixed by removing the USING clause. 20271003000001
+--    drops and recreates this policy correctly as the final authoritative form.
 
 create or replace function public.can_write_sprint_tasks()
   returns boolean language sql security definer stable
@@ -38,20 +44,10 @@ create or replace function public.can_write_sprint_tasks()
 revoke execute on function public.can_write_sprint_tasks() from anon, public;
 grant execute on function public.can_write_sprint_tasks() to authenticated;
 
--- Update tasks RLS: allow Programs to insert/update/delete
+-- Update tasks RLS: allow Programs to insert sprint tasks.
+-- USING clause removed: tasks_insert is FOR INSERT; PostgreSQL disallows USING on INSERT
+-- policies. 20271003000001 recreates this policy as its final authoritative form.
 alter policy "tasks_insert" on public.tasks
-  using (
-    public.current_user_role() in ('super_admin', 'regional_secretary')
-    or public.icplc_is_programs_member()
-    or exists (
-      select 1
-      from public.sprints s
-      join public.sprint_teams st on st.sprint_id = s.id
-      join public.sprint_team_members stm on stm.team_id = st.id
-      where s.id = tasks.sprint_id
-        and stm.user_id = auth.uid()
-    )
-  )
   with check (
     public.current_user_role() in ('super_admin', 'regional_secretary')
     or public.icplc_is_programs_member()
