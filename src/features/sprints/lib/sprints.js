@@ -339,7 +339,8 @@ export async function deleteSprintTeam(teamId) {
   const { error: rpcError } = await supabase.rpc('delete_sprint_team', { p_team_id: teamId })
   if (!rpcError) return
 
-  if (!rpcError.message?.includes('does not exist')) throw rpcError
+  // PGRST202 = function not found in schema cache (migration not yet deployed)
+  if (rpcError.code !== 'PGRST202') throw rpcError
 
   // RPC not deployed yet — pre-delete children while parent still exists.
   // file_attachment_access: best-effort (only deletes rows the caller granted)
