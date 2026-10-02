@@ -31,22 +31,57 @@ function Avatar({ member, size = 40 }) {
   )
 }
 
+function Feedback({ error, success }) {
+  if (error) return (
+    <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', color: '#B91C1C', fontSize: 13 }}>
+      {error}
+    </div>
+  )
+  if (success) return (
+    <div style={{ padding: '10px 14px', borderRadius: 10, background: '#F0FDF4', color: '#15803D', fontSize: 13 }}>
+      {success}
+    </div>
+  )
+  return null
+}
+
+const SECTION_LABEL = {
+  fontSize: 11,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+  color: 'var(--text-tertiary)',
+  marginBottom: 10,
+}
+
 export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwnership, onOwnershipTransferred }) {
   const { profile, role } = useAuth()
   const [members, setMembers] = useState([])
   const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [usersError, setUsersError] = useState(null)
+
+  // Add member state
   const [pickerQuery, setPickerQuery] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState('')
   const [selectedUserName, setSelectedUserName] = useState('')
-  const [selectedNewOwnerId, setSelectedNewOwnerId] = useState('')
   const [selectedSpaceIds, setSelectedSpaceIds] = useState(new Set([groupSpaceId]))
   const [mySpaces, setMySpaces] = useState([])
-  const [saving, setSaving] = useState(false)
+  const [addSaving, setAddSaving] = useState(false)
+  const [addError, setAddError] = useState('')
+  const [addSuccess, setAddSuccess] = useState('')
+
+  // Remove member state
   const [removingId, setRemovingId] = useState(null)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [removeError, setRemoveError] = useState('')
+
+  // Transfer ownership state
+  const [selectedNewOwnerId, setSelectedNewOwnerId] = useState('')
+  const [transferSaving, setTransferSaving] = useState(false)
+  const [transferError, setTransferError] = useState('')
+  const [transferSuccess, setTransferSuccess] = useState('')
+
   const pickerRef = useRef(null)
 
   useEffect(() => {
@@ -70,24 +105,26 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
         getGroupSpaceMembers(groupSpaceId),
         canTransferOwnership ? getMySpaces(profile?.id, role, profile?.department_id) : Promise.resolve([]),
       ])
-
       setMembers(membersData)
-
       if (canTransferOwnership) {
         setMySpaces(spacesData.filter((s) => s.space_type === 'group'))
       }
 
-      const { data: users, error: usersError } = await supabase
+      // Load all users for the picker — catch silently and show inline error
+      const { data: users, error: uErr } = await supabase
         .from('users')
         .select('id, name, email, avatar_color')
         .order('name')
 
-      if (!usersError && users) {
+      if (uErr) {
+        setUsersError(uErr.message)
+      } else if (users) {
         const memberIds = new Set(membersData.map((m) => m.id))
         setAllUsers(users.filter((u) => !memberIds.has(u.id)))
+        setUsersError(null)
       }
     } catch (err) {
-      setError(err.message)
+      setRemoveError(err.message)
     } finally {
       setLoading(false)
     }
@@ -95,40 +132,36 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
 
   async function handleAddMember() {
     if (!selectedUserId) {
-      setError('Please select a user')
+      setAddError('Please select a user first')
       return
     }
-
-    setSaving(true)
-    setError('')
-    setSuccess('')
-
+    setAddSaving(true)
+    setAddError('')
+    setAddSuccess('')
     try {
-      await Promise.all([...selectedSpaceIds].map((spaceId) => addGroupSpaceMember(spaceId, selectedUserId)))
-      setSuccess(`Added to ${selectedSpaceIds.size} space${selectedSpaceIds.size > 1 ? 's' : ''}`)
+      await Promise.all([...selectedSpaceIds].map((sid) => addGroupSpaceMember(sid, selectedUserId)))
+      setAddSuccess(`${selectedUserName} added successfully`)
       setSelectedUserId('')
       setSelectedUserName('')
       setPickerQuery('')
       setSelectedSpaceIds(new Set([groupSpaceId]))
       await loadData()
     } catch (err) {
-      setError(err.message)
+      setAddError(err.message)
     } finally {
-      setSaving(false)
+      setAddSaving(false)
     }
   }
 
-  async function handleRemoveMember(userId) {
-    if (!window.confirm('Remove this member from the group space?')) return
-
+  async function handleRemoveMember(userId, memberName) {
+    if (!window.confirm(`Remove ${memberName} from this group space?`)) return
     setRemovingId(userId)
-    setError('')
-
+    setRemoveError('')
     try {
       await removeGroupSpaceMember(groupSpaceId, userId)
       await loadData()
     } catch (err) {
-      setError(err.message)
+      setRemoveError(err.message)
     } finally {
       setRemovingId(null)
     }
@@ -136,27 +169,24 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
 
   async function handleTransferOwnership() {
     if (!selectedNewOwnerId) {
-      setError('Please select the new owner')
+      setTransferError('Please select a new owner')
       return
     }
-
     if (!window.confirm('Transfer ownership of this group space? You will remain a member.')) return
-
-    setSaving(true)
-    setError('')
-    setSuccess('')
-
+    setTransferSaving(true)
+    setTransferError('')
+    setTransferSuccess('')
     try {
       const updatedSpace = await transferGroupSpaceOwnership(groupSpaceId, selectedNewOwnerId)
       const newOwner = members.find((m) => m.id === selectedNewOwnerId)
       setSelectedNewOwnerId('')
-      setSuccess(`Ownership transferred to ${newOwner?.name ?? newOwner?.email ?? 'new owner'}`)
+      setTransferSuccess(`Ownership transferred to ${newOwner?.name ?? newOwner?.email ?? 'new owner'}`)
       await loadData()
       onOwnershipTransferred?.(updatedSpace)
     } catch (err) {
-      setError(err.message)
+      setTransferError(err.message)
     } finally {
-      setSaving(false)
+      setTransferSaving(false)
     }
   }
 
@@ -167,15 +197,6 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
     if (!q) return true
     return (u.name ?? '').toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q)
   })
-
-  const sectionLabel = {
-    fontSize: 11,
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    color: 'var(--text-tertiary)',
-    marginBottom: 10,
-  }
 
   if (loading) {
     return (
@@ -188,24 +209,18 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* Members list card */}
+      {/* Members list */}
       <div style={{ borderRadius: 24, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={sectionLabel}>Members</div>
+            <div style={SECTION_LABEL}>Members</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{members.length} {members.length === 1 ? 'member' : 'members'}</div>
           </div>
         </div>
 
-        {error && (
-          <div style={{ margin: '12px 20px', padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', color: '#B91C1C', fontSize: 13 }}>
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div style={{ margin: '12px 20px', padding: '10px 14px', borderRadius: 10, background: '#F0FDF4', color: '#15803D', fontSize: 13 }}>
-            {success}
+        {removeError && (
+          <div style={{ margin: '12px 20px 0' }}>
+            <Feedback error={removeError} />
           </div>
         )}
 
@@ -245,9 +260,9 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
               {canTransferOwnership && member.role !== 'owner' && (
                 <button
                   type="button"
-                  onClick={() => handleRemoveMember(member.id)}
+                  onClick={() => handleRemoveMember(member.id, member.name ?? member.email)}
                   disabled={!!removingId}
-                  title="Remove member"
+                  title={`Remove ${member.name ?? member.email}`}
                   style={{
                     width: 32,
                     height: 32,
@@ -258,7 +273,7 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
                     borderRadius: 8,
                     background: 'transparent',
                     cursor: removingId ? 'default' : 'pointer',
-                    color: removingId === member.id ? 'var(--text-tertiary)' : '#DC2626',
+                    color: '#DC2626',
                     opacity: removingId && removingId !== member.id ? 0.4 : 1,
                     flexShrink: 0,
                   }}
@@ -279,57 +294,65 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
         </div>
       </div>
 
-      {/* Add member + transfer ownership (owner/admin only) */}
+      {/* Add member (owner/admin only) */}
       {canTransferOwnership && (
-        <>
-          {/* Add member */}
-          <div style={{ borderRadius: 24, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-              <div style={sectionLabel}>Add Member</div>
-            </div>
-            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ borderRadius: 24, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+            <div style={SECTION_LABEL}>Add Member</div>
+          </div>
+          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-              {/* Typeahead picker */}
-              <div ref={pickerRef} style={{ position: 'relative' }}>
+            <Feedback error={addError} success={addSuccess} />
+
+            {usersError ? (
+              <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FFF7ED', color: '#C2410C', fontSize: 13 }}>
+                Could not load users: {usersError}
+              </div>
+            ) : null}
+
+            {/* Typeahead picker */}
+            <div ref={pickerRef} style={{ position: 'relative' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 12,
+                  background: 'var(--surface-tertiary)',
+                  cursor: 'text',
+                }}
+                onClick={() => { if (!selectedUserId) setPickerOpen(true) }}
+              >
+                <Search size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                {selectedUserId ? (
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{selectedUserName}</span>
+                ) : (
+                  <input
+                    type="text"
+                    value={pickerQuery}
+                    onChange={(e) => { setPickerQuery(e.target.value); setPickerOpen(true) }}
+                    onFocus={() => setPickerOpen(true)}
+                    placeholder={allUsers.length === 0 && !usersError ? 'No users available' : 'Search users…'}
+                    disabled={allUsers.length === 0 && !usersError}
+                    style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13, color: 'var(--text-primary)' }}
+                  />
+                )}
+                {selectedUserId && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setSelectedUserId(''); setSelectedUserName(''); setPickerQuery('') }}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 0, lineHeight: 1 }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                )}
+              </div>
+
+              {pickerOpen && !selectedUserId && (
                 <div
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '10px 12px',
-                    border: '1px solid var(--border)',
-                    borderRadius: 12,
-                    background: 'var(--surface-tertiary)',
-                    cursor: 'text',
-                  }}
-                  onClick={() => setPickerOpen(true)}
-                >
-                  <Search size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-                  {selectedUserId ? (
-                    <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{selectedUserName}</span>
-                  ) : (
-                    <input
-                      type="text"
-                      value={pickerQuery}
-                      onChange={(e) => { setPickerQuery(e.target.value); setPickerOpen(true) }}
-                      onFocus={() => setPickerOpen(true)}
-                      placeholder="Search users…"
-                      style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13, color: 'var(--text-primary)' }}
-                    />
-                  )}
-                  {selectedUserId && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setSelectedUserId(''); setSelectedUserName(''); setPickerQuery('') }}
-                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 0, lineHeight: 1 }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  )}
-                </div>
-
-                {pickerOpen && !selectedUserId && (
-                  <div style={{
                     position: 'absolute',
                     top: 'calc(100% + 4px)',
                     left: 0,
@@ -341,137 +364,148 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
                     maxHeight: 220,
                     overflowY: 'auto',
                     zIndex: 20,
-                  }}>
-                    {filteredUsers.length === 0 ? (
-                      <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-tertiary)' }}>No users found</div>
-                    ) : (
-                      filteredUsers.slice(0, 40).map((user) => (
-                        <button
-                          key={user.id}
-                          type="button"
-                          onClick={() => { setSelectedUserId(user.id); setSelectedUserName(user.name ?? user.email); setPickerOpen(false); setPickerQuery('') }}
-                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--purple-tint, #EDE8F8)' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                        >
-                          <Avatar member={user} size={28} />
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{user.name}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{user.email}</div>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Add to multiple spaces */}
-              {mySpaces.length > 1 && (
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 8 }}>
-                    Also add to
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 10px', background: 'var(--surface-secondary)', borderRadius: 10 }}>
-                    {mySpaces.map((space) => (
-                      <label key={space.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedSpaceIds.has(space.id)}
-                          onChange={(e) => {
-                            const next = new Set(selectedSpaceIds)
-                            if (e.target.checked) { next.add(space.id) } else { next.delete(space.id) }
-                            setSelectedSpaceIds(next)
-                          }}
-                          style={{ accentColor: 'var(--accent)' }}
-                        />
-                        <span style={{ color: 'var(--text-primary)' }}>{space.name}</span>
-                      </label>
-                    ))}
-                  </div>
+                  }}
+                >
+                  {filteredUsers.length === 0 ? (
+                    <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-tertiary)' }}>
+                      {pickerQuery ? 'No users match' : 'No users available'}
+                    </div>
+                  ) : (
+                    filteredUsers.slice(0, 40).map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          // Use mousedown to beat the document click-outside handler
+                          e.preventDefault()
+                          setSelectedUserId(user.id)
+                          setSelectedUserName(user.name ?? user.email)
+                          setPickerOpen(false)
+                          setPickerQuery('')
+                        }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--purple-tint, #EDE8F8)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                      >
+                        <Avatar member={user} size={28} />
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{user.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{user.email}</div>
+                        </div>
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
-
-              <button
-                type="button"
-                onClick={handleAddMember}
-                disabled={!selectedUserId || saving}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  width: '100%',
-                  padding: '10px 18px',
-                  borderRadius: 12,
-                  border: 'none',
-                  background: 'var(--accent)',
-                  color: 'white',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: !selectedUserId || saving ? 'default' : 'pointer',
-                  opacity: !selectedUserId || saving ? 0.55 : 1,
-                }}
-              >
-                <Plus size={14} />
-                {saving ? 'Adding…' : 'Add Member'}
-              </button>
             </div>
-          </div>
 
-          {/* Transfer ownership */}
-          {ownerCandidates.length > 0 && (
-            <div style={{ borderRadius: 24, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-                <div style={sectionLabel}>Transfer Ownership</div>
-                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                  Pass ownership to another member. You'll remain in the group.
+            {/* Add to multiple spaces */}
+            {mySpaces.length > 1 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 8 }}>
+                  Also add to
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 10px', background: 'var(--surface-secondary)', borderRadius: 10 }}>
+                  {mySpaces.map((space) => (
+                    <label key={space.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedSpaceIds.has(space.id)}
+                        onChange={(e) => {
+                          const next = new Set(selectedSpaceIds)
+                          if (e.target.checked) { next.add(space.id) } else { next.delete(space.id) }
+                          setSelectedSpaceIds(next)
+                        }}
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                      <span style={{ color: 'var(--text-primary)' }}>{space.name}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
-              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <select
-                  value={selectedNewOwnerId}
-                  onChange={(e) => setSelectedNewOwnerId(e.target.value)}
-                  disabled={saving}
-                  style={{
-                    width: '100%',
-                    fontSize: 13,
-                    padding: '10px 12px',
-                    border: '1px solid var(--border)',
-                    borderRadius: 12,
-                    background: 'var(--surface-tertiary)',
-                    color: 'var(--text-primary)',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="">Select new owner…</option>
-                  {ownerCandidates.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name ?? m.email}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleTransferOwnership}
-                  disabled={!selectedNewOwnerId || saving}
-                  style={{
-                    width: '100%',
-                    padding: '10px 18px',
-                    borderRadius: 12,
-                    border: '1px solid var(--border)',
-                    background: 'white',
-                    color: 'var(--text-primary)',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: !selectedNewOwnerId || saving ? 'default' : 'pointer',
-                    opacity: !selectedNewOwnerId || saving ? 0.55 : 1,
-                  }}
-                >
-                  {saving ? 'Transferring…' : 'Transfer Ownership'}
-                </button>
-              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleAddMember}
+              disabled={!selectedUserId || addSaving}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                width: '100%',
+                padding: '10px 18px',
+                borderRadius: 12,
+                border: 'none',
+                background: 'var(--accent)',
+                color: 'white',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: !selectedUserId || addSaving ? 'default' : 'pointer',
+                opacity: !selectedUserId || addSaving ? 0.55 : 1,
+              }}
+            >
+              <Plus size={14} />
+              {addSaving ? 'Adding…' : 'Add Member'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer ownership (owner/admin only, needs at least one other member) */}
+      {canTransferOwnership && ownerCandidates.length > 0 && (
+        <div style={{ borderRadius: 24, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+            <div style={SECTION_LABEL}>Transfer Ownership</div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+              Pass ownership to another member. You'll remain in the group.
             </div>
-          )}
-        </>
+          </div>
+          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Feedback error={transferError} success={transferSuccess} />
+
+            <select
+              value={selectedNewOwnerId}
+              onChange={(e) => setSelectedNewOwnerId(e.target.value)}
+              disabled={transferSaving}
+              style={{
+                width: '100%',
+                fontSize: 13,
+                padding: '10px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                background: 'var(--surface-tertiary)',
+                color: 'var(--text-primary)',
+                outline: 'none',
+              }}
+            >
+              <option value="">Select new owner…</option>
+              {ownerCandidates.map((m) => (
+                <option key={m.id} value={m.id}>{m.name ?? m.email}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleTransferOwnership}
+              disabled={!selectedNewOwnerId || transferSaving}
+              style={{
+                width: '100%',
+                padding: '10px 18px',
+                borderRadius: 12,
+                border: '1px solid var(--border)',
+                background: 'white',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: !selectedNewOwnerId || transferSaving ? 'default' : 'pointer',
+                opacity: !selectedNewOwnerId || transferSaving ? 0.55 : 1,
+              }}
+            >
+              {transferSaving ? 'Transferring…' : 'Transfer Ownership'}
+            </button>
+          </div>
+        </div>
       )}
 
       {!canTransferOwnership && (
