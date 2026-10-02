@@ -35,8 +35,33 @@ export interface RecipientResolution {
   recipients: ResolvedIcplcRecipient[]
 }
 
+export interface IcplcSenderProfile {
+  role?: string | null
+}
+
+export interface IcplcProviderAttemptRow {
+  id: string
+  email: string
+}
+
+export interface IcplcProviderAttemptResult {
+  sent: number
+  failed: number
+  outcomes: Array<{
+    id: string
+    email: string
+    status: 'sent' | 'failed'
+    providerId: string | null
+    error: string | null
+  }>
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const URL_RE = /\bhttps?:\/\/[^\s<>"']+/gi
+
+export function canSendIcplcEmail(profile: IcplcSenderProfile | null | undefined, isProgramsMember: boolean): boolean {
+  return ['super_admin', 'regional_secretary'].includes(profile?.role ?? '') || isProgramsMember === true
+}
 
 export function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -140,6 +165,39 @@ export function renderIcplcEmailHtml(body: string, vars: IcplcRecipientVars, opt
 
 export function personalizeSubject(subject: string, vars: IcplcRecipientVars): string {
   return stripPlain(replaceMergeTags(subject, vars), 200)
+}
+
+export async function runIcplcProviderAttempts(
+  rows: IcplcProviderAttemptRow[],
+  sendOne: (row: IcplcProviderAttemptRow) => Promise<{ id?: string | null } | null | undefined>,
+): Promise<IcplcProviderAttemptResult> {
+  const outcomes: IcplcProviderAttemptResult['outcomes'] = []
+
+  for (const row of rows) {
+    try {
+      const result = await sendOne(row)
+      const providerId = typeof result?.id === 'string' && result.id.trim() ? result.id : null
+      outcomes.push({ id: row.id, email: normalizeEmail(row.email), status: 'sent', providerId, error: null })
+    } catch (error) {
+      outcomes.push({
+        id: row.id,
+        email: normalizeEmail(row.email),
+        status: 'failed',
+        providerId: null,
+        error: stripPlain(error instanceof Error ? error.message : String(error ?? 'Unknown provider error'), 500),
+      })
+    }
+  }
+
+  return {
+    sent: outcomes.filter((outcome) => outcome.status === 'sent').length,
+    failed: outcomes.filter((outcome) => outcome.status === 'failed').length,
+    outcomes,
+  }
+}
+
+export function shouldAttemptSend(status: unknown): boolean {
+  return status === 'pending' || status === 'failed'
 }
 
 export function resolveRecipients(participantIds: string[], participants: IcplcParticipantInput[]): RecipientResolution {

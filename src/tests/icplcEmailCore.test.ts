@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
+  canSendIcplcEmail,
   isValidEmail,
   normalizeEmail,
   personalizeSubject,
@@ -8,6 +9,8 @@ import {
   renderIcplcEmailHtml,
   replaceMergeTags,
   resolveRecipients,
+  runIcplcProviderAttempts,
+  shouldAttemptSend,
 } from '../../supabase/functions/_shared/icplcEmailCore.ts'
 
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')
@@ -48,6 +51,25 @@ describe('ICPLC email recipient resolution', () => {
   })
 })
 
+describe('ICPLC email send authorization', () => {
+  it('allows only explicit campaign send authorities', () => {
+    expect(canSendIcplcEmail({ role: 'super_admin' }, false)).toBe(true)
+    expect(canSendIcplcEmail({ role: 'regional_secretary' }, false)).toBe(true)
+    expect(canSendIcplcEmail({ role: 'member' }, true)).toBe(true)
+    expect(canSendIcplcEmail({ role: 'member' }, false)).toBe(false)
+    expect(canSendIcplcEmail({ role: 'group_pastor' }, false)).toBe(false)
+    expect(canSendIcplcEmail(null, false)).toBe(false)
+  })
+
+  it('keeps retry attempts scoped to pending or failed recipient rows', () => {
+    expect(shouldAttemptSend('pending')).toBe(true)
+    expect(shouldAttemptSend('failed')).toBe(true)
+    expect(shouldAttemptSend('sent')).toBe(false)
+    expect(shouldAttemptSend('skipped')).toBe(false)
+    expect(shouldAttemptSend('unsubscribed')).toBe(false)
+  })
+})
+
 describe('ICPLC email content safety', () => {
   it('server-resolves merge tags for subject and body', () => {
     const vars = { name: 'Ada Lovelace', subgroup: 'Central A', email: 'ada@example.org' }
@@ -79,11 +101,60 @@ describe('ICPLC email content safety', () => {
   })
 })
 
+describe('ICPLC email provider behavior', () => {
+  const rows = [
+    { id: 's1', email: 'one@example.org' },
+    { id: 's2', email: 'two@example.org' },
+    { id: 's3', email: 'three@example.org' },
+  ]
+
+  it('records all-success provider results without sending real email', async () => {
+    const result = await runIcplcProviderAttempts(rows, async (row) => ({ id: `resend-${row.id}` }))
+    expect(result.sent).toBe(3)
+    expect(result.failed).toBe(0)
+    expect(result.outcomes.map((outcome) => outcome.status)).toEqual(['sent', 'sent', 'sent'])
+  })
+
+  it('records partial failures accurately', async () => {
+    const result = await runIcplcProviderAttempts(rows, async (row) => {
+      if (row.id === 's2') throw new Error('provider rejected recipient')
+      return { id: `resend-${row.id}` }
+    })
+    expect(result.sent).toBe(2)
+    expect(result.failed).toBe(1)
+    expect(result.outcomes.find((outcome) => outcome.id === 's2')).toMatchObject({
+      status: 'failed',
+      error: 'provider rejected recipient',
+    })
+  })
+
+  it('records all failures and timeout-style errors safely', async () => {
+    const result = await runIcplcProviderAttempts(rows, async () => {
+      throw new Error('provider timeout')
+    })
+    expect(result.sent).toBe(0)
+    expect(result.failed).toBe(3)
+    expect(result.outcomes.every((outcome) => outcome.error === 'provider timeout')).toBe(true)
+  })
+
+  it('treats malformed success responses as sent with no provider id', async () => {
+    const result = await runIcplcProviderAttempts([rows[0]], async () => ({}))
+    expect(result).toMatchObject({
+      sent: 1,
+      failed: 0,
+      outcomes: [{ status: 'sent', providerId: null }],
+    })
+  })
+})
+
 describe('ICPLC email wiring', () => {
   it('edge function authenticates a real user and has no historical hard-coded sender bypass', () => {
     const src = read('supabase/functions/icplc-send-email/index.ts')
     expect(src).toContain('auth.getUser()')
     expect(src).toContain('icplc_is_programs_member')
+    expect(src).toContain('canSendIcplcEmail')
+    expect(src).not.toContain('icplc_can_read_participants')
+    expect(src).not.toContain('icplc_can_write_participants')
     expect(src).not.toContain('NAMED_EDITOR_USER_IDS')
     expect(src).not.toContain('4c70ca61-443b-4a64-87aa-3453c9dd5c65')
   })
@@ -94,6 +165,13 @@ describe('ICPLC email wiring', () => {
     expect(src).toContain(".from('icplc_participants')")
     expect(src).toContain(".eq('event_id', eventId)")
     expect(src).toContain('resolveRecipients')
+  })
+
+  it('test send cannot accept an arbitrary browser-supplied recipient', () => {
+    const src = read('supabase/functions/icplc-send-email/index.ts')
+    expect(src).not.toContain('test_email')
+    expect(src).toContain('const to = authData.user.email')
+    expect(src).toContain('Test emails can only be sent to the signed-in sender')
   })
 
   it('config preserves Phase 0 and RSO function stanzas while adding icplc-send-email', () => {

@@ -7,6 +7,8 @@ import {
   replaceMergeTags,
   renderIcplcEmailHtml,
   resolveRecipients,
+  canSendIcplcEmail,
+  shouldAttemptSend,
   stripPlain,
 } from '../_shared/icplcEmailCore.ts'
 
@@ -164,8 +166,7 @@ Deno.serve(async (request) => {
   }
 
   const { data: isProgramsMember } = await authClient.rpc('icplc_is_programs_member')
-  const isPrivilegedRole = ['super_admin', 'regional_secretary'].includes(sender.role ?? '')
-  if (!isPrivilegedRole && isProgramsMember !== true) {
+  if (!canSendIcplcEmail(sender, isProgramsMember === true)) {
     return respond(403, { error: 'You do not have permission to send ICPLC mass email.' })
   }
 
@@ -173,8 +174,8 @@ Deno.serve(async (request) => {
     const subject = stripPlain(body.subject, 200)
     const messageBody = String(body.body ?? '').trim()
     if (!subject || !messageBody) return respond(400, { error: 'subject and body are required.' })
-    const to = sender.email ?? authData.user.email ?? ''
-    if (!to || normalizeEmail(to) !== normalizeEmail(authData.user.email ?? to)) {
+    const to = authData.user.email ?? ''
+    if (!to) {
       return respond(403, { error: 'Test emails can only be sent to the signed-in sender.' })
     }
 
@@ -325,7 +326,7 @@ Deno.serve(async (request) => {
       .select('id')
       .maybeSingle()
 
-    if (claimError || !claimed) continue
+    if (claimError || !claimed || !shouldAttemptSend(row.status)) continue
 
     const vars = {
       name: row.recipient_name,
