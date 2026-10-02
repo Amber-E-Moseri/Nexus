@@ -747,6 +747,7 @@ export default function SprintOverview() {
               setSavingTeam(true)
               try {
                 await createSprintTeam(detail.sprint.id, { name, description: '', lead_user_id: null })
+                await reloadTeamsAndMembers()
               } catch (err) {
                 alert(`Failed to create team: ${err?.message || String(err)}`)
               } finally {
