@@ -24,23 +24,7 @@ import { hasSpaceRole, isProgramsMember } from '../../lib/permissions'
 
 const STATUS_LABELS = { planning: 'Planning', active: 'Active', completed: 'Completed', review: 'In Review', archived: 'Archived' }
 const STATUS_DOT = { planning: '#9CA3AF', active: '#22C55E', completed: '#3B82F6', review: '#F59E0B', archived: '#9CA3AF' }
-const CATEGORY_ICON = { regional: '✈️', group: '👥' }
 const CATEGORY_BG = { regional: '#7C3AED', group: '#0891B2' }
-
-function SprintIcon({ sprint, size = 56 }) {
-  const isArchived = sprint.status === 'archived'
-  const customIcon = sprint.icon || null
-  const emoji = customIcon ? customIcon
-    : isArchived ? '📦'
-    : shouldAutoStartSprint(sprint) ? '⚡'
-    : (CATEGORY_ICON[sprint.category] ?? '⚡')
-  const bg = isArchived && !customIcon ? '#E8DDD0' : (CATEGORY_BG[sprint.category] ?? '#7C3AED')
-  return (
-    <div style={{ width: size, height: size, borderRadius: 14, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.44, flexShrink: 0 }}>
-      {emoji}
-    </div>
-  )
-}
 
 const TABS = ['Overview', 'Tasks', 'Members', 'Calendar', 'Meetings', 'Teams', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'

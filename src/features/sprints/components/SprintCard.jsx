@@ -17,26 +17,78 @@ const STATUS_DOT = {
   archived: '#9CA3AF',
 }
 
-const CATEGORY_ICON = { regional: '✈️', group: '👥' }
 const CATEGORY_BG = { regional: '#7C3AED', group: '#0891B2' }
+
+function IconPlane({ size = 22, color = 'white' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 19 2c-2-2-4-2-5.5-.5L10 5 1.8 6.2c-.5.1-.9.6-.6 1.1l1.5 2.7c.3.5.9.7 1.4.5l2.7-1 2.3 2.3-1 2.7c-.2.5 0 1.1.5 1.4l2.7 1.5c.5.3 1 0 1.1-.6z" />
+    </svg>
+  )
+}
+
+function IconGroup({ size = 22, color = 'white' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+
+function IconBolt({ size = 22, color = 'white' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  )
+}
+
+function IconArchive({ size = 20, color = 'rgba(0,0,0,0.45)' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  )
+}
+
+function IconLock({ size = 20, color = '#9CA3AF' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
 
 function SprintIcon({ sprint, hasAccess }) {
   const isArchived = sprint.status === 'archived'
   const customIcon = sprint.icon || null
-  const emoji = !hasAccess
-    ? '🔒'
-    : customIcon
-    ? customIcon
-    : isArchived
-    ? '📦'
-    : shouldAutoStartSprint(sprint)
-    ? '⚡'
-    : (CATEGORY_ICON[sprint.category] ?? '⚡')
+
   const bg = !hasAccess
-    ? '#E5E7EB'
+    ? '#F3F4F6'
     : isArchived && !customIcon
     ? '#E8DDD0'
     : (CATEGORY_BG[sprint.category] ?? '#7C3AED')
+
+  let icon
+  if (!hasAccess) {
+    icon = <IconLock size={20} color="#9CA3AF" />
+  } else if (customIcon) {
+    icon = <span style={{ fontSize: 22, lineHeight: 1 }}>{customIcon}</span>
+  } else if (isArchived) {
+    icon = <IconArchive size={20} color="rgba(120,100,80,0.6)" />
+  } else if (sprint.category === 'regional') {
+    icon = <IconPlane size={22} color="white" />
+  } else if (sprint.category === 'group') {
+    icon = <IconGroup size={22} color="white" />
+  } else {
+    icon = <IconBolt size={22} color="white" />
+  }
 
   return (
     <div
@@ -48,11 +100,10 @@ function SprintIcon({ sprint, hasAccess }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 22,
         flexShrink: 0,
       }}
     >
-      {emoji}
+      {icon}
     </div>
   )
 }
