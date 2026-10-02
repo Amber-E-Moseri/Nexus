@@ -69,10 +69,10 @@ async function pgAsUser(userId, sql, params = []) {
   try {
     // Set the JWT claims so RLS sees auth.uid() = userId.
     await client.query(
-      `SELECT set_config('request.jwt.claims', $1, true)`,
+      `SELECT set_config('request.jwt.claims', $1, false)`,
       [JSON.stringify({ sub: userId, role: 'authenticated' })],
     )
-    await client.query(`SET LOCAL ROLE authenticated`)
+    await client.query(`SET ROLE authenticated`)
     return await client.query(sql, params)
   } finally {
     await client.end()
@@ -420,10 +420,31 @@ describe('GP read access (GP01–GP10)', () => {
 
   it('GP10: leadership case normalization — "group pastor" lowercase → authorized', async () => {
     if (!supabaseAvailable) return
-    // GP_USER_ID's row uses 'Group Pastor' (title case). Temporarily swap to lowercase.
+    for (const leadership of ['Group Pastor', 'group pastor', 'GROUP PASTOR', '  gRoUp PaStOr  ']) {
+      await adminClient
+        .from('icplc_participants')
+        .update({ leadership })
+        .eq('id', '00000000-0000-0000-0000-000009300001')
+
+      const result = await pgAsUser(
+        GP_USER_ID,
+        `SELECT public.icplc_gp_is_authorized($1) AS result`,
+        [T_EVENT_ID],
+      )
+      expect(result.rows[0].result).toBe(true)
+    }
+
     await adminClient
       .from('icplc_participants')
-      .update({ leadership: 'group pastor' })
+      .update({ leadership: 'Group Pastor' })
+      .eq('id', '00000000-0000-0000-0000-000009300001')
+  })
+
+  it('GP10B: unrelated leadership role remains denied', async () => {
+    if (!supabaseAvailable) return
+    await adminClient
+      .from('icplc_participants')
+      .update({ leadership: 'Sub Group Pastor' })
       .eq('id', '00000000-0000-0000-0000-000009300001')
 
     try {
@@ -432,9 +453,8 @@ describe('GP read access (GP01–GP10)', () => {
         `SELECT public.icplc_gp_is_authorized($1) AS result`,
         [T_EVENT_ID],
       )
-      expect(result.rows[0].result).toBe(true)
+      expect(result.rows[0].result).toBe(false)
     } finally {
-      // Restore
       await adminClient
         .from('icplc_participants')
         .update({ leadership: 'Group Pastor' })
