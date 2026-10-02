@@ -132,7 +132,9 @@ export default function ICPLCPage() {
         .maybeSingle()
       if (fullGrant) { setSprintEditAccess(true); setCanAccess(true); setLoading(false); return }
 
-      // Sprint team membership check
+      // Sprint membership check — two layers:
+      // 1. sprint_members: direct sprint contributors (any role, any team)
+      // 2. sprint_team_members: sub-team membership used for permission tiers
       const { data: sprint } = await supabase
         .from('sprints')
         .select('id')
@@ -141,6 +143,16 @@ export default function ICPLCPage() {
         .maybeSingle()
 
       if (!sprint?.id) { setCanAccess(false); setLoading(false); return }
+
+      // Direct sprint membership — gate for all non-special-role users.
+      const { data: sprintMember } = await supabase
+        .from('sprint_members')
+        .select('user_id')
+        .eq('sprint_id', sprint.id)
+        .eq('user_id', profile.id)
+        .maybeSingle()
+
+      if (!sprintMember) { setCanAccess(false); setLoading(false); return }
 
       const { data: teams } = await supabase
         .from('sprint_teams')
@@ -163,7 +175,8 @@ export default function ICPLCPage() {
         }
       }
 
-      if (!resolvedTeamNames.length) { setCanAccess(false); setLoading(false); return }
+      // Named team determines the permission tier. No named team → fall through
+      // to the GP check below (direct sprint member without a sub-team assignment).
 
       const permissions = eventConfig.team_permissions || {}
       const matchesAny = (list) => resolvedTeamNames.some((name) =>
