@@ -80,3 +80,6 @@ verify_jwt = false
 # service-role key); the gateway JWT check would admit the public anon key. See _shared/emailCore.ts.
 [functions."send-notification-email"]
 verify_jwt = false
+
+[functions."icplc-send-email"]
+verify_jwt = true
