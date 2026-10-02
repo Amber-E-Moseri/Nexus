@@ -332,14 +332,21 @@ export async function updateSprintTeam(teamId, updates) {
 }
 
 export async function deleteSprintTeam(teamId) {
-  // Uses a SECURITY DEFINER RPC (delete_sprint_team) to avoid two RLS cascade
-  // failures:
-  //  1. sprint_team_members write policy subqueries sprint_teams — but during
-  //     ON DELETE CASCADE the parent row is already gone.
-  //  2. file_attachment_access delete policy restricts to granted_by = caller —
-  //     cascade would be silently blocked for grants made by other users.
-  // The RPC performs the permission check itself and deletes children first.
-  const { error } = await supabase.rpc('delete_sprint_team', { p_team_id: teamId })
+  // Prefer the SECURITY DEFINER RPC which handles cascade RLS failures:
+  //  1. sprint_team_members write policy subqueries sprint_teams (gone during CASCADE)
+  //  2. file_attachment_access delete policy restricts to granted_by = caller
+  // Falls back to direct pre-delete if the migration hasn't been deployed yet.
+  const { error: rpcError } = await supabase.rpc('delete_sprint_team', { p_team_id: teamId })
+  if (!rpcError) return
+
+  if (!rpcError.message?.includes('does not exist')) throw rpcError
+
+  // RPC not deployed yet — pre-delete children while parent still exists.
+  // file_attachment_access: best-effort (only deletes rows the caller granted)
+  await supabase.from('file_attachment_access').delete().eq('sprint_team_id', teamId)
+  const { error: membersError } = await supabase.from('sprint_team_members').delete().eq('team_id', teamId)
+  if (membersError) throw membersError
+  const { error } = await supabase.from('sprint_teams').delete().eq('id', teamId)
   if (error) throw error
 }
 
