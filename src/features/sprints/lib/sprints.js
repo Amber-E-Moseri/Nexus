@@ -67,7 +67,7 @@ export async function getMySprints() {
     .select(`
       role,
       sprint:sprints(
-        id, name, description, goal, status,
+        id, name, description, goal, status, icon,
         start_date, end_date, created_at, archived_at, is_archived, category
       )
     `)
@@ -86,7 +86,7 @@ export async function getMySprints() {
 export async function getAllSprints() {
   const { data, error } = await supabase
     .from('sprints')
-    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
+    .select('id, name, description, goal, status, icon, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -99,7 +99,7 @@ export async function getSprintDetail(sprintId) {
   const [sprintRes, teamsRes, membersRes, reviewRes] = await Promise.all([
     supabase
       .from('sprints')
-      .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
+      .select('id, name, description, goal, status, icon, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
       .eq('id', sprintId)
       .single(),
     supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
@@ -155,7 +155,7 @@ export async function createSprint(data, createdBy, callerRole = null) {
   const { data: sprint, error } = await supabase
     .from('sprints')
     .insert({ ...data, created_by: createdBy })
-    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
+    .select('id, name, description, goal, status, icon, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
     .single()
 
   if (error) throw error
@@ -208,7 +208,7 @@ export async function updateSprint(sprintId, updates) {
     .from('sprints')
     .update(updates)
     .eq('id', sprintId)
-    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
+    .select('id, name, description, goal, status, icon, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
     .single()
 
   if (error) throw error
@@ -332,17 +332,14 @@ export async function updateSprintTeam(teamId, updates) {
 }
 
 export async function deleteSprintTeam(teamId) {
-  // sprint_team_members RLS write policy does a subquery on sprint_teams to
-  // check can_manage_sprint. During ON DELETE CASCADE the parent row is already
-  // gone, causing that policy to fail and block the whole delete. Pre-deleting
-  // members explicitly (while the sprint_teams row still exists) avoids this.
-  const { error: membersError } = await supabase
-    .from('sprint_team_members')
-    .delete()
-    .eq('team_id', teamId)
-  if (membersError) throw membersError
-
-  const { error } = await supabase.from('sprint_teams').delete().eq('id', teamId)
+  // Uses a SECURITY DEFINER RPC (delete_sprint_team) to avoid two RLS cascade
+  // failures:
+  //  1. sprint_team_members write policy subqueries sprint_teams — but during
+  //     ON DELETE CASCADE the parent row is already gone.
+  //  2. file_attachment_access delete policy restricts to granted_by = caller —
+  //     cascade would be silently blocked for grants made by other users.
+  // The RPC performs the permission check itself and deletes children first.
+  const { error } = await supabase.rpc('delete_sprint_team', { p_team_id: teamId })
   if (error) throw error
 }
 

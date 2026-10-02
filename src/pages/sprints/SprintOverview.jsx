@@ -23,7 +23,7 @@ import SprintMeetingsPanel from '../../features/sprints/components/SprintMeeting
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 import { hasSpaceRole, isProgramsMember } from '../../lib/permissions'
 
-const TABS = ['Overview', 'Tasks', 'Participants', 'Calendar', 'Meetings', 'Teams', 'Members', 'Files', 'Review']
+const TABS = ['Overview', 'Tasks', 'Members', 'Calendar', 'Meetings', 'Teams', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
 
 function ArchivedSprintBanner({ sprint, onRestore, userRole }) {
@@ -795,22 +795,6 @@ export default function SprintOverview() {
         </div>
       )}
 
-      {/* Participants Tab */}
-      {activeTab === 'Participants' && (
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <SprintMemberPanel
-            sprintId={detail.sprint.id}
-            sprintName={detail.sprint.name}
-            sprintEndDate={detail.sprint.end_date}
-            members={detail.members ?? []}
-            teams={detail.teams ?? []}
-            canEdit={false}
-            isArchived={Boolean(isArchived)}
-            onChanged={reloadTeamsAndMembers}
-          />
-        </div>
-      )}
-
       {/* Members Tab */}
       {activeTab === 'Members' && (
         <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
@@ -839,15 +823,24 @@ export default function SprintOverview() {
 
       {/* Files Tab */}
       {activeTab === 'Files' && (
-        <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Reference Docs</h2>
-          <FileList
-            entityType="sprint"
-            entityId={detail.sprint.id}
-            showUpload={Boolean((isMember || canManage) && !isArchived)}
-            sprintMembers={detail.members}
-            sprintTeams={detail.teams}
-          />
+        <div className="rounded-[24px] border border-[var(--border)] bg-white shadow-[var(--card-shadow)]" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink-1)', margin: 0, fontFamily: 'var(--font-heading, inherit)' }}>Reference Docs</h2>
+                <p style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2, marginBottom: 0 }}>Shared files and documents for this sprint</p>
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: '16px 20px 20px' }}>
+            <FileList
+              entityType="sprint"
+              entityId={detail.sprint.id}
+              showUpload={Boolean((isMember || canManage) && !isArchived)}
+              sprintMembers={detail.members}
+              sprintTeams={detail.teams}
+            />
+          </div>
         </div>
       )}
 
