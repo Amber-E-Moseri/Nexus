@@ -267,7 +267,7 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottom: '1px solid var(--border)', padding: '10px 20px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottom: '1px solid var(--border)', padding: '10px 16px' }}>
         {/* View switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, borderRadius: 10, background: 'var(--surface-secondary)', padding: 3 }}>
           {['kanban', 'list', 'review'].map((option) => (
@@ -360,8 +360,8 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
                   borderRadius: 14,
                   boxShadow: '0 8px 32px rgba(14,14,30,0.14)',
                   padding: '16px 18px',
-                  minWidth: 300,
-                  maxWidth: 380,
+                  minWidth: 280,
+                  maxWidth: 'min(380px, calc(100vw - 32px))',
                   maxHeight: '70vh',
                   overflowY: 'auto',
                 }}>

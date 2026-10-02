@@ -583,10 +583,10 @@ export default function SprintOverview() {
     <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
       {/* Header */}
       <div>
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>{detail.sprint.name}</h1>
+              <h1 className="text-2xl sm:text-3xl" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>{detail.sprint.name}</h1>
               {detail.sprint.status === 'active' && <Badge tone="success">Active</Badge>}
               {completion >= 70 && <Badge tone="success">On track</Badge>}
             </div>
@@ -634,7 +634,7 @@ export default function SprintOverview() {
 
       {/* Stats Grid — semantic accents: green done / blue progress /
           orange remaining / teal teams */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <Stat label="COMPLETED" value={`${tasks.filter((t) => isTaskCompleted(t)).length}/${tasks.length}`} bg="var(--accent-green)" textColor="white" />
         <Stat label="PROGRESS" value={`${completion}%`} bg="var(--accent-blue)" textColor="white" />
         <Stat label="REMAINING" value={tasks.length - tasks.filter((t) => isTaskCompleted(t)).length} bg="var(--accent-orange)" textColor="white" />
@@ -649,7 +649,10 @@ export default function SprintOverview() {
       )}
 
       {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+      <div
+        className="sprint-tabs-scroll"
+        style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 4, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
         {visibleTabs.map((tab) => (
           <button
             key={tab}
@@ -668,6 +671,8 @@ export default function SprintOverview() {
               borderRadius: 0,
               transition: 'color 0.12s',
               letterSpacing: activeTab === tab ? '-0.01em' : 0,
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
             }}
             onMouseEnter={(e) => { if (activeTab !== tab) e.currentTarget.style.color = 'var(--text-primary)' }}
             onMouseLeave={(e) => { if (activeTab !== tab) e.currentTarget.style.color = 'var(--text-secondary)' }}

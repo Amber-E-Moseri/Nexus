@@ -273,7 +273,7 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
                       />
                     </div>
 
-                    <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr', marginTop: 14 }}>
+                    <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', marginTop: 14 }}>
                       <div>
                         <label style={goalFormLabelStyle}>Target value</label>
                         <input
@@ -296,7 +296,7 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr', marginTop: 14 }}>
+                    <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', marginTop: 14 }}>
                       <div>
                         <label style={goalFormLabelStyle}>Due date</label>
                         <input
