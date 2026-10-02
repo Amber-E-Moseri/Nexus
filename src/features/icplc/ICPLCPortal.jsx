@@ -27,6 +27,7 @@ const LEGACY_TABS = [
 export default function ICPLCPortal({
   config,
   accessTier,
+  scopedSubgroup = null,
   legacyContent,
   financeAccess,
   onConfigReload,
@@ -55,7 +56,7 @@ export default function ICPLCPortal({
 
   const isLegacyTab = LEGACY_TABS.some((t) => t.key === resolvedTab)
   return (
-    <ICPLCProvider config={config} accessTier={accessTier}>
+    <ICPLCProvider config={config} accessTier={accessTier} scopedSubgroup={scopedSubgroup}>
       <div className="icplc-root">
         <header className="icplc-header">
           <div className="icplc-header-left">
@@ -100,6 +101,22 @@ export default function ICPLCPortal({
             ))}
         </div>
 
+        {scopedSubgroup && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '7px 20px',
+            background: '#F5F0FF',
+            borderBottom: '1px solid #E0D5FA',
+            fontSize: 12,
+            color: '#5B3DA8',
+            fontWeight: 500,
+          }}>
+            <span aria-hidden>🔵</span>
+            Viewing <strong>{scopedSubgroup}</strong> — your subgroup
+          </div>
+        )}
         <div role="tabpanel" className="icplc-panel">
           {isLegacyTab && (
             <div data-icplc-legacy-tab={resolvedTab}>

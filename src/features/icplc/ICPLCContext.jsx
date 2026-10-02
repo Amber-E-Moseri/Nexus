@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 
-const ICPLCContext = createContext(null)
+export const ICPLCContext = createContext(null)
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -44,7 +44,7 @@ function saveFilters(eventId, filters) {
   } catch {}
 }
 
-export function ICPLCProvider({ config, accessTier, children }) {
+export function ICPLCProvider({ config, accessTier, scopedSubgroup = null, children }) {
   const eventId = config?.id
 
   // Active profile drawer state — one canonical profile ID open at a time
@@ -80,6 +80,7 @@ export function ICPLCProvider({ config, accessTier, children }) {
   const value = {
     config,
     accessTier,
+    scopedSubgroup,
     activeProfileId,
     activeProfileTab,
     openProfile,

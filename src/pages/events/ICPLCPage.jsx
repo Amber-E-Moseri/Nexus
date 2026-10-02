@@ -62,6 +62,7 @@ export default function ICPLCPage() {
   const [financeAccess, setFinanceAccess] = useState(false)
   const [userTeamNames, setUserTeamNames] = useState([])
   const [needsSubgroupAssignment, setNeedsSubgroupAssignment] = useState(false)
+  const [groupPastorSubgroup, setGroupPastorSubgroup] = useState(null)
   const [configReloadKey, setConfigReloadKey] = useState(0)
   const reloadConfig = React.useCallback(async () => { setConfigReloadKey((k) => k + 1) }, [])
   // Room Assignments places people from the Working List (same cache as the Working List page).
@@ -105,6 +106,7 @@ export default function ICPLCPage() {
     setLoading(true)
     setNeedsSubgroupAssignment(false)
     setUserTeamNames([])
+    setGroupPastorSubgroup(null)
     if (!profile?.id) { setCanAccess(false); setLoading(false); return }
 
     try {
@@ -130,7 +132,9 @@ export default function ICPLCPage() {
         .maybeSingle()
       if (fullGrant) { setSprintEditAccess(true); setCanAccess(true); setLoading(false); return }
 
-      // Sprint team membership check
+      // Sprint membership check — two layers:
+      // 1. sprint_members: direct sprint contributors (any role, any team)
+      // 2. sprint_team_members: sub-team membership used for permission tiers
       const { data: sprint } = await supabase
         .from('sprints')
         .select('id')
@@ -139,6 +143,16 @@ export default function ICPLCPage() {
         .maybeSingle()
 
       if (!sprint?.id) { setCanAccess(false); setLoading(false); return }
+
+      // Direct sprint membership — gate for all non-special-role users.
+      const { data: sprintMember } = await supabase
+        .from('sprint_members')
+        .select('user_id')
+        .eq('sprint_id', sprint.id)
+        .eq('user_id', profile.id)
+        .maybeSingle()
+
+      if (!sprintMember) { setCanAccess(false); setLoading(false); return }
 
       const { data: teams } = await supabase
         .from('sprint_teams')
@@ -161,7 +175,8 @@ export default function ICPLCPage() {
         }
       }
 
-      if (!resolvedTeamNames.length) { setCanAccess(false); setLoading(false); return }
+      // Named team determines the permission tier. No named team → fall through
+      // to the GP check below (direct sprint member without a sub-team assignment).
 
       const permissions = eventConfig.team_permissions || {}
       const matchesAny = (list) => resolvedTeamNames.some((name) =>
@@ -187,6 +202,47 @@ export default function ICPLCPage() {
       }
       if (matchesAny(permissions.scoped_view_reg)) {
         setCanAccess('limited'); setLoading(false); return
+      }
+
+      // Group pastors: sprint members not on any named team. Scope their view to their
+      // own subgroup. Fail closed on any ambiguity — a GP with a broken/duplicate
+      // identity mapping must NOT silently fall through to unrestricted access.
+      if (eventConfig?.id) {
+        // Fetch ALL rows for this user in this event (no .maybeSingle() — we need to
+        // detect duplicates). No .catch() wrapper: errors propagate to the outer try/catch
+        // which sets canAccess=false (fail closed).
+        const { data: ownRows, error: ownErr } = await supabase
+          .from('icplc_participants')
+          .select('leadership, subgroup')
+          .eq('event_id', eventConfig.id)
+          .eq('nexus_user_id', profile.id)
+
+        if (ownErr) throw ownErr
+
+        const gpRows = (ownRows ?? []).filter(
+          (r) => (r.leadership ?? '').toLowerCase() === 'group pastor',
+        )
+
+        if (gpRows.length === 0) {
+          // No group pastor row — ordinary sprint member, allow unscoped access.
+          setCanAccess(true); setLoading(false); return
+        }
+
+        if (gpRows.length > 1) {
+          // Ambiguous: multiple Group Pastor rows for this user. Fail closed.
+          console.warn('ICPLC: ambiguous Group Pastor mapping — multiple rows for user', profile.id)
+          setCanAccess(false); setLoading(false); return
+        }
+
+        const sg = gpRows[0].subgroup?.trim() || null
+        if (!sg) {
+          // Group Pastor row found but subgroup is missing. Fail closed.
+          setNeedsSubgroupAssignment(true)
+          setCanAccess(false); setLoading(false); return
+        }
+
+        setGroupPastorSubgroup(sg)
+        setCanAccess(true); setLoading(false); return
       }
 
       setCanAccess(true); setLoading(false)
@@ -256,6 +312,7 @@ export default function ICPLCPage() {
       <ICPLCPortal
         config={eventConfig}
         accessTier={accessTier}
+        scopedSubgroup={groupPastorSubgroup}
         financeAccess={financeAccess}
         onConfigReload={reloadConfig}
         legacyContent={legacyContent}

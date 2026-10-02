@@ -553,3 +553,6 @@ code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospa
   /* Badge pills — slightly more padding so text doesn't hug the border */
   .badge { padding: 3px 10px !important; }
 }
+
+/* Sprint tab bar — hide scrollbar on webkit so horizontal scroll is invisible */
+.sprint-tabs-scroll::-webkit-scrollbar { display: none; }

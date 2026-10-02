@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
-import { UsersRound } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { SlidersHorizontal, UsersRound } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth'
 import { canAssignOrgWide } from '../../../lib/permissions'
 import AssignedToMeToggle from '../../tasks/components/AssignedToMeToggle'
@@ -87,6 +87,16 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
   }, [statuses])
   const [view, setView] = useState('kanban')
   const [teamView, setTeamView] = useState(canEdit ? 'my' : 'all')
+  const [showFilters, setShowFilters] = useState(false)
+  const filterRef = useRef(null)
+  useEffect(() => {
+    if (!showFilters) return
+    function handleClickOutside(e) {
+      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showFilters])
   const [modal, setModal] = useState(null)
   const [taskSearch, setTaskSearch] = useState('')
   const { filters, setFilters, filtered, clearFilters, hasActiveFilters } = useTaskFilters(tasks, {
@@ -257,23 +267,25 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-        <div className="flex items-center gap-2 rounded-[10px] bg-[var(--surface-secondary)] p-[3px]">
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderBottom: '1px solid var(--border)', padding: '10px 16px' }}>
+        {/* View switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, borderRadius: 10, background: 'var(--surface-secondary)', padding: 3 }}>
           {['kanban', 'list', 'review'].map((option) => (
             <button
               key={option}
               type="button"
               onClick={() => setView(option)}
               style={{
-                padding: '4px 12px',
+                padding: '5px 14px',
                 fontSize: 12,
-                fontWeight: 500,
+                fontWeight: view === option ? 600 : 400,
                 borderRadius: 8,
                 cursor: 'pointer',
                 border: 'none',
                 background: view === option ? 'white' : 'transparent',
                 color: view === option ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                boxShadow: view === option ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
+                boxShadow: view === option ? '0 1px 3px rgba(20,20,43,0.08)' : 'none',
+                transition: 'all 0.12s',
               }}
             >
               {option === 'kanban' ? 'Board' : option === 'list' ? 'List' : 'Review'}
@@ -281,52 +293,112 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Right controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {view !== 'review' && <TaskSearchInput value={taskSearch} onChange={setTaskSearch} />}
           {hasTeams && view !== 'review' ? (
-            <div className="flex items-center gap-1 rounded-[10px] bg-[var(--surface-secondary)] p-[3px]">
-              <button
-                type="button"
-                onClick={() => setTeamView('my')}
-                style={{
-                  padding: '4px 12px',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  border: 'none',
-                  background: teamView === 'my' ? 'white' : 'transparent',
-                  color: teamView === 'my' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  boxShadow: teamView === 'my' ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
-                }}
-              >
-                My Team
-              </button>
-              <button
-                type="button"
-                onClick={() => setTeamView('all')}
-                style={{
-                  padding: '4px 12px',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  border: 'none',
-                  background: teamView === 'all' ? 'white' : 'transparent',
-                  color: teamView === 'all' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  boxShadow: teamView === 'all' ? '0 1px 3px rgba(20,20,43,0.1)' : 'none',
-                }}
-              >
-                All Teams
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 1, borderRadius: 10, background: 'var(--surface-secondary)', padding: 3 }}>
+              {[['my', 'My Team'], ['all', 'All Teams']].map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setTeamView(val)}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontWeight: teamView === val ? 600 : 400,
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    border: 'none',
+                    background: teamView === val ? 'white' : 'transparent',
+                    color: teamView === val ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    boxShadow: teamView === val ? '0 1px 3px rgba(20,20,43,0.08)' : 'none',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           ) : null}
+          {view !== 'review' && (
+            <div ref={filterRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  borderRadius: 20,
+                  border: `1px solid ${hasActiveFilters() ? 'var(--accent)' : 'var(--border)'}`,
+                  background: hasActiveFilters() ? 'var(--accent-light)' : showFilters ? 'var(--surface-secondary)' : 'white',
+                  color: hasActiveFilters() ? 'var(--accent)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <SlidersHorizontal size={13} />
+                Filter
+                {hasActiveFilters() ? (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--accent)', color: 'white', borderRadius: 999, padding: '1px 5px' }}>
+                    {Object.values(filters).flat().filter(Boolean).length}
+                  </span>
+                ) : null}
+              </button>
+              {showFilters && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  zIndex: 60,
+                  background: 'white',
+                  border: '1px solid var(--border)',
+                  borderRadius: 14,
+                  boxShadow: '0 8px 32px rgba(14,14,30,0.14)',
+                  padding: '16px 18px',
+                  minWidth: 280,
+                  maxWidth: 'min(380px, calc(100vw - 32px))',
+                  maxHeight: '70vh',
+                  overflowY: 'auto',
+                }}>
+                  <TaskFilters
+                    filters={filters}
+                    setFilters={setFilters}
+                    clearFilters={clearFilters}
+                    hasActiveFilters={hasActiveFilters}
+                    members={members}
+                    statuses={statuses}
+                    tasks={tasks}
+                    showDateClosedFilter
+                    forceExpanded
+                  />
+                </div>
+              )}
+            </div>
+          )}
           <AssignedToMeToggle active={assignedToMe} onClick={toggleAssignedToMe} />
           {canEdit ? (
             <button
               type="button"
               onClick={() => setModal({ mode: 'create', defaultStatus: defaultStatusId })}
-              className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
+              style={{
+                padding: '7px 14px',
+                fontSize: 13,
+                fontWeight: 600,
+                borderRadius: 10,
+                border: 'none',
+                background: 'var(--accent)',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                whiteSpace: 'nowrap',
+              }}
             >
               + New task
             </button>
@@ -334,18 +406,6 @@ function SprintTasksInner({ sprintId, sprint, canEdit, onArchived }) {
         </div>
       </div>
 
-      <div className="px-5">
-        <TaskFilters
-          filters={filters}
-          setFilters={setFilters}
-          clearFilters={clearFilters}
-          hasActiveFilters={hasActiveFilters}
-          members={members}
-          statuses={statuses}
-          tasks={tasks}
-          showDateClosedFilter
-        />
-      </div>
 
       {view !== 'review' ? (
         <BulkTasksBanner

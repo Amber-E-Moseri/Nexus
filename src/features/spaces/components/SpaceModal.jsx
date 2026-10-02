@@ -13,11 +13,11 @@ const COLOR_SWATCHES = ['185FA5', '3B6D11', '854F0B', 'A32D2D', '534AB7', 'E91E8
 const inputStyle = {
   width: '100%',
   fontSize: 13,
-  padding: '8px 10px',
+  padding: '10px 12px',
   border: '1px solid var(--border)',
-  borderRadius: 8,
+  borderRadius: 12,
   outline: 'none',
-  background: 'white',
+  background: 'var(--surface-tertiary)',
   color: 'var(--text-primary)',
 }
 
@@ -129,8 +129,8 @@ export default function SpaceModal({ mode = 'create', space = null, onSaved, onC
             width: 'min(680px, 95vw)',
             maxHeight: '90vh',
             background: 'white',
-            borderRadius: 16,
-            boxShadow: '0 24px 64px rgba(14,14,30,0.22)',
+            borderRadius: 28,
+            boxShadow: '0 32px 80px rgba(14,14,30,0.24)',
             display: 'flex',
             flexDirection: 'column',
             zIndex: 50,
@@ -138,16 +138,16 @@ export default function SpaceModal({ mode = 'create', space = null, onSaved, onC
           }}
           aria-describedby={undefined}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-            <Dialog.Title style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-              {mode === 'create' ? 'New space' : 'Edit space'}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
+            <Dialog.Title style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+              {mode === 'create' ? 'New Space' : 'Edit Space'}
             </Dialog.Title>
-            <Dialog.Close style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 20, lineHeight: 1, padding: '2px 6px', borderRadius: 6 }} aria-label="Close">
-              ×
+            <Dialog.Close style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-secondary)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', color: 'var(--text-tertiary)' }} aria-label="Close">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </Dialog.Close>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
             {error ? (
               <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: 'var(--coral-light)', color: 'var(--coral-dark)', fontSize: 13 }}>
                 {error}
@@ -222,12 +222,12 @@ export default function SpaceModal({ mode = 'create', space = null, onSaved, onC
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-secondary)' }}>
-            <Dialog.Close style={{ fontSize: 13, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '16px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface-secondary)' }}>
+            <Dialog.Close style={{ fontSize: 13, fontWeight: 500, padding: '9px 18px', borderRadius: 12, cursor: 'pointer', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
               Cancel
             </Dialog.Close>
-            <button type="button" onClick={handleSave} disabled={saving} style={{ fontSize: 13, fontWeight: 500, padding: '7px 20px', borderRadius: 8, cursor: 'pointer', background: 'var(--accent)', color: 'white', border: 'none', opacity: saving ? 0.7 : 1 }}>
-              {saving ? 'Saving…' : mode === 'create' ? 'Create space' : 'Save changes'}
+            <button type="button" onClick={handleSave} disabled={saving} style={{ fontSize: 13, fontWeight: 600, padding: '9px 22px', borderRadius: 12, cursor: 'pointer', background: 'var(--accent)', color: 'white', border: 'none', opacity: saving ? 0.7 : 1 }}>
+              {saving ? 'Saving…' : mode === 'create' ? 'Create Space' : 'Save Changes'}
             </button>
           </div>
         </Dialog.Content>
