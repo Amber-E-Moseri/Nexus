@@ -1,5 +1,7 @@
+import { useContext } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
+import { ICPLCContext } from '../ICPLCContext.jsx'
 
 const PARTICIPANTS_KEY = (eventId, filters) => ['icplc_participants', eventId, filters]
 
@@ -15,10 +17,16 @@ function normalizeFilters(filters = {}) {
 }
 
 export function useICPLCParticipants(eventId, filters = {}) {
-  const normalized = normalizeFilters(filters)
+  // Read scopedSubgroup from context if available (null when called outside ICPLCProvider,
+  // e.g. the room-people prefetch in ICPLCPage, which should not be subgroup-scoped).
+  const ctx = useContext(ICPLCContext)
+  const lockedSubgroup = ctx?.scopedSubgroup ?? null
+
+  const effectiveFilters = lockedSubgroup ? { ...filters, onlySubgroup: lockedSubgroup } : filters
+  const normalized = normalizeFilters(effectiveFilters)
   return useQuery({
     queryKey: PARTICIPANTS_KEY(eventId, normalized),
-    queryFn: () => fetchParticipants(eventId, filters),
+    queryFn: () => fetchParticipants(eventId, effectiveFilters),
     enabled: !!eventId,
     staleTime: 30_000,
     // Data is edited from imports/migrations outside this tab; refresh when the user comes back.
@@ -62,6 +70,12 @@ async function fetchParticipants(eventId, filters) {
   }
   if (filters.visa_process_status?.length) {
     q = q.in('visa_process_status', filters.visa_process_status)
+  }
+  // onlySubgroup is an INCLUSION lock — set when the viewer is a group pastor scoped
+  // to their own subgroup. Takes precedence; the exclusion filter below is a no-op
+  // when this is active because the result set is already constrained.
+  if (filters.onlySubgroup) {
+    q = q.eq('subgroup', filters.onlySubgroup)
   }
   if (filters.subgroup?.length) {
     // subgroup is an EXCLUSION list. Wrap value in PostgREST double-quotes so
