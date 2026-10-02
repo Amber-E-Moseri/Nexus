@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pencil, Crown, Trash2, Plus } from 'lucide-react'
-import { removeSprintMember, updateSprintMemberTeams, updateSprintTeam, deleteSprintTeam, getActiveUsers, addSprintMember } from '../lib/sprints'
+import { updateSprintMemberTeams, updateSprintTeam, deleteSprintTeam, getActiveUsers, addSprintMember } from '../lib/sprints'
 
 const TEAM_COLORS = ['#5B34C7', '#1C87BE', '#E8A020', '#C94830', '#4A8F6C', '#A0522D', '#8B008B']
 
@@ -108,14 +108,14 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
 
   const getTeamMembers = (teamId) => members.filter((m) => (m.sprint_team_ids ?? []).includes(teamId))
 
-  async function handleRemoveMember(member, teamId) {
-    if (!window.confirm(`Remove ${member.user?.name} from this team?`)) return
+  async function handleRemoveFromTeam(teamId, member) {
     setSaving(true)
     try {
-      await updateSprintMemberTeams(sprintId, member.user_id, (member.sprint_team_ids ?? []).filter((id) => id !== teamId))
+      const remaining = (member.sprint_team_ids ?? []).filter((id) => id !== teamId)
+      await updateSprintMemberTeams(sprintId, member.user_id, remaining)
       await onTeamChanged?.()
     } catch (err) {
-      alert(`Failed to remove member: ${err?.message || String(err)}`)
+      alert(`Failed to remove from team: ${err?.message || String(err)}`)
     } finally {
       setSaving(false)
     }
@@ -419,11 +419,12 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleRemoveMember(member, team.id)}
+                          onClick={() => handleRemoveFromTeam(team.id, member)}
                           disabled={saving}
+                          title={`Remove ${member.user?.name} from this team`}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: 'var(--text-tertiary)', lineHeight: 1, opacity: saving ? 0.4 : 0.6, marginLeft: 1 }}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = '#C94830' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#C94830'; e.currentTarget.style.opacity = '1' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.opacity = '0.6' }}
                         >
                           ×
                         </button>

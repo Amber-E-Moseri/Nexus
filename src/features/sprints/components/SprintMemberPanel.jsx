@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
 import { createNotification } from '../../notifications'
@@ -148,6 +148,10 @@ export default function SprintMemberPanel({
   const [reactivating, setReactivating] = useState(null)
   const [loadingPending, setLoadingPending] = useState(false)
   const [addingGroup, setAddingGroup] = useState(false)
+  const [openMenuId, setOpenMenuId] = useState(null)
+  const [makeLeadForId, setMakeLeadForId] = useState(null)
+  const [addTeamForId, setAddTeamForId] = useState(null)
+  const menuRef = useRef(null)
   const existingUserIds = useMemo(() => new Set(members.map((member) => member.user?.id)), [members])
   const pendingAccessRequests = useMemo(
     () => accessRequests.filter((request) => request.status === 'pending' && !existingUserIds.has(request.user_id)),
@@ -174,6 +178,26 @@ export default function SprintMemberPanel({
       .then(setAccessRequests)
       .catch(() => setAccessRequests([]))
   }, [sprintId, canEdit, isArchived, onChanged])
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpenMenuId(null)
+        setMakeLeadForId(null)
+        setAddTeamForId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  async function handleMakeTeamLead(teamId, userId) {
+    const { error } = await supabase.from('sprint_teams').update({ lead_user_id: userId }).eq('id', teamId)
+    if (error) throw error
+    setOpenMenuId(null)
+    setMakeLeadForId(null)
+    await onChanged?.()
+  }
 
   async function handleApproveRequest(request) {
     setRespondingRequestId(request.id)
@@ -430,12 +454,15 @@ export default function SprintMemberPanel({
         </div>
 
         {/* Member rows */}
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div ref={menuRef} style={{ display: 'grid', gap: 8 }}>
           {members.map((member) => {
             const expiringMemberships = member.team_memberships?.filter(
               (m) => m.membership_end_date && new Date(m.membership_end_date) > new Date()
             ) ?? []
             const roleColor = ROLE_COLORS[member.role] || ROLE_COLORS.contributor
+            const assignedTeams = teams.filter((t) => (member.sprint_team_ids ?? []).includes(t.id))
+            const unassignedTeams = teams.filter((t) => !(member.sprint_team_ids ?? []).includes(t.id))
+            const isMenuOpen = openMenuId === member.user?.id
 
             return (
               <div
@@ -449,7 +476,7 @@ export default function SprintMemberPanel({
                   boxShadow: TOKENS.cardShadow,
                 }}
               >
-                {/* Top: avatar + identity */}
+                {/* Top: avatar + identity + overflow menu */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                   <MemberAvatar name={member.user?.name} role={member.role} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -465,12 +492,11 @@ export default function SprintMemberPanel({
                     <div style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {member.user?.email}
                     </div>
-                    {/* Teams (read mode) */}
-                    {!canEdit && member.sprint_teams?.length > 0 && (
+                    {/* Teams read-only chips */}
+                    {!canEdit && assignedTeams.length > 0 && (
                       <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                        {member.sprint_teams.map((team) => {
-                          const teamRole = member.team_member_roles?.[team.id] || member.role || 'contributor'
-                          const tColor = ROLE_COLORS[teamRole] || ROLE_COLORS.contributor
+                        {assignedTeams.map((team) => {
+                          const tColor = ROLE_COLORS[member.team_member_roles?.[team.id] || 'contributor']
                           return (
                             <span key={team.id} style={{ fontSize: 11, padding: '2px 7px', background: `${tColor}12`, color: tColor, border: `1px solid ${tColor}28`, borderRadius: 6, fontWeight: 500 }}>
                               {team.name}
@@ -494,55 +520,192 @@ export default function SprintMemberPanel({
                       </div>
                     )}
                   </div>
+
+                  {/* ··· overflow menu */}
+                  {!isArchived && (
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenMenuId(isMenuOpen ? null : member.user?.id)
+                          setMakeLeadForId(null)
+                          setAddTeamForId(null)
+                        }}
+                        style={{
+                          width: 28, height: 28, borderRadius: 6, border: `1px solid transparent`,
+                          background: isMenuOpen ? TOKENS.surfaceTertiary : 'transparent',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 14, color: TOKENS.textSecondary, fontFamily: 'DM Sans, system-ui, sans-serif',
+                          letterSpacing: 1,
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = TOKENS.surfaceTertiary; e.currentTarget.style.borderColor = TOKENS.border }}
+                        onMouseLeave={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent' } }}
+                      >
+                        •••
+                      </button>
+                      {isMenuOpen && (
+                        <div style={{
+                          position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 60,
+                          background: 'white', borderRadius: 10,
+                          border: `1px solid ${TOKENS.border}`,
+                          boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                          minWidth: 190, overflow: 'visible',
+                        }}>
+                          {/* Make team lead */}
+                          {canEdit && assignedTeams.length > 0 && (
+                            <div style={{ position: 'relative' }}>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setMakeLeadForId(makeLeadForId === member.user?.id ? null : member.user?.id) }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: TOKENS.textPrimary, fontFamily: 'DM Sans, system-ui, sans-serif', textAlign: 'left', justifyContent: 'space-between' }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = TOKENS.surfaceTertiary }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+                              >
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                  Make team lead
+                                </span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                              </button>
+                              {makeLeadForId === member.user?.id && (
+                                <div style={{
+                                  position: 'absolute', right: 'calc(100% + 4px)', top: 0,
+                                  background: 'white', borderRadius: 10,
+                                  border: `1px solid ${TOKENS.border}`,
+                                  boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                                  minWidth: 160, overflow: 'hidden', zIndex: 61,
+                                }}>
+                                  {assignedTeams.map((team) => (
+                                    <button
+                                      key={team.id}
+                                      type="button"
+                                      onClick={() => handleMakeTeamLead(team.id, member.user.id)}
+                                      style={{ display: 'block', width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: TOKENS.textPrimary, fontFamily: 'DM Sans, system-ui, sans-serif', textAlign: 'left' }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.background = TOKENS.surfaceTertiary }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+                                    >
+                                      {team.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Manage teams */}
+                          {canEdit && teams.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => { setOpenMenuId(null); setAddTeamForId(member.user?.id) }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: TOKENS.textPrimary, fontFamily: 'DM Sans, system-ui, sans-serif', textAlign: 'left' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = TOKENS.surfaceTertiary }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                              Manage teams
+                            </button>
+                          )}
+
+                          {/* Remove from sprint */}
+                          {canEdit && (
+                            <>
+                              <div style={{ borderTop: `1px solid ${TOKENS.border}`, margin: '4px 0' }} />
+                              <button
+                                type="button"
+                                onClick={() => { setOpenMenuId(null); handleRemove(member.user.id) }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#C94830', fontFamily: 'DM Sans, system-ui, sans-serif', textAlign: 'left' }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = '#FEF2F2' }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                                Remove from sprint
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Controls row — always below info on any screen width */}
+                {/* Controls footer */}
                 {canEdit && !isArchived ? (
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${TOKENS.border}`, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {/* Sprint role */}
-                    <select
-                      value={member.role}
-                      onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
-                      style={{ ...selectStyle, padding: '5px 10px', fontSize: 12 }}
-                    >
-                      {ROLE_OPTIONS.map((r) => (
-                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                      ))}
-                    </select>
-                    {/* Team assignment chips */}
-                    {teams.map((team) => {
-                      const assigned = (member.sprint_team_ids ?? []).includes(team.id)
-                      return (
-                        <button
-                          key={team.id}
-                          type="button"
-                          title={assigned ? `Remove from ${team.name}` : `Add to ${team.name}`}
-                          onClick={() => {
-                            const cur = member.sprint_team_ids ?? []
-                            handleTeamChange(member.user.id, assigned ? cur.filter((id) => id !== team.id) : [...cur, team.id])
-                          }}
-                          style={{
-                            fontSize: 12, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
-                            fontFamily: 'DM Sans, system-ui, sans-serif',
-                            border: `1px solid ${assigned ? `${TOKENS.primary}50` : TOKENS.border}`,
-                            background: assigned ? `${TOKENS.primary}10` : TOKENS.surfaceTertiary,
-                            color: assigned ? TOKENS.primary : TOKENS.textTertiary,
-                            fontWeight: assigned ? 600 : 400,
-                          }}
-                        >
-                          {assigned ? '✓ ' : '+ '}{team.name}
-                        </button>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(member.user.id)}
-                      style={{ ...smallBtnStyle, color: '#C94830', borderColor: '#F5C6C0', marginLeft: 'auto' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#FEF2F2' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'white' }}
-                    >
-                      Remove
-                    </button>
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${TOKENS.border}`, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {/* Role */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: TOKENS.textSecondary }}>Role</span>
+                      <select
+                        value={member.role}
+                        onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
+                        style={{ ...selectStyle, padding: '4px 8px', fontSize: 12 }}
+                      >
+                        {ROLE_OPTIONS.map((r) => (
+                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Teams */}
+                    {teams.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: TOKENS.textSecondary, whiteSpace: 'nowrap' }}>
+                          Teams{assignedTeams.length > 0 ? ` (${assignedTeams.length})` : ''}
+                        </span>
+                        {assignedTeams.map((team) => (
+                          <span key={team.id} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            fontSize: 12, padding: '3px 6px 3px 9px', borderRadius: 6,
+                            background: `${TOKENS.primary}10`, color: TOKENS.primary,
+                            border: `1px solid ${TOKENS.primary}30`, fontWeight: 500,
+                          }}>
+                            {team.name}
+                            <button
+                              type="button"
+                              onClick={() => handleTeamChange(member.user.id, (member.sprint_team_ids ?? []).filter((id) => id !== team.id))}
+                              style={{ lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer', color: TOKENS.primary, fontSize: 13, padding: '0 1px', opacity: 0.7 }}
+                              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
+                              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7' }}
+                            >×</button>
+                          </span>
+                        ))}
+                        {/* + Add team */}
+                        {unassignedTeams.length > 0 && (
+                          <div style={{ position: 'relative' }}>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setAddTeamForId(addTeamForId === member.user?.id ? null : member.user?.id) }}
+                              style={{ fontSize: 12, padding: '3px 9px', borderRadius: 6, border: `1px dashed ${TOKENS.border}`, background: 'none', color: TOKENS.textTertiary, cursor: 'pointer', fontFamily: 'DM Sans, system-ui, sans-serif' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = TOKENS.primary; e.currentTarget.style.color = TOKENS.primary }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = TOKENS.border; e.currentTarget.style.color = TOKENS.textTertiary }}
+                            >
+                              + Add team
+                            </button>
+                            {addTeamForId === member.user?.id && (
+                              <div style={{
+                                position: 'absolute', left: 0, top: 'calc(100% + 4px)', zIndex: 60,
+                                background: 'white', borderRadius: 10,
+                                border: `1px solid ${TOKENS.border}`,
+                                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                                minWidth: 150, overflow: 'hidden',
+                              }}>
+                                {unassignedTeams.map((team) => (
+                                  <button
+                                    key={team.id}
+                                    type="button"
+                                    onClick={() => { handleTeamChange(member.user.id, [...(member.sprint_team_ids ?? []), team.id]); setAddTeamForId(null) }}
+                                    style={{ display: 'block', width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: TOKENS.textPrimary, fontFamily: 'DM Sans, system-ui, sans-serif', textAlign: 'left' }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = TOKENS.surfaceTertiary }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+                                  >
+                                    {team.name}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : member.is_temporary && member.user?.status === 'inactive' && profile?.role === 'super_admin' ? (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${TOKENS.border}` }}>
@@ -569,64 +732,89 @@ export default function SprintMemberPanel({
       {/* Add Member Form — super_admin only */}
       {isSuperAdmin && !isArchived && (
         <div style={{ borderRadius: 20, border: `1px solid ${TOKENS.border}`, background: 'white', padding: 20, boxShadow: TOKENS.cardShadow }}>
-          <div style={{ marginBottom: 14, fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary }}>Add member directly</div>
-          {loadingUsers
-            ? <div style={{ padding: '8px 0', color: TOKENS.textTertiary, fontSize: 13 }}>Loading users…</div>
-            : null
-          }
-          <div style={{ display: 'grid', gap: 10 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-              <select
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                style={{ ...selectStyle, gridColumn: 'span 2' }}
-              >
-                <option value="">Select member to add…</option>
-                {addableUsers.map((user) => (
-                  <option key={user.id} value={user.id}>{user.name} — {user.email}</option>
-                ))}
-              </select>
+          <div style={{ marginBottom: 16, fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary }}>Add member directly</div>
 
+          <div style={{ display: 'grid', gap: 14 }}>
+            {/* Member picker */}
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              style={{ ...selectStyle, width: '100%', boxSizing: 'border-box' }}
+              disabled={loadingUsers}
+            >
+              <option value="">{loadingUsers ? 'Loading users…' : 'Select member to add…'}</option>
+              {addableUsers.map((user) => (
+                <option key={user.id} value={user.id}>{user.name} — {user.email}</option>
+              ))}
+            </select>
+
+            {/* Role row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: TOKENS.textSecondary, whiteSpace: 'nowrap' }}>Role</span>
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
-                style={selectStyle}
+                style={{ ...selectStyle, padding: '6px 10px', fontSize: 12 }}
               >
                 {ROLE_OPTIONS.map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                 ))}
               </select>
-
-              {teams.length > 0 && (
-                <select
-                  multiple
-                  value={selectedTeamIds}
-                  onChange={(e) => setSelectedTeamIds(selectedValuesFromOptions(e.target.options))}
-                  style={{ ...selectStyle, minHeight: 40 }}
-                  title="Assign to team(s)"
-                >
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>{team.name}</option>
-                  ))}
-                </select>
-              )}
             </div>
 
+            {/* Team toggle chips */}
+            {teams.length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 500, color: TOKENS.textSecondary, marginBottom: 8 }}>
+                  Teams {selectedTeamIds.length > 0 && <span style={{ color: TOKENS.primary }}>({selectedTeamIds.length} selected)</span>}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {teams.map((team) => {
+                    const selected = selectedTeamIds.includes(team.id)
+                    return (
+                      <button
+                        key={team.id}
+                        type="button"
+                        onClick={() => setSelectedTeamIds(selected ? selectedTeamIds.filter((id) => id !== team.id) : [...selectedTeamIds, team.id])}
+                        style={{
+                          fontSize: 12, padding: '5px 12px', borderRadius: 6, cursor: 'pointer',
+                          fontFamily: 'DM Sans, system-ui, sans-serif', fontWeight: selected ? 600 : 400,
+                          border: `1px solid ${selected ? `${TOKENS.primary}50` : TOKENS.border}`,
+                          background: selected ? `${TOKENS.primary}10` : TOKENS.surfaceTertiary,
+                          color: selected ? TOKENS.primary : TOKENS.textSecondary,
+                          transition: 'all 0.1s',
+                        }}
+                      >
+                        {selected ? '✓ ' : ''}{team.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Expiry — only when teams selected */}
             {selectedTeamIds.length > 0 && (
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: TOKENS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
-                  Membership expiration (optional)
-                </label>
+                <div style={{ fontSize: 12, fontWeight: 500, color: TOKENS.textSecondary, marginBottom: 6 }}>
+                  Membership expiration <span style={{ fontWeight: 400, color: TOKENS.textTertiary }}>(optional)</span>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <input
                     type="date"
                     value={selectedMembershipEndDate}
                     onChange={(e) => setSelectedMembershipEndDate(e.target.value)}
-                    style={selectStyle}
+                    style={{ ...selectStyle, fontSize: 12, padding: '6px 10px' }}
                   />
-                  <span style={{ fontSize: 12, color: TOKENS.textTertiary }}>
-                    {selectedMembershipEndDate ? 'Leave empty for permanent' : 'Permanent member'}
-                  </span>
+                  {selectedMembershipEndDate && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMembershipEndDate('')}
+                      style={{ fontSize: 12, color: TOKENS.textTertiary, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -637,7 +825,7 @@ export default function SprintMemberPanel({
               disabled={!selectedUserId || saving}
               style={{
                 borderRadius: 10, border: 'none',
-                background: !selectedUserId || saving ? `${TOKENS.accent}80` : TOKENS.accent,
+                background: !selectedUserId || saving ? `${TOKENS.primary}60` : TOKENS.primary,
                 padding: '10px 20px', fontSize: 13, fontWeight: 600, color: 'white',
                 cursor: !selectedUserId || saving ? 'not-allowed' : 'pointer',
                 fontFamily: 'DM Sans, system-ui, sans-serif',
