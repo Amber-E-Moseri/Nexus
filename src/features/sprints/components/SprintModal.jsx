@@ -34,6 +34,12 @@ const labelStyle = {
   marginBottom: 6,
 }
 
+function TwEmoji({ emoji, size = 18 }) {
+  const pts = [...emoji].map((c) => c.codePointAt(0).toString(16)).filter((h) => h !== 'fe0f')
+  const src = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${pts.join('-')}.svg`
+  return <img src={src} alt={emoji} width={size} height={size} style={{ display: 'block', pointerEvents: 'none' }} />
+}
+
 export default function SprintModal({ mode = 'create', sprint = null, initialDepartmentId = null, initialName = '', onSaved, onClose }) {
   const { profile } = useAuth()
   const [name, setName] = useState(sprint?.name ?? initialName ?? '')
@@ -436,9 +442,9 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
                     <div style={{
                       width: 40, height: 40, borderRadius: 10, flexShrink: 0,
                       background: category === 'group' ? '#0891B2' : '#7C3AED',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      {icon || (category === 'group' ? '👥' : category === 'regional' ? '✈️' : '⚡')}
+                      <TwEmoji emoji={icon || (category === 'group' ? '👥' : category === 'regional' ? '✈️' : '⚡')} size={20} />
                     </div>
                     <input
                       type="text"
@@ -464,7 +470,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}
                       >
-                        {e}
+                        <TwEmoji emoji={e} size={18} />
                       </button>
                     ))}
                   </div>
