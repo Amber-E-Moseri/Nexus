@@ -442,83 +442,64 @@ export default function SprintMemberPanel({
               <div
                 key={member.user?.id}
                 style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 12,
                   borderRadius: 12,
                   border: `1px solid ${TOKENS.border}`,
                   borderLeft: `3px solid ${roleColor}`,
                   background: 'white',
                   padding: '12px 14px',
                   boxShadow: TOKENS.cardShadow,
-                  transition: 'box-shadow 0.15s, transform 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 4px 14px rgba(28,22,16,0.11)'
-                  e.currentTarget.style.transform = 'translateY(-1px)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = TOKENS.cardShadow
-                  e.currentTarget.style.transform = 'translateY(0)'
                 }}
               >
-                <MemberAvatar name={member.user?.name} role={member.role} />
-
-                {/* Info block */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
-                      {member.user?.name ?? member.user?.email ?? '—'}
-                    </span>
-                    <RolePill role={member.role} />
-                    {member.is_temporary && (
-                      <span style={{ fontSize: 11, padding: '2px 7px', background: '#FFF2D9', color: '#C47E0A', borderRadius: 999 }}>Temp</span>
-                    )}
-                  </div>
-
-                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {member.user?.email}
-                  </div>
-
-                  {/* Teams (read mode) */}
-                  {!canEdit && member.sprint_teams?.length > 0 && (
-                    <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                      {member.sprint_teams.map((team) => {
-                        const teamRole = member.team_member_roles?.[team.id] || member.role || 'contributor'
-                        const tColor = ROLE_COLORS[teamRole] || ROLE_COLORS.contributor
-                        return (
-                          <span
-                            key={team.id}
-                            style={{ fontSize: 11, padding: '2px 7px', background: `${tColor}12`, color: tColor, border: `1px solid ${tColor}28`, borderRadius: 6, fontWeight: 500 }}
-                          >
-                            {team.name}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {/* Expiry */}
-                  {member.is_temporary && member.membership_end_date && (
-                    <div style={{ marginTop: 4, fontSize: 11, color: '#DC2626' }}>
-                      Expires {new Date(`${member.membership_end_date}T00:00:00`).toLocaleDateString()}
-                      {daysUntilExpiration(member.membership_end_date) <= 7 && (
-                        <span style={{ marginLeft: 4, color: '#C47E0A' }}>
-                          ({daysUntilExpiration(member.membership_end_date)}d)
-                        </span>
+                {/* Top: avatar + identity */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <MemberAvatar name={member.user?.name} role={member.role} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: TOKENS.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {member.user?.name ?? member.user?.email ?? '—'}
+                      </span>
+                      <RolePill role={member.role} />
+                      {member.is_temporary && (
+                        <span style={{ fontSize: 11, padding: '2px 7px', background: '#FFF2D9', color: '#C47E0A', borderRadius: 999 }}>Temp</span>
                       )}
                     </div>
-                  )}
-                  {expiringMemberships.length > 0 && !member.is_temporary && (
-                    <div style={{ marginTop: 4, fontSize: 11, color: '#DC2626' }}>
-                      Expires {expiringMemberships.map((m) => new Date(`${m.membership_end_date}T00:00:00`).toLocaleDateString()).join(', ')}
+                    <div style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {member.user?.email}
                     </div>
-                  )}
+                    {/* Teams (read mode) */}
+                    {!canEdit && member.sprint_teams?.length > 0 && (
+                      <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                        {member.sprint_teams.map((team) => {
+                          const teamRole = member.team_member_roles?.[team.id] || member.role || 'contributor'
+                          const tColor = ROLE_COLORS[teamRole] || ROLE_COLORS.contributor
+                          return (
+                            <span key={team.id} style={{ fontSize: 11, padding: '2px 7px', background: `${tColor}12`, color: tColor, border: `1px solid ${tColor}28`, borderRadius: 6, fontWeight: 500 }}>
+                              {team.name}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {/* Expiry */}
+                    {member.is_temporary && member.membership_end_date && (
+                      <div style={{ marginTop: 4, fontSize: 11, color: '#DC2626' }}>
+                        Expires {new Date(`${member.membership_end_date}T00:00:00`).toLocaleDateString()}
+                        {daysUntilExpiration(member.membership_end_date) <= 7 && (
+                          <span style={{ marginLeft: 4, color: '#C47E0A' }}>({daysUntilExpiration(member.membership_end_date)}d)</span>
+                        )}
+                      </div>
+                    )}
+                    {expiringMemberships.length > 0 && !member.is_temporary && (
+                      <div style={{ marginTop: 4, fontSize: 11, color: '#DC2626' }}>
+                        Expires {expiringMemberships.map((m) => new Date(`${m.membership_end_date}T00:00:00`).toLocaleDateString()).join(', ')}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Controls */}
+                {/* Controls row — always below info on any screen width */}
                 {canEdit && !isArchived ? (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${TOKENS.border}`, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                     {member.sprint_teams?.length > 0
                       ? member.sprint_teams.map((team) => {
                           const teamRole = member.team_member_roles?.[team.id] || 'contributor'
@@ -527,7 +508,7 @@ export default function SprintMemberPanel({
                               key={team.id}
                               value={teamRole}
                               onChange={(e) => handleTeamRoleChange(member.user.id, team.id, e.target.value)}
-                              style={{ ...selectStyle, padding: '6px 10px', fontSize: 12 }}
+                              style={{ ...selectStyle, padding: '6px 10px', fontSize: 12, flex: '1 1 auto' }}
                               title={team.name}
                             >
                               {ROLE_OPTIONS.map((r) => (
@@ -540,7 +521,7 @@ export default function SprintMemberPanel({
                         <select
                           value={member.role}
                           onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
-                          style={{ ...selectStyle, minWidth: 110 }}
+                          style={{ ...selectStyle, flex: '1 1 auto' }}
                         >
                           {ROLE_OPTIONS.map((r) => (
                             <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -548,13 +529,12 @@ export default function SprintMemberPanel({
                         </select>
                       )
                     }
-
                     {teams.length > 0 && (
                       <select
                         multiple
                         value={member.sprint_team_ids ?? []}
                         onChange={(e) => handleTeamChange(member.user.id, selectedValuesFromOptions(e.target.options))}
-                        style={{ ...selectStyle, minWidth: 120 }}
+                        style={{ ...selectStyle, flex: '1 1 auto' }}
                         title="Assign to team(s)"
                       >
                         {teams.map((team) => (
@@ -562,7 +542,6 @@ export default function SprintMemberPanel({
                         ))}
                       </select>
                     )}
-
                     <button
                       type="button"
                       onClick={() => handleRemove(member.user.id)}
@@ -573,20 +552,18 @@ export default function SprintMemberPanel({
                       Remove
                     </button>
                   </div>
-                ) : (
-                  <>
-                    {member.is_temporary && member.user?.status === 'inactive' && profile?.role === 'super_admin' && (
-                      <button
-                        type="button"
-                        onClick={() => handleReactivate(member.user.id)}
-                        disabled={reactivating === member.user.id}
-                        style={{ ...smallBtnStyle, background: TOKENS.primary, color: 'white', border: 'none', opacity: reactivating === member.user.id ? 0.6 : 1 }}
-                      >
-                        {reactivating === member.user.id ? 'Reactivating…' : 'Reactivate'}
-                      </button>
-                    )}
-                  </>
-                )}
+                ) : member.is_temporary && member.user?.status === 'inactive' && profile?.role === 'super_admin' ? (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${TOKENS.border}` }}>
+                    <button
+                      type="button"
+                      onClick={() => handleReactivate(member.user.id)}
+                      disabled={reactivating === member.user.id}
+                      style={{ ...smallBtnStyle, background: TOKENS.primary, color: 'white', border: 'none', opacity: reactivating === member.user.id ? 0.6 : 1 }}
+                    >
+                      {reactivating === member.user.id ? 'Reactivating…' : 'Reactivate'}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )
           })}
