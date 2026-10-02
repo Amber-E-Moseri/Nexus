@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import Badge from '../../components/ui/Badge'
 import { useAuth } from '../../hooks/useAuth'
 import { deleteCalendarEvent } from '../../features/calendar'
 import { advanceSprintStatus, archiveSprintWithAutoDeactivation, calculateSprintTaskStats, createSprintTeam, duplicateSprint, getSprintDetail, getSprintTasks, getTemporarySprintMembers, hasSprintAccess, restoreSprint, shouldAutoStartSprint, updateSprint, SPRINT_MEMBER_WITH_TEMP_SELECT } from '../../features/sprints'
@@ -22,6 +21,26 @@ import SprintGoalsPanel from '../../features/sprints/components/SprintGoalsPanel
 import SprintMeetingsPanel from '../../features/sprints/components/SprintMeetingsPanel'
 import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
 import { hasSpaceRole, isProgramsMember } from '../../lib/permissions'
+
+const STATUS_LABELS = { planning: 'Planning', active: 'Active', completed: 'Completed', review: 'In Review', archived: 'Archived' }
+const STATUS_DOT = { planning: '#9CA3AF', active: '#22C55E', completed: '#3B82F6', review: '#F59E0B', archived: '#9CA3AF' }
+const CATEGORY_ICON = { regional: '✈️', group: '👥' }
+const CATEGORY_BG = { regional: '#7C3AED', group: '#0891B2' }
+
+function SprintIcon({ sprint, size = 56 }) {
+  const isArchived = sprint.status === 'archived'
+  const customIcon = sprint.icon || null
+  const emoji = customIcon ? customIcon
+    : isArchived ? '📦'
+    : shouldAutoStartSprint(sprint) ? '⚡'
+    : (CATEGORY_ICON[sprint.category] ?? '⚡')
+  const bg = isArchived && !customIcon ? '#E8DDD0' : (CATEGORY_BG[sprint.category] ?? '#7C3AED')
+  return (
+    <div style={{ width: size, height: size, borderRadius: 14, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.44, flexShrink: 0 }}>
+      {emoji}
+    </div>
+  )
+}
 
 const TABS = ['Overview', 'Tasks', 'Members', 'Calendar', 'Meetings', 'Teams', 'Files', 'Review']
 const CALENDAR_EVENT_SELECT = 'id, title, description, event_type, start_date, end_date, all_day, location, zoom_join_url, sprint_id, space_id, created_by, created_at, status, department_id, approved_by, approved_at, rejection_note, is_org_wide'
@@ -169,6 +188,7 @@ export default function SprintOverview() {
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false)
   const [showEditSprintModal, setShowEditSprintModal] = useState(false)
   const [showInviteExternalModal, setShowInviteExternalModal] = useState(false)
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false)
   const [temporaryMembers, setTemporaryMembers] = useState([])
   // regional_secretary deliberately excluded from the unrestricted bypass —
   // sprints are membership-gated for everyone except super_admin/programs/
@@ -582,50 +602,91 @@ export default function SprintOverview() {
   return (
     <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
       {/* Header */}
-      <div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>{detail.sprint.name}</h1>
-              {detail.sprint.status === 'active' && <Badge tone="success">Active</Badge>}
-              {completion >= 70 && <Badge tone="success">On track</Badge>}
-            </div>
-            <div className="mt-2 text-sm text-[var(--text-tertiary)]">
-              {detail.sprint.start_date && detail.sprint.end_date
-                ? `${new Date(detail.sprint.start_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} – ${new Date(detail.sprint.end_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} • ${detail.sprint?.department?.name || 'Space'}`
-                : 'No dates set'}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 26, letterSpacing: '-0.02em', color: 'var(--ink-1)', margin: 0, lineHeight: 1.2 }}>
+              {detail.sprint.name}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_DOT[detail.sprint.status] ?? '#9CA3AF', display: 'inline-block', flexShrink: 0 }} />
+              {STATUS_LABELS[detail.sprint.status] ?? detail.sprint.status}
+              {completion >= 70 && detail.sprint.status === 'active' && (
+                <span style={{ marginLeft: 2, color: '#16A34A', fontWeight: 600 }}>· On track</span>
+              )}
             </div>
           </div>
+          <div className="mt-1.5 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+            {detail.sprint.start_date && detail.sprint.end_date
+              ? `${new Date(detail.sprint.start_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} – ${new Date(detail.sprint.end_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })} · ${detail.sprint?.department?.name || 'Space'}`
+              : 'No dates set'}
+          </div>
+        </div>
 
-          <div className="flex flex-wrap gap-2">
-            {getNextAction(detail.sprint) && canManage && !isArchived ? (
-              <button
-                type="button"
-                onClick={handleAdvance}
-                disabled={detail.sprint.status === 'review' && !reviewCompleted}
-                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: 'var(--purple-700)', transition: 'background .13s' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--purple-600)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--purple-700)' }}
-              >
-                {getNextAction(detail.sprint).label}
-              </button>
-            ) : null}
-            {canManage && !isArchived ? (
-              <button
-                type="button"
-                onClick={() => setShowEditSprintModal(true)}
-                className="rounded-xl border border-[var(--border-1)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink-1)]"
-              >
-                Edit sprint
-              </button>
-            ) : null}
-            <button type="button" onClick={handleArchive} disabled={isArchived} className="rounded-xl border border-[var(--border-1)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink-1)] disabled:opacity-50">
-              {isArchived ? 'Archived' : 'Archive sprint'}
+        <div className="flex flex-wrap items-center gap-2">
+          {getNextAction(detail.sprint) && canManage && !isArchived ? (
+            <button
+              type="button"
+              onClick={handleAdvance}
+              disabled={detail.sprint.status === 'review' && !reviewCompleted}
+              className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: 'var(--purple-700)', transition: 'background .13s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--purple-600)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--purple-700)' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              {getNextAction(detail.sprint).label}
             </button>
-            <button type="button" className="rounded-xl border border-[var(--border-1)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ink-1)]">
-              Close
+          ) : null}
+          {canManage && !isArchived ? (
+            <button
+              type="button"
+              onClick={() => setShowEditSprintModal(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--border-1)] bg-white px-4 py-2 text-sm font-medium text-[var(--ink-1)]"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Edit sprint
             </button>
+          ) : null}
+
+          {/* Overflow: Archive + Duplicate */}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setShowOverflowMenu((v) => !v)}
+              className="flex items-center justify-center rounded-xl border border-[var(--border-1)] bg-white"
+              style={{ width: 34, height: 34, fontSize: 18, cursor: 'pointer', color: 'var(--text-tertiary)' }}
+            >
+              ⋯
+            </button>
+            {showOverflowMenu && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setShowOverflowMenu(false)} />
+                <div style={{ position: 'absolute', top: 38, right: 0, zIndex: 20, minWidth: 160, background: 'white', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setShowOverflowMenu(false); handleDuplicate() }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', fontSize: 13, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                  >
+                    Duplicate sprint
+                  </button>
+                  {!isArchived && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowOverflowMenu(false); handleArchive() }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', fontSize: 13, background: 'transparent', border: 'none', cursor: 'pointer', color: '#C94830' }}
+                    >
+                      Archive sprint
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
