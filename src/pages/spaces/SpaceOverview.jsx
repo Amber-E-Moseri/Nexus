@@ -127,15 +127,15 @@ function getMediaOverviewMember(members = []) {
 
 function ModalShell({ title, children, onClose }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(14,14,30,0.45)] px-4">
-      <div className="w-full max-w-md rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-secondary)]">
-            Close
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(14,14,30,0.45)] px-4" style={{ backdropFilter: 'blur(2px)' }}>
+      <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-[var(--border)] bg-white shadow-[0_32px_80px_rgba(14,14,30,0.24)]">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-6 py-5">
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{title}</h2>
+          <button type="button" onClick={onClose} style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-secondary)', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', color: 'var(--text-tertiary)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        {children}
+        <div className="p-6">{children}</div>
       </div>
     </div>
   )
@@ -452,13 +452,12 @@ function SpaceSopCard({ spaceId, spaceName, canManage }) {
 
 const WIDGET_LABELS = {
   glance: 'Space at a glance',
-  metrics: 'Lists / Sprints / Members',
   organizer: 'Folders & Lists',
   activity: 'Recent Activity & Meetings',
   openItems: 'Open Discussion Items',
   sops: 'SOPs & Resources',
 }
-const DEFAULT_WIDGETS = { glance: true, metrics: true, organizer: true, activity: true, openItems: true, sops: true }
+const DEFAULT_WIDGETS = { glance: true, organizer: true, activity: true, openItems: true, sops: true }
 
 const OPEN_ITEM_ICON_BY_TYPE = {
   question: CircleHelp,
@@ -542,7 +541,7 @@ function OpenItemsWidget({ spaceId, onViewAll }) {
   )
 }
 
-function SpaceOverviewTab({ space, listsCount, members, tasks, activity, sprints, meetings, selectedFolder, selectedList, canManage, canCreate, onSelectList, onTreeDataChange }) {
+function SpaceOverviewTab({ space, listsCount, members, tasks, activity, sprints, meetings, selectedFolder, selectedList, canManage, canCreate, onSelectList, onTreeDataChange, onSwitchTab }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [calFeedOpen, setCalFeedOpen] = useState(false)
@@ -589,37 +588,30 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, activity, sprints
     { key: 'to_do', label: 'To Do', count: tasksByStatus['to_do'] ?? 0 },
     { key: 'in_progress', label: 'In Progress', count: tasksByStatus['in_progress'] ?? 0 },
     { key: 'review', label: 'In Review', count: tasksByStatus['review'] ?? 0 },
-    { key: 'cancelled', label: 'Cancelled', count: tasksByStatus['cancelled'] ?? 0 },
     { key: 'completed', label: 'Completed', count: tasksByStatus['completed'] ?? 0 },
   ]
 
+  const overdueTasks = tasks.filter(
+    (t) => !t.parent_task_id && t.due_date && new Date(t.due_date).getTime() < Date.now()
+      && !['completed', 'cancelled'].includes(t.status_category),
+  )
+
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {selectedList ? (
         <div className="rounded-[20px] border border-[var(--border)] bg-white px-5 py-4 text-sm text-[var(--text-secondary)] shadow-[var(--card-shadow)]">
           Viewing tasks for <span className="font-semibold text-[var(--text-primary)]">{selectedFolder?.name ?? 'Folder'}</span> → <span className="font-semibold text-[var(--text-primary)]">{selectedList.name}</span>
         </div>
       ) : null}
 
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          title="Sync tasks to calendar"
-          aria-label="Sync tasks to calendar"
-          onClick={() => setCalFeedOpen(true)}
-          className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]"
-        >
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+        <button type="button" title="Sync tasks to calendar" aria-label="Sync tasks to calendar" onClick={() => setCalFeedOpen(true)} className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-primary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]">
           <CalendarDays size={16} />
         </button>
-        <div className="relative">
-          <button
-            type="button"
-            title="Customize widgets"
-            aria-label="Customize widgets"
-            onClick={() => setCustomizeOpen((v) => !v)}
-            className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-secondary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]"
-          >
-            <Settings size={16} />
+        <div style={{ position: 'relative' }}>
+          <button type="button" title="Customize widgets" aria-label="Customize widgets" onClick={() => setCustomizeOpen((v) => !v)} className="rounded-xl border border-[var(--border)] bg-white p-2 text-[var(--text-secondary)] shadow-[0_1px_2px_rgba(28,22,16,0.04)] hover:bg-[var(--surface-hover)]">
+            <SlidersHorizontal size={16} />
           </button>
           {customizeOpen ? (
             <div className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[220px] rounded-[14px] border border-[var(--border)] bg-white p-3 shadow-[0_8px_24px_rgba(14,14,30,0.14)]">
@@ -627,12 +619,7 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, activity, sprints
               <div className="space-y-1">
                 {Object.entries(WIDGET_LABELS).map(([key, label]) => (
                   <label key={key} className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
-                    <input
-                      type="checkbox"
-                      checked={widgetConfig[key] !== false}
-                      onChange={() => setWidgetConfig((prev) => ({ ...prev, [key]: !prev[key] }))}
-                      className="h-3.5 w-3.5 rounded"
-                    />
+                    <input type="checkbox" checked={widgetConfig[key] !== false} onChange={() => setWidgetConfig((prev) => ({ ...prev, [key]: !prev[key] }))} className="h-3.5 w-3.5 rounded" />
                     {label}
                   </label>
                 ))}
@@ -642,120 +629,175 @@ function SpaceOverviewTab({ space, listsCount, members, tasks, activity, sprints
         </div>
       </div>
 
+      {/* Space at a Glance */}
       {widgetConfig.glance !== false ? (
-        <section>
-          <div className="mb-3 text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide">Space at a glance</div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)' }}>Space at a glance</span>
+            <button type="button" onClick={() => onSwitchTab?.('Board')} style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+              View board →
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
             {statusSummary.map((status) => (
-              <div key={status.key} className="rounded-[18px] border border-[var(--border)] bg-white p-4 shadow-[var(--card-shadow)] transition-all hover:shadow-[0_8px_16px_rgba(14,14,30,0.12)]">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-semibold uppercase text-[var(--text-tertiary)] tracking-[0.08em]">{status.label}</div>
-                    <div className="mt-2 text-[32px] font-semibold leading-none text-[var(--text-primary)]">{status.count}</div>
-                  </div>
-                  <div className="h-3 w-3 rounded-full" style={{ background: STATUS_ACCENT[status.key] ?? '#E5E7EB' }} />
+              <div key={status.key} style={{ borderRadius: 16, border: '1px solid var(--border)', background: 'var(--surface-tertiary)', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)' }}>{status.label}</span>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_ACCENT[status.key] ?? '#E5E7EB', display: 'block', flexShrink: 0 }} />
                 </div>
+                <div style={{ fontSize: 32, fontWeight: 600, lineHeight: 1, color: 'var(--text-primary)' }}>{status.count}</div>
               </div>
             ))}
           </div>
         </section>
       ) : null}
 
-      {widgetConfig.metrics !== false ? (
-        <section className="grid gap-4 sm:grid-cols-3">
-          {[
-            { label: 'Lists', value: effectiveListsCount },
-            { label: 'Active sprints', value: activeSprints },
-            { label: 'Members', value: members.length },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center gap-3 rounded-[18px] border border-[var(--border)] bg-white px-4 py-4 shadow-[var(--card-shadow)]">
-              <div className="min-w-0">
-                <div className="text-xs font-semibold uppercase text-[var(--text-tertiary)] tracking-[0.08em]">{item.label}</div>
-                <div className="mt-1 text-[24px] font-semibold text-[var(--text-primary)]">{item.value}</div>
-              </div>
-            </div>
-          ))}
-        </section>
-      ) : null}
 
+      {/* Folders & Lists */}
       {widgetConfig.organizer !== false ? (
         <section className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-          <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Folders &amp; Lists</div>
-          <SpaceOrganizerPanel
-            spaceId={space.id}
-            selectedListId={selectedList?.id ?? null}
-            onSelectList={onSelectList}
-            canManage={canManage}
-            canCreate={canCreate}
-            onTreeDataChange={onTreeDataChange}
-            members={members}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)' }}>Folders &amp; Lists</span>
+          </div>
+          <SpaceOrganizerPanel spaceId={space.id} selectedListId={selectedList?.id ?? null} onSelectList={onSelectList} canManage={canManage} canCreate={canCreate} onTreeDataChange={onTreeDataChange} members={members} />
         </section>
       ) : null}
 
+      {/* Recent Activity + Upcoming Meetings */}
       {widgetConfig.activity !== false ? (
-        <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
+        <section className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+          {/* Recent Activity */}
           <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-            <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Recent Activity</div>
-            <div className="space-y-4">
-              {recentActivity.map((entry) => {
-                const member = entry.user
-                return (
-                  <div key={entry.id} className="flex items-start gap-3">
-                    <div
-                      className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
-                      style={{ background: member?.avatar_color ?? '#5B34C7' }}
-                    >
-                      {getInitials(member?.name ?? 'Unknown')}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm text-[var(--text-primary)]">
-                        <span className="font-semibold">{member?.name ?? 'Unknown'}</span> {getActivityActionLabel(entry.action)} <span className="font-medium">"{entry.task.title}"</span>
-                      </div>
-                      <div className="mt-1 text-xs text-[var(--text-tertiary)]">{formatRelativeTime(entry.timestamp)}</div>
-                    </div>
-                  </div>
-                )
-              })}
-              {recentActivity.length === 0 ? (
-                <div className="flex min-h-[240px] items-center justify-center rounded-[20px] border border-dashed border-[var(--border)] bg-[var(--surface-tertiary)] p-6 text-center text-sm text-[var(--text-tertiary)]">
-                  No recent activity yet.
-                </div>
-              ) : null}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)' }}>Recent Activity</span>
+              <button type="button" onClick={() => onSwitchTab?.('List')} style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+                View all →
+              </button>
             </div>
+            {recentActivity.length === 0 ? (
+              <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 16, border: '1px dashed var(--border)', background: 'var(--surface-tertiary)', marginTop: 12, fontSize: 13, color: 'var(--text-tertiary)' }}>
+                No recent activity yet.
+              </div>
+            ) : (
+              <div>
+                {recentActivity.map((entry, i) => {
+                  const member = entry.user
+                  return (
+                    <div key={entry.id}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: member?.avatar_color ?? '#5B34C7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                          {getInitials(member?.name ?? 'Unknown')}
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                            <span style={{ fontWeight: 600 }}>{member?.name ?? 'Unknown'}</span> {getActivityActionLabel(entry.action)} <span style={{ fontWeight: 500 }}>"{entry.task.title}"</span>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>{formatRelativeTime(entry.timestamp)}</div>
+                      </div>
+                      {i < recentActivity.length - 1 ? <div style={{ borderTop: '1px solid var(--border)' }} /> : null}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
+          {/* Upcoming Meetings */}
           <div className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
-            <div className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Upcoming Meetings</div>
-            <div className="space-y-3">
-              {visibleMeetings.map((meeting) => (
-                <button
-                  key={meeting.id}
-                  type="button"
-                  onClick={() => navigate(`/meetings/${meeting.id}`)}
-                  className="w-full rounded-[18px] border border-[var(--border)] bg-[var(--surface-tertiary)] px-4 py-3 text-left text-sm text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:bg-white"
-                >
-                  <div className="font-medium text-[var(--text-primary)]">{meeting.title}</div>
-                  <div className="mt-1 text-xs text-[var(--text-tertiary)]">{formatDateTime(meeting.date)}</div>
-                </button>
-              ))}
-              {visibleMeetings.length === 0 ? (
-                <div className="flex min-h-[240px] items-center justify-center rounded-2xl bg-[var(--surface-tertiary)] px-4 py-6 text-center text-sm text-[var(--text-tertiary)]">
-                  No upcoming meetings.
-                </div>
-              ) : null}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)' }}>Upcoming Meetings</span>
+              <button type="button" onClick={() => onSwitchTab?.('Calendar')} style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+                View calendar →
+              </button>
             </div>
+            {visibleMeetings.length === 0 ? (
+              <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 16, border: '1px dashed var(--border)', background: 'var(--surface-tertiary)', marginTop: 12, fontSize: 13, color: 'var(--text-tertiary)' }}>
+                No upcoming meetings.
+              </div>
+            ) : (
+              <div>
+                {visibleMeetings.map((meeting, i) => (
+                  <div key={meeting.id}>
+                    <button type="button" onClick={() => navigate(`/meetings/${meeting.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 0', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meeting.title}</div>
+                        <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-tertiary)' }}>{formatDateTime(meeting.date)}</div>
+                      </div>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    {i < visibleMeetings.length - 1 ? <div style={{ borderTop: '1px solid var(--border)' }} /> : null}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       ) : null}
 
+      {/* Team Members */}
+      <section className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)' }}>Team Members</span>
+          <button type="button" onClick={() => onSwitchTab?.('Members')} style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+            View members →
+          </button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {members.slice(0, 5).map((member, i) => (
+              <div key={member.id} title={member.name ?? member.email} style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid #fff', background: member.avatar_color ?? '#5B34C7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', marginLeft: i === 0 ? 0 : -10, flexShrink: 0, position: 'relative', zIndex: 5 - i }}>
+                {getInitials(member.name ?? member.email)}
+              </div>
+            ))}
+            {members.length > 5 ? (
+              <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid #fff', background: 'var(--surface-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', marginLeft: -10, flexShrink: 0 }}>
+                +{members.length - 5}
+              </div>
+            ) : null}
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{members.length} member{members.length !== 1 ? 's' : ''}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>Working across multiple teams.</div>
+          </div>
+        </div>
+      </section>
+
+      {/* Overdue Tasks */}
+      <section className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--card-shadow)]">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)' }}>Overdue Tasks</span>
+          <button type="button" onClick={() => onSwitchTab?.('Board')} style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+            View all →
+          </button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: overdueTasks.length > 0 ? '#FEE2E2' : '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {overdueTasks.length > 0 ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            )}
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{overdueTasks.length}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>
+              {overdueTasks.length === 0 ? 'No overdue tasks. Great job!' : `task${overdueTasks.length !== 1 ? 's' : ''} past due date`}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Open Discussion Items */}
       {widgetConfig.openItems !== false ? <OpenItemsWidget spaceId={space.id} onViewAll={() => navigate(`?action=open-items`)} /> : null}
 
+      {/* SOPs & Resources */}
       {widgetConfig.sops !== false ? <SpaceSopCard spaceId={space.id} spaceName={space.name} canManage={canManage} /> : null}
 
-      {calFeedOpen ? (
-        <GlobalTaskFeedPanel userId={profile?.id} onClose={() => setCalFeedOpen(false)} />
-      ) : null}
+      {calFeedOpen ? <GlobalTaskFeedPanel userId={profile?.id} onClose={() => setCalFeedOpen(false)} /> : null}
     </div>
   )
 }
@@ -2018,7 +2060,7 @@ export default function SpaceOverview() {
 
   const tabContent = (
     <>
-      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} activity={spaceActivity} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} canCreate={canCreate} onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${id}`) }} onTreeDataChange={(next) => { setTreeData(next); setListsCount(next.lists.length) }} /></div> : null}
+      {activeTab === 'Overview' ? <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" tabIndex={0}><SpaceOverviewTab space={space} listsCount={listsCount} members={spaceMembers} tasks={overviewTasks} activity={spaceActivity} sprints={spaceSprints} meetings={spaceMeetings} selectedFolder={selectedFolder} selectedList={selectedList} canManage={canManage} canCreate={canCreate} onSelectList={(id) => { setSelectedListId(id); setSelectedFolderId(null); setActiveTab('List'); navigate(`/spaces/${spaceId}?list=${id}`) }} onTreeDataChange={(next) => { setTreeData(next); setListsCount(next.lists.length) }} onSwitchTab={setActiveTab} /></div> : null}
       {activeTab === 'Board' ? <div role="tabpanel" id="tabpanel-board" aria-labelledby="tab-board" tabIndex={0}><TasksProvider key={statusVersion} departmentId={spaceId}>{canManage === null ? <div style={{ padding: '2rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading board…</div> : <SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="kanban" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} />}</TasksProvider></div> : null}
       {activeTab === 'List' ? <div role="tabpanel" id="tabpanel-list" aria-labelledby="tab-list" tabIndex={0}><TasksProvider key={statusVersion} departmentId={spaceId}>{canManage === null ? <div style={{ padding: '2rem', color: 'var(--text-tertiary)', fontSize: 13 }}>Loading…</div> : <SpaceTasksPanel spaceId={spaceId} spaceName={space.name} canManage={canManage} viewMode="list" spaceFieldSettings={space.task_field_settings} selectedListId={selectedListId} selectedFolderId={selectedFolderId} folders={treeData.folders} lists={treeData.lists} onClearToSpace={() => navigate(`/spaces/${spaceId}`)} onClearToFolder={(folderId) => { setSelectedListId(null); setSelectedFolderId(folderId); navigate(`/spaces/${spaceId}`) }} members={spaceMembers} />}</TasksProvider></div> : null}
       {activeTab === 'Calendar' ? (
@@ -2150,12 +2192,48 @@ export default function SpaceOverview() {
       />
 
       <div className="relative">
-        <div role="tablist" className="flex items-center border-b border-[var(--border)] overflow-x-auto">
-          <div className="flex flex-nowrap gap-0">
+        <div
+          role="tablist"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            borderBottom: '1px solid var(--border)',
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', flexShrink: 0, gap: 0 }}>
             {visibleTabs.map((tab) => {
+              const active = activeTab === tab
               const tabId = tab.toLowerCase().replace(/\s+/g, '-')
               return (
-                <button key={tab} id={`tab-${tabId}`} type="button" role="tab" aria-selected={activeTab === tab} aria-controls={`tabpanel-${tabId}`} onClick={() => setActiveTab(tab)} className="border-b-2 px-4 py-3 text-sm font-medium transition-colors" style={{ borderColor: activeTab === tab ? 'var(--accent)' : 'transparent', color: activeTab === tab ? 'var(--accent)' : 'var(--text-secondary)', marginBottom: -1 }}>
+                <button
+                  key={tab}
+                  id={`tab-${tabId}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls={`tabpanel-${tabId}`}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    padding: '12px 16px',
+                    fontSize: 13,
+                    fontWeight: active ? 600 : 500,
+                    color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: `3px solid ${active ? 'var(--accent)' : 'transparent'}`,
+                    marginBottom: -1,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'color 0.12s',
+                    letterSpacing: active ? '-0.01em' : 0,
+                    fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-secondary)' }}
+                >
                   {tab}
                 </button>
               )

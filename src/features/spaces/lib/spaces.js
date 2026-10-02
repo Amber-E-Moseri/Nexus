@@ -224,14 +224,15 @@ export async function getSpaceMembers(space) {
   if (!space?.id) return []
 
   if (space.space_type === 'department') {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, name, email, role, department_id, status')
-      .eq('department_id', space.id)
-      .order('name')
-
-    if (error) throw error
-    return data ?? []
+    const [{ data: primary, error: e1 }, { data: extra, error: e2 }] = await Promise.all([
+      supabase.from('users').select('id, name, email, role, department_id, status, avatar_color').eq('department_id', space.id).order('name'),
+      supabase.from('space_members').select('user:users(id, name, email, role, department_id, status, avatar_color)').eq('space_id', space.id),
+    ])
+    if (e1) throw e1
+    if (e2) throw e2
+    const seen = new Set((primary ?? []).map((u) => u.id))
+    const cross = (extra ?? []).filter((m) => m.user?.id && !seen.has(m.user.id)).map((m) => m.user)
+    return [...(primary ?? []), ...cross].sort((a, b) => a.name.localeCompare(b.name))
   }
 
   const { data, error } = await supabase
