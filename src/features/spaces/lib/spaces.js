@@ -31,7 +31,7 @@ export async function getMySpaces(userId, role, departmentId, isProgramsMember =
     if (space.space_type === 'department') {
       if (role === 'super_admin' || role === 'regional_secretary') return true
       if (space.id === departmentId) return true
-      if (isProgramsMember && ['Media', 'Admin', 'Admins', 'PFCC'].includes(space.name)) return true
+      if (isProgramsMember && space.name === 'Media') return true
       return false
     }
     // group: only owner, members, and super_admin can see (never org-visible)
