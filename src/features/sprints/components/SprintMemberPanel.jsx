@@ -403,7 +403,6 @@ export default function SprintMemberPanel({
                 {members.length}
               </span>
             </div>
-            <div style={{ fontSize: 13, color: TOKENS.textSecondary, marginTop: 2 }}>Cross-functional members assigned to this sprint.</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {isPastor && isMember && !isArchived && (
@@ -500,52 +499,45 @@ export default function SprintMemberPanel({
                 {/* Controls row — always below info on any screen width */}
                 {canEdit && !isArchived ? (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${TOKENS.border}`, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {member.sprint_teams?.length > 0
-                      ? member.sprint_teams.map((team) => {
-                          const teamRole = member.team_member_roles?.[team.id] || 'contributor'
-                          return (
-                            <select
-                              key={team.id}
-                              value={teamRole}
-                              onChange={(e) => handleTeamRoleChange(member.user.id, team.id, e.target.value)}
-                              style={{ ...selectStyle, padding: '6px 10px', fontSize: 12, flex: '1 1 auto' }}
-                              title={team.name}
-                            >
-                              {ROLE_OPTIONS.map((r) => (
-                                <option key={r} value={r}>{team.name.slice(0, 10)} — {r}</option>
-                              ))}
-                            </select>
-                          )
-                        })
-                      : (
-                        <select
-                          value={member.role}
-                          onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
-                          style={{ ...selectStyle, flex: '1 1 auto' }}
+                    {/* Sprint role */}
+                    <select
+                      value={member.role}
+                      onChange={(e) => handleRoleChange(member.user.id, e.target.value)}
+                      style={{ ...selectStyle, padding: '5px 10px', fontSize: 12 }}
+                    >
+                      {ROLE_OPTIONS.map((r) => (
+                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                      ))}
+                    </select>
+                    {/* Team assignment chips */}
+                    {teams.map((team) => {
+                      const assigned = (member.sprint_team_ids ?? []).includes(team.id)
+                      return (
+                        <button
+                          key={team.id}
+                          type="button"
+                          title={assigned ? `Remove from ${team.name}` : `Add to ${team.name}`}
+                          onClick={() => {
+                            const cur = member.sprint_team_ids ?? []
+                            handleTeamChange(member.user.id, assigned ? cur.filter((id) => id !== team.id) : [...cur, team.id])
+                          }}
+                          style={{
+                            fontSize: 12, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                            fontFamily: 'DM Sans, system-ui, sans-serif',
+                            border: `1px solid ${assigned ? `${TOKENS.primary}50` : TOKENS.border}`,
+                            background: assigned ? `${TOKENS.primary}10` : TOKENS.surfaceTertiary,
+                            color: assigned ? TOKENS.primary : TOKENS.textTertiary,
+                            fontWeight: assigned ? 600 : 400,
+                          }}
                         >
-                          {ROLE_OPTIONS.map((r) => (
-                            <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                          ))}
-                        </select>
+                          {assigned ? '✓ ' : '+ '}{team.name}
+                        </button>
                       )
-                    }
-                    {teams.length > 0 && (
-                      <select
-                        multiple
-                        value={member.sprint_team_ids ?? []}
-                        onChange={(e) => handleTeamChange(member.user.id, selectedValuesFromOptions(e.target.options))}
-                        style={{ ...selectStyle, flex: '1 1 auto' }}
-                        title="Assign to team(s)"
-                      >
-                        {teams.map((team) => (
-                          <option key={team.id} value={team.id}>{team.name}</option>
-                        ))}
-                      </select>
-                    )}
+                    })}
                     <button
                       type="button"
                       onClick={() => handleRemove(member.user.id)}
-                      style={{ ...smallBtnStyle, color: '#C94830', borderColor: '#F5C6C0' }}
+                      style={{ ...smallBtnStyle, color: '#C94830', borderColor: '#F5C6C0', marginLeft: 'auto' }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = '#FEF2F2' }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'white' }}
                     >

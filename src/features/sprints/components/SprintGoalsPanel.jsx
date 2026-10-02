@@ -180,11 +180,11 @@ export default function SprintGoalsPanel({ sprintId, departmentId, teams = [] })
           </div>
           <div>
             <h3 style={styles.title}>Sprint goals</h3>
-            <span style={styles.subtitle}>
-              {loading ? 'Loading…' : goals.length > 0
-                ? `${goals.filter((g) => g.status === 'completed').length} of ${goals.length} goal${goals.length === 1 ? '' : 's'} completed`
-                : 'Set the outcomes this sprint should deliver'}
-            </span>
+            {!loading && goals.length > 0 && (
+              <span style={styles.subtitle}>
+                {goals.filter((g) => g.status === 'completed').length} of {goals.length} goal{goals.length === 1 ? '' : 's'} completed
+              </span>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

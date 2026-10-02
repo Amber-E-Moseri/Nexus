@@ -785,7 +785,6 @@ export default function SprintOverview() {
           <div className="mb-1 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-[var(--text-primary)]">Sprint Teams</h2>
-              <p className="mt-0.5 text-sm text-[var(--text-secondary)]">Cross-functional squads — name them and pull in members from any department.</p>
             </div>
             {(canManage || isMember) && !isArchived && (
               <div className="flex items-center gap-2 flex-shrink-0">

@@ -1,3 +1,16 @@
+const EVENT_TYPE_LABELS = {
+  conference: 'Conference',
+  program: 'Program',
+  training: 'Training',
+  prayer: 'Prayer',
+  graduation: 'Graduation',
+  event: 'Event',
+  deadline: 'Deadline',
+  leave: 'Leave',
+  regional_program: 'Regional Program',
+  executive_birthday: 'Birthday',
+}
+
 export const EVENT_COLORS = {
   conference: '#7C3AED',
   program: '#2563EB',
@@ -106,17 +119,18 @@ export default function CalendarEventCard({ event, canEdit, onEdit, onDelete }) 
               borderRadius: 6,
               padding: '2px 7px',
               whiteSpace: 'nowrap',
-              textTransform: 'capitalize',
               flexShrink: 0,
             }}
           >
-            {event.event_type}
+            {EVENT_TYPE_LABELS[event.event_type] ?? event.event_type}
           </span>
         </div>
 
         {event.location ? (
           <div className="mt-3 flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-            <span style={{ fontSize: 13 }}>📍</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: 'var(--text-tertiary)' }}>
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
             {event.location}
           </div>
         ) : null}
@@ -124,10 +138,20 @@ export default function CalendarEventCard({ event, canEdit, onEdit, onDelete }) 
           <div className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">{event.description}</div>
         ) : null}
         {event.space_id || event.sprint_id ? (
-          <div className="mt-3 flex items-center gap-1 text-xs text-[var(--text-tertiary)]">
-            {event.space_id ? <span>🏢 Department</span> : null}
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
+            {event.space_id ? (
+              <span className="flex items-center gap-1">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                Department
+              </span>
+            ) : null}
             {event.space_id && event.sprint_id ? <span>·</span> : null}
-            {event.sprint_id ? <span>🏃 Sprint</span> : null}
+            {event.sprint_id ? (
+              <span className="flex items-center gap-1">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Sprint
+              </span>
+            ) : null}
           </div>
         ) : null}
 
