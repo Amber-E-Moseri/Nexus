@@ -93,10 +93,9 @@ describe('bulk bar and export are read-only', () => {
       <BulkActionBar eventId="ev" selection={selection} context="documentation" canWrite filteredRows={[ready]} />,
       { wrapper: wrapper() },
     )
-    await screen.findByRole('option', { name: 'Finances' })
+    await screen.findAllByRole('option', { name: 'Finances' })
     await new Promise((r) => setTimeout(r, 50))
-    fireEvent.click(screen.getByRole('button', { name: /more/i }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /export selected/i }))
+    fireEvent.click(screen.getByRole('button', { name: /export selected/i }))
     fireEvent.click(screen.getByRole('button', { name: /more/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /export filtered/i }))
     expect(downloadSpy).toHaveBeenCalledTimes(2)

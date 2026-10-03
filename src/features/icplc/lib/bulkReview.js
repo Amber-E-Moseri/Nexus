@@ -82,11 +82,16 @@ const REASON_LABELS = {
 }
 
 /** Per-participant RPC results -> { total, counts, reasons: [{ status, reason, label, count }] } for the result panel. */
+/** Statuses that mean the participant did NOT get the change and staff should look at them individually. */
+export const PROBLEM_STATUSES = ['failed', 'skipped_stale', 'skipped_ineligible']
+
 export function summarizeBulkResults(results) {
   const counts = {}
   const reasons = new Map()
+  const problems = []
   for (const r of results || []) {
     counts[r.status] = (counts[r.status] || 0) + 1
+    if (PROBLEM_STATUSES.includes(r.status)) problems.push({ id: r.id, status: r.status, reason: r.reason })
     if (r.status !== 'updated' && r.reason) {
       const key = `${r.status}:${r.reason}`
       const cur = reasons.get(key) || { status: r.status, reason: r.reason, label: REASON_LABELS[r.reason] || r.reason, count: 0 }
@@ -94,5 +99,5 @@ export function summarizeBulkResults(results) {
       reasons.set(key, cur)
     }
   }
-  return { total: (results || []).length, counts, reasons: [...reasons.values()] }
+  return { total: (results || []).length, counts, reasons: [...reasons.values()], problems }
 }

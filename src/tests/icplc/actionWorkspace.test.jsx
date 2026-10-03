@@ -144,7 +144,7 @@ describe('Action workspace', () => {
     renderPage(['/icplc'])
 
     fireEvent.change(screen.getByLabelText(/Search/i), { target: { value: 'doc' } })
-    fireEvent.change(screen.getByLabelText(/Subgroup/i), { target: { value: 'Media' } })
+    fireEvent.change(screen.getByLabelText(/Subgroup/i), { target: { value: 'media' } })
 
     await waitFor(() => expect(screen.queryByText('Reg Missing')).toBeNull())
     expect(screen.getByText('Doc Needed')).toBeTruthy()
@@ -157,6 +157,7 @@ describe('Action workspace', () => {
     mocks.participants = [registrationAction, documentationAction, healthy]
     renderPage(['/icplc'])
 
+    fireEvent.click(screen.getByRole('button', { name: /More filters/i }))
     fireEvent.change(screen.getByLabelText(/Category/i), { target: { value: 'registration' } })
     await waitFor(() => expect(screen.queryByText('Doc Needed')).toBeNull())
 
@@ -182,5 +183,146 @@ describe('Action workspace', () => {
 
     fireEvent.click(within(screen.getByLabelText('Action results')).getByLabelText('Open profile: Reg Missing'))
     expect(mocks.openProfile).toHaveBeenCalledWith('reg', 'registration')
+  })
+
+  describe('subgroup filter, chips and bulk targeting', () => {
+    const regVariant = { ...registrationAction, id: 'reg2', full_name: 'Reg Variant', email: 'reg2@example.test', subgroup: '  central ', tags: [{ id: 'tag-docs', name: 'Docs' }] }
+    const noSubgroup = { ...registrationAction, id: 'nosub', full_name: 'No Subgroup', email: 'nosub@example.test', subgroup: null, tags: [] }
+    const docCentral = { ...documentationAction, id: 'doccen', full_name: 'Doc Central', email: 'doccen@example.test', subgroup: 'Central', tags: [{ id: 'tag-docs', name: 'Docs' }] }
+    const all = () => [registrationAction, regVariant, noSubgroup, documentationAction, docCentral, healthy]
+
+    const subgroupSelect = () => screen.getByLabelText('Subgroup')
+    const names = () => [...screen.getByLabelText('Action results').querySelectorAll('.icplc-action-person strong')].map((n) => n.textContent)
+
+    it('builds subgroup options from the current population, merges spelling variants and flags unknown', () => {
+      mocks.participants = all()
+      renderPage(['/icplc'])
+      const opts = [...subgroupSelect().querySelectorAll('option')].map((o) => o.textContent)
+      expect(opts).toEqual(['All subgroups', 'Central (3)', 'Media (1)', 'Unknown / No subgroup (1)'])
+    })
+
+    it('filters rows, updates the count and persists via the URL', () => {
+      mocks.participants = all()
+      renderPage(['/icplc?subgroup=media'])
+      expect(names()).toEqual(['Doc Needed'])
+      expect(screen.getByRole('status').textContent).toBe('1 of 5 action items')
+      expect(subgroupSelect().value).toBe('media')
+      expect(screen.getByRole('button', { name: /Remove filter Subgroup: Media/ })).toBeTruthy()
+    })
+
+    it('Unknown / No subgroup selects only participants without a subgroup', () => {
+      mocks.participants = all()
+      renderPage(['/icplc'])
+      fireEvent.change(subgroupSelect(), { target: { value: '__none__' } })
+      expect(names()).toEqual(['No Subgroup'])
+    })
+
+    it('does not offer Unknown when everyone has a subgroup', () => {
+      mocks.participants = [registrationAction, documentationAction]
+      renderPage(['/icplc'])
+      expect([...subgroupSelect().querySelectorAll('option')].some((o) => /Unknown/.test(o.textContent))).toBe(false)
+    })
+
+    it('subgroup composes (intersection) with registration, reason, tag and search', () => {
+      mocks.participants = all()
+      renderPage(['/icplc?subgroup=central'])
+      expect(names().sort()).toEqual(['Doc Central', 'Reg Missing', 'Reg Variant'])
+
+      fireEvent.click(screen.getByRole('button', { name: /More filters/i }))
+      fireEvent.change(screen.getByLabelText('Registration'), { target: { value: 'registration_missing' } })
+      expect(names().sort()).toEqual(['Reg Missing', 'Reg Variant'])
+      expect(names()).not.toContain('Doc Central')
+      expect(subgroupSelect().value).toBe('central')
+
+      fireEvent.change(screen.getByLabelText('Tag'), { target: { value: 'Docs' } })
+      expect(names()).toEqual(['Reg Variant'])
+      expect(subgroupSelect().value).toBe('central')
+
+      fireEvent.change(screen.getByLabelText(/Search/i), { target: { value: 'zzz-nobody' } })
+      expect(names()).toEqual([])
+      expect(subgroupSelect().value).toBe('central')
+    })
+
+    it('subgroup + reason is an intersection', () => {
+      mocks.participants = all()
+      renderPage(['/icplc?subgroup=central'])
+      fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'passport_incomplete' } })
+      expect(names()).toEqual(['Doc Central'])
+    })
+
+    it('shows removable chips, removes one, and Clear all resets everything', () => {
+      mocks.participants = all()
+      renderPage(['/icplc?subgroup=central&tag=Docs'])
+      expect(screen.getByRole('button', { name: /Remove filter Tag: Docs/ })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: /Remove filter Tag: Docs/ }))
+      expect(screen.queryByRole('button', { name: /Remove filter Tag/ })).toBeNull()
+      expect(subgroupSelect().value).toBe('central')
+      fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+      expect(subgroupSelect().value).toBe('')
+      expect(screen.queryByLabelText('Active filters')).toBeNull()
+    })
+
+    it('keeps primary filters visible and secondary filters behind More filters', () => {
+      mocks.participants = all()
+      renderPage(['/icplc'])
+      for (const label of [/Search/i, 'Subgroup', 'Reason', 'Readiness']) expect(screen.getByLabelText(label)).toBeTruthy()
+      for (const label of ['Participation', 'Registration', 'Travel', 'Time risk', 'Tag', 'Category']) expect(screen.queryByLabelText(label)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: /More filters/i }))
+      for (const label of ['Participation', 'Registration', 'Travel', 'Time risk', 'Tag', 'Category']) expect(screen.getByLabelText(label)).toBeTruthy()
+    })
+
+    it('opens More filters when a secondary filter arrives via the URL', () => {
+      mocks.participants = all()
+      renderPage(['/icplc?registration=not_registered'])
+      expect(screen.getByLabelText('Registration')).toBeTruthy()
+    })
+
+    it('Select all filtered selects only the subgroup-filtered rows and sends those exact IDs', async () => {
+      mocks.participants = all()
+      renderPage(['/icplc?subgroup=central'])
+      fireEvent.click(screen.getByLabelText('Select all 3 filtered action rows'))
+      await waitFor(() => expect(screen.getByTestId('bulk-selected-count').textContent).toBe('3'))
+      fireEvent.click(screen.getByRole('button', { name: 'Capture selected IDs' }))
+      expect([...window.__bulkIds].sort()).toEqual(['doccen', 'reg', 'reg2'])
+      expect(screen.getByText('3 of 3 selected')).toBeTruthy()
+    })
+
+    it('changing a filter clears the selection so hidden rows cannot be bulk-targeted', async () => {
+      mocks.participants = all()
+      renderPage(['/icplc'])
+      fireEvent.click(screen.getByLabelText('Select all 5 filtered action rows'))
+      await waitFor(() => expect(screen.getByTestId('bulk-selected-count').textContent).toBe('5'))
+      fireEvent.change(subgroupSelect(), { target: { value: 'media' } })
+      await waitFor(() => expect(screen.getByTestId('bulk-selected-count').textContent).toBe('0'))
+      fireEvent.click(screen.getByRole('button', { name: 'Capture selected IDs' }))
+      expect(window.__bulkIds).toEqual([])
+    })
+
+    it('summary cards are global totals and act as filters whose result count equals the card', () => {
+      mocks.participants = all()
+      renderPage(['/icplc?subgroup=media'])
+      const card = (name) => within(screen.getByLabelText('Action summary')).getByRole('button', { name: new RegExp(name) })
+      const cardCount = (name) => Number(card(name).querySelector('strong').textContent)
+
+      // Global totals ignore the active subgroup filter; the header shows filtered / total.
+      expect(cardCount('All Actions')).toBe(5)
+      expect(screen.getByRole('status').textContent).toBe('1 of 5 action items')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear all' }))
+      for (const [name, expected] of [
+        ['Registration', ['No Subgroup', 'Reg Missing', 'Reg Variant']],
+        ['Urgent', ['No Subgroup', 'Reg Missing', 'Reg Variant']],
+      ]) {
+        fireEvent.click(card(name))
+        expect(names().sort()).toEqual(expected)
+        expect(names()).toHaveLength(cardCount(name))
+      }
+      for (const name of ['Documentation', 'Travel']) {
+        fireEvent.click(card(name))
+        expect(names()).toHaveLength(cardCount(name))
+      }
+      fireEvent.click(card('All Actions'))
+      expect(names()).toHaveLength(5)
+    })
   })
 })

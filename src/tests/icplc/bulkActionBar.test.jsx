@@ -126,12 +126,41 @@ describe('BulkActionBar', () => {
   it('BAR-8 tag action confirms with the count and reports per-participant outcomes', async () => {
     tagMutate.mockResolvedValue({ results: [{ id: 'e1', status: 'updated' }, { id: 'e2', status: 'no_change', reason: 'already_tagged' }] })
     renderBar([elig1, elig2])
-    await screen.findByRole('option', { name: 'Finances' })
+    await screen.findAllByRole('option', { name: 'Finances' })
     fireEvent.change(screen.getByLabelText('Add a tag to selected'), { target: { value: 't1' } })
     await screen.findByText('Add tag "Finances" to 2 people?')
     expect(tagMutate).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
     await screen.findByText(/1 updated · 1 unchanged/)
     expect(tagMutate.mock.calls[0][0]).toEqual({ ids: ['e1', 'e2'], tagId: 't1', action: 'add' })
+  })
+
+  it('BAR-9 names the participants that failed or went stale instead of reporting a bare success', async () => {
+    tagMutate.mockResolvedValue({ results: [
+      { id: 'e1', status: 'updated' },
+      { id: 'e2', status: 'failed', reason: 'update_blocked' },
+    ] })
+    renderBar([elig1, elig2])
+    await screen.findAllByRole('option', { name: 'Finances' })
+    fireEvent.change(screen.getByLabelText('Remove a tag from selected'), { target: { value: 't1' } })
+    await screen.findByText('Remove tag "Finances" from 2 people?')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await screen.findByText(/2 processed · 1 updated · 1 failed/)
+    const list = screen.getByLabelText('Needs follow-up')
+    expect(list.textContent).toContain('Eligible Two')
+    expect(list.textContent).not.toContain('Eligible One')
+    expect(tagMutate.mock.calls[0][0]).toEqual({ ids: ['e1', 'e2'], tagId: 't1', action: 'remove' })
+  })
+
+  it('BAR-10 Action shows the main management workflow without opening a menu, and no derived-status setters', () => {
+    renderBar([elig1], { context: 'needs_attention', canEmail: true, onEmail: vi.fn() })
+    expect(screen.getByRole('button', { name: /mark reviewed/i }).className).toContain('icplc-btn-primary')
+    expect(screen.getByLabelText('Add a tag to selected')).toBeTruthy()
+    expect(screen.getByLabelText('Remove a tag from selected')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /email selected/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /export selected/i })).toBeTruthy()
+    for (const forbidden of [/set readiness/i, /mark registered/i, /set participation/i, /not attending/i]) {
+      expect(screen.queryByText(forbidden)).toBeNull()
+    }
   })
 })
