@@ -92,7 +92,7 @@ describe('BulkActionBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark 2 reviewed' }))
     await screen.findByText(/1 updated · 1 already reviewed · 1 skipped \(changed since loaded\) · 1 ineligible · 1 failed/)
     expect(screen.getByText(/Changed since you loaded the list — 1/)).toBeTruthy()
-    expect(screen.getByText(/stay in Needs Attention/)).toBeTruthy()
+    expect(screen.getByText(/stay in Action/)).toBeTruthy()
   })
 
   it('BAR-4 nothing eligible: no write is offered', () => {
