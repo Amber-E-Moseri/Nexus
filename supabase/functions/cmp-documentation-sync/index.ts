@@ -477,12 +477,14 @@ Deno.serve(async (req) => {
     if (eventConfig?.sprint_id) {
       const { data: memberships } = await supabase
         .from('sprint_team_members')
-        .select('user_id, sprint_teams!inner(name, sprint_id)')
+        .select('user_id, sprint_teams!inner(name, sprint_id, is_archived)')
         .eq('user_id', user.user.id)
 
       authorized = (memberships || []).some((m: any) => {
         const teamName = String(m.sprint_teams?.name || '')
+        // Archived teams never authorize (NULL is_archived = active); membership rows are untouched.
         return m.sprint_teams?.sprint_id === eventConfig.sprint_id
+          && m.sprint_teams?.is_archived !== true
           && !/finance|transportation|accommodation|hospitality/i.test(teamName)
       })
     }
