@@ -1,7 +1,10 @@
-import React, { useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
+import BulkActionBar from '../components/BulkActionBar.jsx'
+import SelectCheckbox from '../components/SelectCheckbox.jsx'
+import { useRowSelection } from '../hooks/useRowSelection.js'
 import { humanize, rowOpenProps } from '../components/ParticipantTable.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
 import { deriveDocumentation, SUPPORTING_DOC, documentationActionRequired } from '../lib/documentationRules.js'
@@ -64,6 +67,11 @@ export default function DocumentationPage({ canWrite }) {
       return (a.full_name || '').localeCompare(b.full_name || '')
     })
   }, [participants, search, subgroupFilter, canadaFilter, passportFilter, visaFilter, showAbsent])
+
+  // Selection follows exactly the rendered rows; any filter change (including Include not attending) clears it.
+  const selection = useRowSelection({ resetKey: JSON.stringify([search, subgroupFilter, canadaFilter, passportFilter, visaFilter, showAbsent]) })
+  const syncShown = selection.syncShown
+  useEffect(() => { syncShown(filtered) }, [syncShown, filtered])
 
   if (isLoading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -195,6 +203,14 @@ export default function DocumentationPage({ canWrite }) {
           <table className="icplc-table">
             <thead>
               <tr>
+                <th scope="col" className="icplc-wl-select">
+                  <SelectCheckbox
+                    checked={selection.allShownSelected}
+                    indeterminate={selection.someSelected}
+                    onChange={selection.toggleAllShown}
+                    label={`Select all ${filtered.length} shown`}
+                  />
+                </th>
                 <th scope="col">Participant</th>
                 <th scope="col">Canadian status</th>
                 <th scope="col">Canadian document</th>
@@ -208,6 +224,13 @@ export default function DocumentationPage({ canWrite }) {
                 const d = deriveDocumentation(p)
                 return (
                   <tr key={p.id} {...rowOpenProps(p.full_name, () => openProfile(p.id, 'documentation'))}>
+                    <td className="icplc-wl-select">
+                      <SelectCheckbox
+                        checked={selection.isSelected(p.id)}
+                        onChange={() => selection.toggle(p.id)}
+                        label={`Select ${p.full_name}`}
+                      />
+                    </td>
                     <td data-primary>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{p.full_name}</div>
                       {p.subgroup && <div className="icplc-cell-sub">{p.subgroup}</div>}
@@ -251,6 +274,8 @@ export default function DocumentationPage({ canWrite }) {
           </table>
         </div>
       )}
+
+      <BulkActionBar eventId={config?.id} selection={selection} context="documentation" canWrite={canWrite} filteredRows={filtered} />
 
       {activeProfileId && (
         <ParticipantProfileDrawer

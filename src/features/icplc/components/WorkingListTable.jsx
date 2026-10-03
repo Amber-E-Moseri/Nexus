@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, XCircle, ArrowUp, ArrowDown, X, UserX, UserCheck } from 'lucide-react'
 import { rowOpenProps } from './ParticipantTable.jsx'
+import SelectCheckbox from './SelectCheckbox.jsx'
 import { attentionCategoryKeys } from '../lib/documentationRules.js'
 import { groupForSubgroup } from '../lib/subgroups.js'
 import { registrationState, REGISTRATION_STATE, REGISTRATION_STATE_LABELS } from '../lib/documentationRules.js'
@@ -39,10 +40,10 @@ const COLUMNS = {
  * Compact Working List table. Click a header to sort; click a Subgroup / Campus /
  * Registered / Attention value to filter to it (click again, or the chip, to clear).
  */
-export default function WorkingListTable({ participants, loading, onOpen, onToggleAbsent, selectedIds, onToggleSelect, onSetSelection }) {
+export default function WorkingListTable({ participants, loading, onOpen, onToggleAbsent, selection }) {
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
   const [cellFilters, setCellFilters] = useState([]) // [{ column, value }]
-  const selectionEnabled = selectedIds && onToggleSelect
+  const selectionEnabled = Boolean(selection)
 
   const rows = useMemo(() => {
     let list = participants || []
@@ -63,11 +64,16 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
     return list
   }, [participants, cellFilters, sort])
 
+  // Selection follows exactly the rows rendered here (after the column filters below), never the unfiltered list.
+  const syncShown = selection?.syncShown
+  useEffect(() => { syncShown?.(rows) }, [syncShown, rows])
+
   function toggleSort(key) {
     setSort((s) => (s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }))
   }
 
   function toggleFilter(column, value) {
+    selection?.clear() // a column filter changes what is shown; do not carry the old selection over
     setCellFilters((cur) => (
       cur.some((f) => f.column === column && f.value === value)
         ? cur.filter((f) => !(f.column === column && f.value === value))
@@ -76,8 +82,6 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
   }
 
   const isFiltered = (column, value) => cellFilters.some((f) => f.column === column && f.value === value)
-  const allVisibleSelected = selectionEnabled && rows.length > 0 && rows.every((p) => selectedIds.has(p.id))
-  const someVisibleSelected = selectionEnabled && rows.some((p) => selectedIds.has(p.id))
 
   function FilterCell({ column, value, children }) {
     const active = isFiltered(column, value)
@@ -126,7 +130,7 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
               {COLUMNS[column].label}: {value} <X size={12} aria-hidden style={{ marginLeft: 4 }} />
             </button>
           ))}
-          <button type="button" onClick={() => setCellFilters([])}
+          <button type="button" onClick={() => { selection?.clear(); setCellFilters([]) }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>
             Clear
           </button>
@@ -137,18 +141,13 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
         <table className="icplc-wl-table">
           <thead>
             <tr>
-              {selectionEnabled && (
-                <th scope="col" style={{ width: 36, textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    aria-label={allVisibleSelected ? 'Clear visible selection' : 'Select visible participants'}
-                    checked={allVisibleSelected}
-                    ref={(el) => { if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected }}
-                    onChange={(e) => {
-                      const visibleIds = rows.map((p) => p.id)
-                      if (e.target.checked) onSetSelection?.([...new Set([...(selectedIds || []), ...visibleIds])])
-                      else onSetSelection?.([...(selectedIds || [])].filter((id) => !visibleIds.includes(id)))
-                    }}
+              {selection && (
+                <th scope="col" className="icplc-wl-select">
+                  <SelectCheckbox
+                    checked={selection.allShownSelected}
+                    indeterminate={selection.someSelected}
+                    onChange={selection.toggleAllShown}
+                    label={`Select all ${rows.length} shown`}
                   />
                 </th>
               )}
@@ -180,14 +179,12 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
                   {...rowOpenProps(p.full_name, () => onOpen(p.id))}
                   className={`icplc-row icplc-wl-row ${registered ? 'is-registered' : 'is-unregistered'}${isAbsent(p) ? ' is-absent' : ''}`}
                 >
-                  {selectionEnabled && (
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${p.full_name}`}
-                        checked={selectedIds.has(p.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={() => onToggleSelect(p.id)}
+                  {selection && (
+                    <td className="icplc-wl-select">
+                      <SelectCheckbox
+                        checked={selection.isSelected(p.id)}
+                        onChange={() => selection.toggle(p.id)}
+                        label={`Select ${p.full_name}`}
                       />
                     </td>
                   )}

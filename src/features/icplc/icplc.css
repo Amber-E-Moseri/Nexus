@@ -666,3 +666,7 @@
   }
   .icplc-dim-label { margin-top: 4px; }
 }
+
+/* Bulk selection column (People, Documentation, Travel tables). */
+.icplc-wl-select { width: 34px; min-width: 34px; text-align: center; padding-left: 8px; padding-right: 4px; }
+.icplc-select-box { width: 16px; height: 16px; cursor: pointer; accent-color: var(--icplc-purple, #4C2A92); }

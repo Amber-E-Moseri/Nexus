@@ -1,7 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
+import BulkActionBar from '../components/BulkActionBar.jsx'
+import SelectCheckbox from '../components/SelectCheckbox.jsx'
+import { useRowSelection } from '../hooks/useRowSelection.js'
 import {
   ATTENTION_CATEGORIES,
   attentionCategoryKeys,
@@ -92,6 +95,12 @@ export default function NeedsAttentionPage({ canWrite }) {
       })
   }, [participants, showAbsent])
 
+  // Selection follows exactly the rendered queue. Toggling Not Attending changes it, so it clears the selection.
+  const shownParticipants = useMemo(() => queue.map((q) => q.participant), [queue])
+  const selection = useRowSelection({ resetKey: String(showAbsent) })
+  const syncShown = selection.syncShown
+  useEffect(() => { syncShown(shownParticipants) }, [syncShown, shownParticipants])
+
   const absentAttentionCount = useMemo(() => {
     if (!participants) return 0
     return participants.filter(
@@ -128,8 +137,21 @@ export default function NeedsAttentionPage({ canWrite }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)' }}>
-          {queue.length} item{queue.length !== 1 ? 's' : ''} need attention
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {queue.length > 0 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--icplc-text-soft)', cursor: 'pointer' }}>
+              <SelectCheckbox
+                checked={selection.allShownSelected}
+                indeterminate={selection.someSelected}
+                onChange={selection.toggleAllShown}
+                label={`Select all ${queue.length} shown`}
+              />
+              Select all shown
+            </label>
+          )}
+          <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)' }}>
+            {queue.length} item{queue.length !== 1 ? 's' : ''} need attention
+          </div>
         </div>
         {absentAttentionCount > 0 && (
           <button
@@ -214,8 +236,15 @@ export default function NeedsAttentionPage({ canWrite }) {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ paddingTop: 2 }}>
+                <SelectCheckbox
+                  checked={selection.isSelected(participant.id)}
+                  onChange={() => selection.toggle(participant.id)}
+                  label={`Select ${participant.full_name}`}
+                />
+              </div>
               {/* Left: name + reasons */}
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--icplc-text)', marginBottom: 4 }}>
                   {participant.full_name}
                   {participant.subgroup && (
@@ -249,6 +278,8 @@ export default function NeedsAttentionPage({ canWrite }) {
           </div>
         )
       })}
+
+      <BulkActionBar eventId={config?.id} selection={selection} context="needs_attention" canWrite={canWrite} filteredRows={shownParticipants} />
 
       {activeProfileId && (
         <ParticipantProfileDrawer

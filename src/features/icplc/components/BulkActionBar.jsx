@@ -1,49 +1,44 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Mail, X } from 'lucide-react'
+import { ClipboardCheck, Download, Mail, MoreHorizontal, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
-import { useBulkAddTag, useBulkRemoveTag, useBulkUpdateParticipants, useBulkFlightNotRequired } from '../hooks/useICPLCBulk.js'
-import { downloadCsv, participantsToCsv } from '../lib/exportParticipants.js'
-import { FLIGHT_NOT_REQUIRED_REASONS, hasFlightData } from '../lib/flightRequirement.js'
-
-const STATUSES = [
-  { value: 'tracking', label: 'Tracking' },
-  { value: 'likely', label: 'Likely' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'uncertain', label: 'Uncertain' },
-  { value: 'not_attending', label: 'Not attending' },
-]
-
-// Documentation fields that can be set in bulk. Values match the database check constraints.
-const DOC_FIELDS = [
-  { field: 'passport_readiness', label: 'Passport', options: [
-    ['ready', 'Ready'], ['renewal_needed', 'Renewal needed'], ['renewal_in_progress', 'Renewal in progress'],
-    ['no_passport', 'No passport'], ['unsure', 'Unsure'], ['issue', 'Issue'], ['unknown', 'Not provided'],
-  ] },
-  { field: 'visa_requirement', label: 'Visa requirement', options: [
-    ['required', 'Required'], ['not_required', 'Not required'], ['review', 'Needs review'],
-  ] },
-  { field: 'visa_process_status', label: 'Visa process', options: [
-    ['not_started', 'Not started'], ['in_progress', 'In progress'], ['submitted', 'Submitted'], ['processing', 'Processing'],
-    ['approved', 'Approved'], ['issue', 'Issue'], ['not_applicable', 'Not applicable'],
-  ] },
-]
+import { useBulkMarkDocumentationReviewed, useBulkSetTag } from '../hooks/useICPLCBulk.js'
+import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
+import { buildReviewItems, classifyForReview, partitionForReview, RESULT_LABELS, CANNOT_REVIEW_REASONS, summarizeBulkResults } from '../lib/bulkReview.js'
+import { downloadBulkExport } from '../lib/bulkExport.js'
 
 const selectStyle = { minHeight: 34, width: 'auto', maxWidth: 170 }
+const STATUS_ORDER = ['updated', 'already_reviewed', 'no_change', 'skipped_stale', 'skipped_ineligible', 'failed']
 
 /**
- * Sticky bar shown while people are selected on the Working List. Every change asks for an inline
- * confirmation that names the count, since one click touches many records.
+ * Contextual bulk-action bar, shared by Needs Attention, People, Documentation and Travel.
+ *
+ * Phase 1/2 actions only: Mark Documentation Reviewed, Add / Remove tag, Export selected / filtered.
+ * Everything that changes participation, travel exceptions, registration, passport/visa values, assistance,
+ * deletion or merging is intentionally absent.
+ *
+ * Every mutation asks for an inline confirmation naming the count, and ends with a per-participant result
+ * (never a bare "Success"). Nothing here sends a notification.
+ *
+ * @param selection     controller from useRowSelection()
+ * @param context       'needs_attention' | 'people' | 'documentation' | 'travel'
+ * @param filteredRows  every row currently shown, used by Export filtered
  */
-export default function BulkActionBar({ eventId, selectedIds, selectedParticipants, userId, canWrite, canEmail, onEmail, onClear }) {
-  const count = selectedIds.length
-  const [pending, setPending] = useState(null) // { text, run }
-  const [note, setNote] = useState(null) // { ok, text }
-  const updateMut = useBulkUpdateParticipants()
-  const addTagMut = useBulkAddTag()
-  const removeTagMut = useBulkRemoveTag()
-  const fnrMut = useBulkFlightNotRequired()
-  const busy = updateMut.isPending || addTagMut.isPending || removeTagMut.isPending || fnrMut.isPending
+export default function BulkActionBar({ eventId, selection, context, canWrite, filteredRows = [], canEmail = false, onEmail }) {
+  const count = selection.count
+  const [pending, setPending] = useState(null) // { kind, text, run, partition? }
+  const [result, setResult] = useState(null) // { title, summary, note, error }
+  const [menuOpen, setMenuOpen] = useState(false)
+  const reviewMut = useBulkMarkDocumentationReviewed()
+  const tagMut = useBulkSetTag()
+  const busy = reviewMut.isPending || tagMut.isPending
+
+  // Canonical rows: registration state in the export, and updated_at / missing-info for the review, must come from the
+  // same derivation the rest of ICPLC uses. Same query keys as the pages, so this reuses their cache. promote:false
+  // keeps this a read-only consumer (no Ready => Confirmed write from the Documentation or Travel pages).
+  const { participants: canonical } = useICPLCWorkingList(eventId, {}, { promote: false })
+  const canonById = useMemo(() => new Map((canonical || []).map((p) => [p.id, p])), [canonical])
+  const canon = (rows) => rows.map((r) => canonById.get(r.id) || r)
 
   const { data: tags = [] } = useQuery({
     queryKey: ['icplc_tags', eventId],
@@ -60,20 +55,62 @@ export default function BulkActionBar({ eventId, selectedIds, selectedParticipan
     staleTime: 5 * 60_000,
   })
 
+  if (count === 0 && !result) return null
+
   const who = `${count} ${count === 1 ? 'person' : 'people'}`
+  const showReview = canWrite && context !== 'travel'
+  const reviewIsPrimary = context === 'documentation' || context === 'needs_attention'
 
-  function ask(text, run) { setNote(null); setPending({ text, run }) }
+  function dismiss() { setResult(null); setPending(null) }
 
-  async function confirm() {
-    const { run, text } = pending
+  function startReview() {
+    const partition = partitionForReview(canon(selection.selectedRows))
+    setResult(null)
+    setMenuOpen(false)
+    setPending({ kind: 'review', partition })
+  }
+
+  async function applyReview() {
+    const { partition } = pending
     setPending(null)
     try {
-      await run()
-      setNote({ ok: true, text: `Done: ${text}` })
+      const { results } = await reviewMut.mutateAsync({ items: buildReviewItems(partition.eligible) })
+      setResult({
+        title: 'Documentation review',
+        summary: summarizeBulkResults(results),
+        // Bulk review records the acknowledgement only. Needs Attention is recalculated by the canonical rules.
+        note: 'Reviewing records that staff looked at what is missing. Registration, visa, passport and travel issues are unaffected, so those people stay in Needs Attention.',
+      })
     } catch (err) {
-      setNote({ ok: false, text: `Failed: ${err.message || 'could not save'}` })
+      setResult({ title: 'Documentation review', error: err.message || 'Could not save' })
     }
   }
+
+  function startTag(action, tag) {
+    setResult(null)
+    setMenuOpen(false)
+    const ids = selection.selectedIds
+    setPending({
+      kind: 'tag',
+      text: `${action === 'add' ? 'Add' : 'Remove'} tag "${tag.name}" ${action === 'add' ? 'to' : 'from'} ${who}?`,
+      run: async () => {
+        try {
+          const { results } = await tagMut.mutateAsync({ ids, tagId: tag.id, action })
+          setResult({ title: `${action === 'add' ? 'Add' : 'Remove'} tag "${tag.name}"`, summary: summarizeBulkResults(results) })
+        } catch (err) {
+          setResult({ title: 'Tag', error: err.message || 'Could not save' })
+        }
+      },
+    })
+  }
+
+  function exportRows(kind, rows) {
+    const n = downloadBulkExport(kind, canon(rows))
+    setMenuOpen(false)
+    setResult({ title: 'Export', summary: null, note: `Exported ${n} ${n === 1 ? 'person' : 'people'} (${kind}).` })
+  }
+
+  const partition = pending?.kind === 'review' ? pending.partition : null
 
   return (
     <div
@@ -83,75 +120,37 @@ export default function BulkActionBar({ eventId, selectedIds, selectedParticipan
         position: 'sticky', bottom: 12, zIndex: 15, marginTop: 12,
         background: 'var(--icplc-surface, #fff)', border: '1px solid var(--icplc-purple, #4C2A92)',
         borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.16)', padding: '10px 12px',
-        display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
+        display: 'flex', flexDirection: 'column', gap: 8,
       }}
     >
-      <strong style={{ fontSize: 13, color: 'var(--icplc-purple, #4C2A92)' }}>{count} selected</strong>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+        {count > 0 && <strong style={{ fontSize: 13, color: 'var(--icplc-purple, #4C2A92)' }}>{count} selected</strong>}
 
-      {pending ? (
-        <>
-          <span style={{ fontSize: 13 }}>{pending.text}</span>
-          <button type="button" className="icplc-btn icplc-btn-primary" disabled={busy} onClick={confirm}>Apply</button>
-          <button type="button" className="icplc-btn" onClick={() => setPending(null)}>Cancel</button>
-        </>
-      ) : (
-        <>
-          {canWrite && (
-            <>
-              <select
-                className="icplc-input"
-                style={selectStyle}
-                aria-label="Set participation status for selected"
-                value=""
+        {count > 0 && !pending && (
+          <>
+            {showReview && (
+              <button
+                type="button"
+                className={`icplc-btn${reviewIsPrimary ? ' icplc-btn-primary' : ''}`}
                 disabled={busy}
-                onChange={(e) => {
-                  const s = STATUSES.find((x) => x.value === e.target.value)
-                  if (!s) return
-                  if (s.value === 'confirmed') {
-                    // Skip not_attending participants — they must be re-activated individually first
-                    const eligible = selectedIds.filter(
-                      (id) => selectedParticipants.find((p) => p.id === id)?.participation_status !== 'not_attending'
-                    )
-                    const skippedCount = selectedIds.length - eligible.length
-                    const skipNote = skippedCount > 0 ? ` (${skippedCount} Not Attending skipped)` : ''
-                    if (eligible.length === 0) {
-                      setNote({ ok: false, text: 'All selected are Not Attending — re-activate them individually first.' })
-                      return
-                    }
-                    ask(
-                      `Confirm ${eligible.length} participant${eligible.length !== 1 ? 's' : ''}?${skipNote}`,
-                      async () => {
-                        await updateMut.mutateAsync({ ids: eligible, fields: { participation_status: 'confirmed' }, userId })
-                        if (skippedCount > 0) setNote({ ok: true, text: `Confirmed ${eligible.length}; ${skippedCount} Not Attending skipped.` })
-                      },
-                    )
-                  } else {
-                    ask(`Set status to "${s.label}" for ${who}?`, () => updateMut.mutateAsync({ ids: selectedIds, fields: { participation_status: s.value }, userId }))
-                  }
-                }}
+                onClick={startReview}
               >
-                <option value="">Set status…</option>
-                {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
+                <ClipboardCheck size={14} aria-hidden /> Mark reviewed
+              </button>
+            )}
 
-              {DOC_FIELDS.map(({ field, label, options }) => (
-                <select
-                  key={field}
-                  className="icplc-input"
-                  style={selectStyle}
-                  aria-label={`Set ${label.toLowerCase()} for selected`}
-                  value=""
-                  disabled={busy}
-                  onChange={(e) => {
-                    const opt = options.find(([v]) => v === e.target.value)
-                    if (opt) ask(`Set ${label.toLowerCase()} to "${opt[1]}" for ${who}?`, () => updateMut.mutateAsync({ ids: selectedIds, fields: { [field]: opt[0] }, userId }))
-                  }}
-                >
-                  <option value="">{label}…</option>
-                  {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-              ))}
+            {canEmail && (
+              <button
+                type="button"
+                className="icplc-btn"
+                disabled={busy}
+                onClick={onEmail}
+              >
+                <Mail size={14} aria-hidden /> Email selected
+              </button>
+            )}
 
+            {canWrite && (
               <select
                 className="icplc-input"
                 style={selectStyle}
@@ -160,106 +159,138 @@ export default function BulkActionBar({ eventId, selectedIds, selectedParticipan
                 disabled={busy || tags.length === 0}
                 onChange={(e) => {
                   const t = tags.find((x) => x.id === e.target.value)
-                  if (t) ask(`Add tag "${t.name}" to ${who}?`, () => addTagMut.mutateAsync({ ids: selectedIds, tagId: t.id, addedBy: userId }))
+                  if (t) startTag('add', t)
                 }}
               >
                 <option value="">Add tag…</option>
                 {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
+            )}
 
-              <select
-                className="icplc-input"
-                style={selectStyle}
-                aria-label="Remove a tag from selected"
-                value=""
-                disabled={busy || tags.length === 0}
-                onChange={(e) => {
-                  const t = tags.find((x) => x.id === e.target.value)
-                  if (t) ask(`Remove tag "${t.name}" from ${who}?`, () => removeTagMut.mutateAsync({ ids: selectedIds, tagId: t.id }))
-                }}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="icplc-btn"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((v) => !v)}
               >
-                <option value="">Remove tag…</option>
-                {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+                <MoreHorizontal size={14} aria-hidden /> More
+              </button>
+              {menuOpen && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute', bottom: '110%', left: 0, minWidth: 220, zIndex: 20,
+                    background: 'var(--icplc-surface, #fff)', border: '1px solid var(--icplc-border, #ddd)',
+                    borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.16)', padding: 6, display: 'flex', flexDirection: 'column', gap: 4,
+                  }}
+                >
+                  {canWrite && (
+                    <select
+                      className="icplc-input"
+                      aria-label="Remove a tag from selected"
+                      value=""
+                      disabled={busy || tags.length === 0}
+                      onChange={(e) => {
+                        const t = tags.find((x) => x.id === e.target.value)
+                        if (t) startTag('remove', t)
+                      }}
+                    >
+                      <option value="">Remove tag…</option>
+                      {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  )}
+                  <button type="button" role="menuitem" className="icplc-btn" onClick={() => exportRows('selected', selection.selectedRows)}>
+                    <Download size={14} aria-hidden /> Export selected ({count})
+                  </button>
+                  <button type="button" role="menuitem" className="icplc-btn" disabled={filteredRows.length === 0} onClick={() => exportRows('filtered', filteredRows)}>
+                    <Download size={14} aria-hidden /> Export filtered ({filteredRows.length})
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
-              {/* Mark FNR in bulk — skips participants with existing flight/travel data or Not Attending status */}
-              <select
-                className="icplc-input"
-                style={selectStyle}
-                aria-label="Mark flight not required for selected"
-                value=""
-                disabled={busy}
-                onChange={(e) => {
-                  const reason = e.target.value
-                  if (!reason) return
-                  // Build eligible set using the same canonical predicate as the server re-check
-                  const eligible = selectedParticipants.filter(
-                    (pt) => selectedIds.includes(pt.id) && !hasFlightData(pt) && pt.participation_status !== 'not_attending'
-                  )
-                  const skippedFlight = selectedParticipants.filter(
-                    (pt) => selectedIds.includes(pt.id) && hasFlightData(pt)
-                  ).length
-                  const skippedNotAttending = selectedParticipants.filter(
-                    (pt) => selectedIds.includes(pt.id) && !hasFlightData(pt) && pt.participation_status === 'not_attending'
-                  ).length
-                  if (eligible.length === 0) {
-                    const reasons = []
-                    if (skippedFlight > 0) reasons.push('have existing flight/travel data')
-                    if (skippedNotAttending > 0) reasons.push('are Not Attending')
-                    setNote({ ok: false, text: `No eligible participants — all selected ${reasons.join(' or ')}.` })
-                    return
-                  }
-                  const skipParts = []
-                  if (skippedFlight > 0) skipParts.push(`${skippedFlight} with existing flight data`)
-                  if (skippedNotAttending > 0) skipParts.push(`${skippedNotAttending} Not Attending`)
-                  const conflictNote = skipParts.length > 0 ? ` (${skipParts.join(', ')} skipped)` : ''
-                  ask(
-                    `Mark flight not required for ${eligible.length} participant${eligible.length !== 1 ? 's' : ''}?${conflictNote}`,
-                    async () => {
-                      const result = await fnrMut.mutateAsync({ ids: eligible.map((pt) => pt.id), reason, userId })
-                      if (result.skipped > 0) {
-                        const noteParts = []
-                        if (result.skippedFlight > 0) noteParts.push(`${result.skippedFlight} with flight data`)
-                        if (result.skippedNotAttending > 0) noteParts.push(`${result.skippedNotAttending} Not Attending`)
-                        setNote({ ok: true, text: `FNR set for ${result.applied}; ${noteParts.join(', ')} skipped by server re-check.` })
-                      }
-                    },
-                  )
-                }}
-              >
-                <option value="">Mark FNR…</option>
-                {FLIGHT_NOT_REQUIRED_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
+        {pending?.kind === 'tag' && (
+          <>
+            <span style={{ fontSize: 13 }}>{pending.text}</span>
+            <button type="button" className="icplc-btn icplc-btn-primary" disabled={busy} onClick={() => { const run = pending.run; setPending(null); run() }}>Apply</button>
+            <button type="button" className="icplc-btn" onClick={() => setPending(null)}>Cancel</button>
+          </>
+        )}
+
+        <span style={{ flex: 1 }} />
+        {count > 0 && (
+          <button type="button" className="icplc-btn" onClick={() => { selection.clear(); setPending(null); setMenuOpen(false) }} aria-label="Clear selection">
+            <X size={14} aria-hidden /> Clear
+          </button>
+        )}
+      </div>
+
+      {partition && (
+        <div role="group" aria-label="Confirm documentation review" style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div>
+            <strong>{count} selected</strong>
+            <div>Eligible: {partition.eligible.length}</div>
+            <div>Already reviewed: {partition.already_reviewed.length}</div>
+            <div>
+              Cannot review: {partition.cannot_review.length}
+              {partition.cannot_review.length > 0 && (
+                <span style={{ color: 'var(--icplc-text-soft, #666)' }}>{' '}({cannotSummary(partition.cannot_review)})</span>
+              )}
+            </div>
+          </div>
+          {partition.eligible.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <span>Mark {partition.eligible.length} as documentation reviewed?</span>
+              <button type="button" className="icplc-btn icplc-btn-primary" disabled={busy} onClick={applyReview}>
+                Mark {partition.eligible.length} reviewed
+              </button>
+              <button type="button" className="icplc-btn" onClick={() => setPending(null)}>Cancel</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span>Nobody in this selection needs a documentation review.</span>
+              <button type="button" className="icplc-btn" onClick={() => setPending(null)}>Close</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {result && (
+        <div role="status" style={{ fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <strong>{result.title}</strong>
+            <span style={{ flex: 1 }} />
+            <button type="button" className="icplc-btn" onClick={dismiss} aria-label="Dismiss result"><X size={12} aria-hidden /></button>
+          </div>
+          {result.error && <div style={{ color: 'var(--icplc-red, #B42318)' }}>Failed: {result.error}</div>}
+          {result.summary && (
+            <>
+              <div>
+                {STATUS_ORDER.filter((s) => result.summary.counts[s]).map((s) => `${result.summary.counts[s]} ${RESULT_LABELS[s]}`).join(' · ') || 'No participants'}
+              </div>
+              {result.summary.reasons.length > 0 && (
+                <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--icplc-text-soft, #666)' }}>
+                  {result.summary.reasons.map((r) => <li key={`${r.status}:${r.reason}`}>{r.label} — {r.count}</li>)}
+                </ul>
+              )}
             </>
           )}
-
-          <button
-            type="button"
-            className="icplc-btn"
-            onClick={() => {
-              downloadCsv(`icplc-people-${new Date().toISOString().slice(0, 10)}.csv`, participantsToCsv(selectedParticipants))
-              setNote({ ok: true, text: `Exported ${who}` })
-            }}
-          >
-            <Download size={14} aria-hidden /> Export CSV
-          </button>
-
-          {canEmail && (
-            <button type="button" className="icplc-btn" onClick={onEmail}>
-              <Mail size={14} aria-hidden /> Email
-            </button>
-          )}
-        </>
+          {result.note && <div style={{ color: 'var(--icplc-text-soft, #666)' }}>{result.note}</div>}
+        </div>
       )}
-
-      {note && (
-        <span role="status" style={{ fontSize: 12.5, color: note.ok ? 'var(--icplc-green)' : 'var(--icplc-red)' }}>{note.text}</span>
-      )}
-
-      <span style={{ flex: 1 }} />
-      <button type="button" className="icplc-btn" onClick={onClear} aria-label="Clear selection">
-        <X size={14} aria-hidden /> Clear
-      </button>
     </div>
   )
+}
+
+function cannotSummary(rows) {
+  const by = {}
+  for (const p of rows) {
+    const label = CANNOT_REVIEW_REASONS[classifyForReview(p).reason] || 'Other'
+    by[label] = (by[label] || 0) + 1
+  }
+  return Object.entries(by).map(([k, v]) => `${k} ${v}`).join(', ')
 }

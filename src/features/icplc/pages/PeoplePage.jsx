@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { UserPlus } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useAuth } from '../../../hooks/useAuth.js'
@@ -8,11 +8,13 @@ import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
 import { useICPLCTargets } from '../hooks/useICPLCTargets.js'
 import { useUpdateProfile } from '../hooks/useICPLCProfile.js'
 import WorkingListTable from '../components/WorkingListTable.jsx'
+import BulkActionBar from '../components/BulkActionBar.jsx'
+import { useRowSelection } from '../hooks/useRowSelection.js'
+import { absentToggleNotice, applyAbsentVisibility } from '../lib/bulkSelection.js'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import StatusKey from '../components/StatusKey.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import BoardPage from './BoardPage.jsx'
-import BulkActionBar from '../components/BulkActionBar.jsx'
 import ICPLCEmailComposer, { EmailParticipantsButton, canEstimateICPLCEmail } from '../components/ICPLCEmailComposer.jsx'
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import { applyClientFilters, countAttentionCategories } from '../lib/participantFilters.js'
@@ -23,19 +25,14 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
+  // Operational People view hides Not Attending by default, like Needs Attention, Documentation and Travel.
+  const [showAbsent, setShowAbsent] = useState(false)
+  const [notice, setNotice] = useState(null) // { ok, text } feedback for the per-row Absent toggle
   const [showEmail, setShowEmail] = useState(false)
   const [emailSelectedOnly, setEmailSelectedOnly] = useState(false)
-  const [selectedIds, setSelectedIds] = useState(() => new Set())
   const { profile } = useAuth()
   const canEmail = canEstimateICPLCEmail(profile)
   const updateProfile = useUpdateProfile()
-  const setSelection = useCallback((ids) => setSelectedIds(new Set(ids)), [])
-  const toggleSelect = useCallback((id) => setSelectedIds((prev) => {
-    const next = new Set(prev)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    return next
-  }), [])
 
   // Same hook (and cache keys) as the Overview, so opening the Working List after the Overview
   // reuses the already-fetched participants, registrations and identity maps instead of refetching.
@@ -60,7 +57,7 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
 
   const targets = useICPLCTargets(eventId)
 
-  const displayedParticipants = useMemo(() => applyClientFilters(
+  const filteredParticipants = useMemo(() => applyClientFilters(
     filterParticipantsByWorkingListView(
       participantsWithRegistrationCoverage,
       registrations,
@@ -73,6 +70,31 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
     filters,
     { targets },
   ), [eventId, filters, participantsWithRegistrationCoverage, registrationMaps, registrations, targets])
+
+  // Asking for Not Attending in the Participation filter is an explicit request and is honoured.
+  const explicitlyAbsent = (filters.participation_status || []).includes('not_attending')
+  const absentCount = useMemo(
+    () => filteredParticipants.filter((p) => p.participation_status === 'not_attending').length,
+    [filteredParticipants],
+  )
+  const displayedParticipants = useMemo(
+    () => applyAbsentVisibility(filteredParticipants, { showAbsent, participationFilter: filters.participation_status }),
+    [filteredParticipants, showAbsent, filters.participation_status],
+  )
+
+  function toggleAbsent(p) {
+    const next = p.participation_status === 'not_attending' ? 'tracking' : 'not_attending'
+    updateProfile.mutate(
+      { id: p.id, fields: { participation_status: next } },
+      {
+        onSuccess: () => setNotice(absentToggleNotice(p, next, showAbsent || explicitlyAbsent)),
+        onError: (err) => setNotice({ ok: false, text: `Could not update ${p.full_name}: ${err?.message || 'save failed'}` }),
+      },
+    )
+  }
+
+  // Any material filter change (including the Not Attending toggle and switching view) clears the selection.
+  const selection = useRowSelection({ resetKey: JSON.stringify([filters, showAbsent, view]) })
 
   const viewToggle = (
     <div
@@ -147,8 +169,15 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
 
       {/* Count */}
       <div style={{ marginBottom: 12 }}>
-        <div role="status" style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>
-          {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div role="status" style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>
+            {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
+          </div>
+          {absentCount > 0 && !explicitlyAbsent && (
+            <button type="button" className="icplc-chip" aria-pressed={showAbsent} onClick={() => setShowAbsent((v) => !v)}>
+              {showAbsent ? 'Hiding not attending' : `Include not attending (${absentCount})`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -164,28 +193,30 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
         </div>
       )}
 
+      {notice && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, marginBottom: 8, color: notice.ok ? 'var(--icplc-text, inherit)' : 'var(--icplc-red, #B42318)' }}>
+          <span>{notice.text}</span>
+          <button type="button" className="icplc-btn" aria-label="Dismiss message" onClick={() => setNotice(null)}>×</button>
+        </div>
+      )}
+
       <WorkingListTable
         participants={displayedParticipants}
         loading={loading}
         onOpen={openProfile}
-        selectedIds={canWrite || canEmail ? selectedIds : undefined}
-        onToggleSelect={canWrite || canEmail ? toggleSelect : undefined}
-        onSetSelection={setSelection}
-        onToggleAbsent={canWrite ? (p) => updateProfile.mutate({ id: p.id, fields: { participation_status: p.participation_status === 'not_attending' ? 'tracking' : 'not_attending' } }) : undefined}
+        onToggleAbsent={canWrite ? toggleAbsent : undefined}
+        selection={selection}
       />
 
-      {selectedIds.size > 0 && (
-        <BulkActionBar
-          eventId={eventId}
-          selectedIds={[...selectedIds]}
-          selectedParticipants={displayedParticipants.filter((p) => selectedIds.has(p.id))}
-          userId={profile?.id}
-          canWrite={canWrite}
-          canEmail={canEmail}
-          onEmail={() => { setEmailSelectedOnly(true); setShowEmail(true) }}
-          onClear={() => setSelectedIds(new Set())}
-        />
-      )}
+      <BulkActionBar
+        eventId={eventId}
+        selection={selection}
+        context="people"
+        canWrite={canWrite}
+        filteredRows={displayedParticipants}
+        canEmail={canEmail}
+        onEmail={() => { setEmailSelectedOnly(true); setShowEmail(true) }}
+      />
 
       {activeProfileId && (
         <ParticipantProfileDrawer
@@ -201,7 +232,7 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
           eventId={eventId}
           eventName={config?.event_name}
           sourceLabel={emailSelectedOnly ? 'Selected people' : 'Current list'}
-          participants={emailSelectedOnly ? displayedParticipants.filter((p) => selectedIds.has(p.id)) : displayedParticipants}
+          participants={emailSelectedOnly ? selection.selectedRows : displayedParticipants}
           open
           onClose={() => { setShowEmail(false); setEmailSelectedOnly(false) }}
         />
