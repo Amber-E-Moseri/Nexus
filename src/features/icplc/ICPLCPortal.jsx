@@ -143,7 +143,7 @@ export default function ICPLCPortal({
             Viewing <strong>{scopedSubgroup}</strong> — your subgroup
           </div>
         )}
-        <div role="tabpanel" className="icplc-panel">
+        <div role="tabpanel" className={`icplc-panel${resolvedTab === 'needs_attention' ? ' icplc-panel--sticky-bar' : ''}`}>
           {isLegacyTab && (
             <div data-icplc-legacy-tab={LEGACY_KEY}>
               {legacyContent}

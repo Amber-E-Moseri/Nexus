@@ -7,7 +7,7 @@ import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
 import { buildReviewItems, classifyForReview, partitionForReview, RESULT_LABELS, CANNOT_REVIEW_REASONS, summarizeBulkResults } from '../lib/bulkReview.js'
 import { downloadBulkExport } from '../lib/bulkExport.js'
 
-const selectStyle = { minHeight: 34, width: 'auto', maxWidth: 170 }
+const selectStyle = { width: 'auto', maxWidth: 170 }
 const STATUS_ORDER = ['updated', 'already_reviewed', 'no_change', 'skipped_stale', 'skipped_ineligible', 'failed']
 
 /**
@@ -226,7 +226,7 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
 
         <span style={{ flex: 1 }} />
         {count > 0 && (
-          <button type="button" className="icplc-btn" onClick={() => { selection.clear(); setPending(null); setMenuOpen(false) }} aria-label="Clear selection">
+          <button type="button" className="icplc-btn icplc-bulk-clear" onClick={() => { selection.clear(); setPending(null); setMenuOpen(false) }} aria-label="Clear selection">
             <X size={14} aria-hidden /> Clear
           </button>
         )}

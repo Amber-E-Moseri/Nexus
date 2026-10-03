@@ -5,6 +5,8 @@ import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   openProfile: vi.fn(),
@@ -324,5 +326,12 @@ describe('Action workspace', () => {
       fireEvent.click(card('All Actions'))
       expect(names()).toHaveLength(5)
     })
+  })
+
+  it('keeps the bulk bar sticky: Action\'s tab panel must not be an overflow scroll container', () => {
+    // An overflow:auto ancestor captures position:sticky, which left the bar stranded at the bottom of long lists.
+    const read = (f) => readFileSync(resolve(process.cwd(), 'src/features/icplc', f), 'utf8')
+    expect(read('ICPLCPortal.jsx')).toMatch(/needs_attention'\s*\?\s*' icplc-panel--sticky-bar'/)
+    expect(read('icplc.css')).toMatch(/\.icplc-panel--sticky-bar\s*\{\s*overflow:\s*visible/)
   })
 })

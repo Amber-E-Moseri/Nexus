@@ -1022,3 +1022,27 @@
   .icplc-action-more { grid-column: 1 / -1; }
   .icplc-bulk-bar-group .icplc-btn, .icplc-bulk-bar-group select { flex: 1 1 auto; min-height: 40px; }
 }
+
+/* Action: long subgroup names must not push the chip's remove icon onto its own line */
+.icplc-action-active-filters .icplc-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; text-align: left; white-space: normal; }
+.icplc-action-active-filters .icplc-chip svg { flex: none; }
+@media (max-width: 720px) {
+  .icplc-action-summary { grid-template-columns: repeat(3, 1fr); }
+  .icplc-action-stat { padding: 8px 10px; }
+  .icplc-action-stat strong { font-size: 18px; }
+  .icplc-action-active-filters .icplc-chip, .icplc-action-active-filters .icplc-btn { min-height: 40px; }
+}
+.icplc-bulk-bar-group select { min-height: 34px; }
+@media (max-width: 720px) {
+  /* beats the mobile `.icplc-content .icplc-btn/.icplc-input` compaction so touch targets stay >= 40px */
+  .icplc-content .icplc-bulk-bar-group select, .icplc-content .icplc-bulk-bar-group .icplc-btn, .icplc-content .icplc-bulk-clear { min-height: 40px; }
+}
+
+/* Action: an overflow:auto ancestor captures position:sticky, so the bulk bar never stuck. Action has no wide tables
+   (rows wrap), so its panel can leave overflow visible and let the page scroller drive the sticky bar. */
+.icplc-panel--sticky-bar { overflow: visible; }
+@media (max-width: 720px) {
+  /* mobile bulk bar: "N selected" and Clear share the first row; the actions wrap below */
+  .icplc-bulk-clear { order: 1; margin-left: auto; }
+  .icplc-bulk-bar-group { order: 2; width: 100%; }
+}
