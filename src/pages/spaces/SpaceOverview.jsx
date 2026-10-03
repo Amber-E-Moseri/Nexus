@@ -2082,21 +2082,31 @@ export default function SpaceOverview() {
   }, [effectiveRole, profile?.id])
 
   useEffect(() => {
-    if (!detail?.space) return
+    let active = true
+    if (!detail?.space || detail.space.id !== spaceId) {
+      setSpaceMembers([])
+      setSpaceMembersError('')
+      setSpaceMembersLoading(false)
+      return () => { active = false }
+    }
 
     setSpaceMembersLoading(true)
     setSpaceMembersError('')
     setSpaceMembers([])
     getSpaceMembers(detail.space)
       .then((members) => {
+        if (!active) return
         setSpaceMembers(members)
       })
       .catch((error) => {
+        if (!active) return
         console.error('Failed to load space members', error)
         setSpaceMembers([])
         setSpaceMembersError(error?.message ?? 'Failed to load members.')
       })
-      .finally(() => setSpaceMembersLoading(false))
+      .finally(() => {
+        if (active) setSpaceMembersLoading(false)
+      })
     getSpaceSprints(spaceId).then(setSpaceSprints).catch(() => setSpaceSprints([]))
     getSpaceMeetings(spaceId).then(setSpaceMeetings).catch(() => setSpaceMeetings([]))
     getSpaceTasks(spaceId)
@@ -2114,6 +2124,8 @@ export default function SpaceOverview() {
     Promise.all([getFolders(spaceId), getLists(spaceId)])
       .then(([folders, lists]) => setTreeData({ folders: folders ?? [], lists: lists ?? [] }))
       .catch(() => setTreeData({ folders: [], lists: [] }))
+
+    return () => { active = false }
   }, [detail?.space, spaceId])
 
   useEffect(() => {
