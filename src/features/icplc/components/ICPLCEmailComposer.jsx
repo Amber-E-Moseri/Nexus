@@ -149,6 +149,7 @@ export default function ICPLCEmailComposer({
   const [error, setError] = useState(null)
   const [filters, setFilters] = useState({})
   const [excludedIds, setExcludedIds] = useState(() => new Set())
+  const [sampleRecipientId, setSampleRecipientId] = useState('')
 
   const { eligibleCandidates, filtered, effective } = useMemo(
     () => narrowICPLCEmailCandidates(participants, filters, excludedIds),
@@ -168,7 +169,10 @@ export default function ICPLCEmailComposer({
       .sort()
       .map((value) => ({ value, label: value.replace(/^BLW /, '') }))
   ), [counts.subgroup])
-  const vars = useMemo(() => previewVars(effective), [effective])
+  const sampleParticipant = useMemo(() => (
+    effective.find((participant) => participant.id === sampleRecipientId) || effective[0] || null
+  ), [effective, sampleRecipientId])
+  const vars = useMemo(() => previewVars(sampleParticipant ? [sampleParticipant] : effective), [effective, sampleParticipant])
   const subjectPreview = useMemo(() => replaceMergeTags(subject || '', vars), [subject, vars])
   const participantIds = useMemo(() => effective.map((p) => p.id).filter(Boolean), [effective])
   const canContinue = subject.trim().length > 0 && body.trim().length > 0 && stats.unique > 0 && !busy
@@ -342,7 +346,26 @@ export default function ICPLCEmailComposer({
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--icplc-text-soft)', marginBottom: 6 }}>Preview</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--icplc-text-soft)' }}>Preview</div>
+                  {effective.length > 0 && (
+                    <label className="icplc-label" style={{ fontSize: 11, margin: 0, minWidth: 180 }}>
+                      Sample recipient
+                      <select
+                        className="icplc-input"
+                        value={sampleParticipant?.id || ''}
+                        onChange={(event) => setSampleRecipientId(event.target.value)}
+                        style={{ minHeight: 32, padding: '4px 8px', fontSize: 12 }}
+                      >
+                        {effective.map((participant) => (
+                          <option key={participant.id} value={participant.id}>
+                            {displayName(participant)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
                 <div
                   style={{ maxHeight: 390, overflow: 'auto', border: '1px solid var(--icplc-border)', borderRadius: 8, background: '#fff' }}
                   dangerouslySetInnerHTML={{ __html: renderEmailHtml(body, vars) }}
