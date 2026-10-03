@@ -8,19 +8,17 @@ import DocumentationPage from './pages/DocumentationPage.jsx'
 import TravelPage from './pages/TravelPage.jsx'
 import ImportsPage from './pages/ImportsPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
-import RegistrationsPage from './pages/RegistrationsPage.jsx'
 
 // maturity: undefined = READY (no tag), 'beta' = BETA tag
 const PRIMARY_TABS = [
   { key: 'overview',        label: 'Overview',        short: 'Overview' },
-  { key: 'needs_attention', label: 'Needs Attention',  short: 'Attention' },
+  { key: 'needs_attention', label: 'Action',           short: 'Action' },
   { key: 'people',          label: 'People',           short: 'People' },
   { key: 'documentation',   label: 'Documentation',    short: 'Docs' },
   { key: 'travel',          label: 'Travel',           short: 'Travel', maturity: 'beta' },
 ]
 
 const MANAGE_ITEMS = [
-  { key: 'registrations', label: 'Registrations' },
   { key: 'imports',       label: 'Imports',       requiresWrite: true },
   { key: 'settings',      label: 'Settings',      requiresAdmin: true },
 ]
@@ -169,11 +167,8 @@ export default function ICPLCPortal({
               {resolvedTab === 'travel' && (
                 <TravelPage canWrite={canWrite} />
               )}
-              {resolvedTab === 'registrations' && (
-                <RegistrationsPage canWrite={canWrite} />
-              )}
               {resolvedTab === 'imports' && canWrite && (
-                <ImportsPage />
+                <ImportsPage canWrite={canWrite} />
               )}
               {resolvedTab === 'settings' && canAdmin && (
                 <SettingsPage onConfigReload={onConfigReload} />

@@ -1,7 +1,7 @@
 /**
  * ICPLC Operational UX / IA — regression tests.
  *
- * Covers navigation structure, People view, Needs Attention work queue,
+ * Covers navigation structure, People view, Action work queue,
  * drawer operational summary, documentation problems-first, travel problems-first,
  * board readiness grouping, and Not Attending toggle behavior.
  *
@@ -75,18 +75,21 @@ function registered(over = {}) {
 
 describe('navigation structure', () => {
   const PRIMARY_TABS = ['overview', 'needs_attention', 'people', 'documentation', 'travel']
-  const MANAGE_ITEMS = ['registrations', 'imports', 'settings']
+  const PRIMARY_LABELS = ['Overview', 'Action', 'People', 'Documentation', 'Travel']
+  const MANAGE_ITEMS = ['imports', 'settings']
 
   it('five primary tabs are defined', () => {
     expect(PRIMARY_TABS).toHaveLength(5)
+    expect(PRIMARY_LABELS).toContain('Action')
+    expect(PRIMARY_LABELS).not.toContain('Needs Attention')
   })
 
   it('board is not a primary tab', () => {
     expect(PRIMARY_TABS).not.toContain('board')
   })
 
-  it('manage destinations contain registrations, imports, settings', () => {
-    expect(MANAGE_ITEMS).toContain('registrations')
+  it('manage destinations contain imports and settings, not the old standalone registrations page', () => {
+    expect(MANAGE_ITEMS).not.toContain('registrations')
     expect(MANAGE_ITEMS).toContain('imports')
     expect(MANAGE_ITEMS).toContain('settings')
   })
@@ -118,9 +121,9 @@ describe('people: effectiveParticipationStatus not duplicated', () => {
   })
 })
 
-// ─── C. Needs Attention work queue ──────────────────────────────────────────────
+// ─── C. Action work queue ───────────────────────────────────────────────────────
 
-describe('needs attention deduplication and ordering', () => {
+describe('action queue deduplication and ordering', () => {
   it('healthy participant is absent from the queue', () => {
     const p = registered()
     expect(needsAttentionNow(p)).toBe(false)
@@ -171,8 +174,7 @@ describe('needs attention deduplication and ordering', () => {
       registration_status: 'not_registered',
     })
     // attentionCategoryKeys always returns [] for not_attending — by canonical design.
-    // The showAbsent toggle on NeedsAttentionPage hides absent participants from OTHER pages,
-    // but not_attending can never appear in the attention queue regardless.
+    // Not Attending participants can never appear in the Action queue regardless.
     expect(needsAttentionNow(p)).toBe(false)
   })
 })

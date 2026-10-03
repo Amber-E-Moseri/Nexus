@@ -11,7 +11,7 @@ const selectStyle = { minHeight: 34, width: 'auto', maxWidth: 170 }
 const STATUS_ORDER = ['updated', 'already_reviewed', 'no_change', 'skipped_stale', 'skipped_ineligible', 'failed']
 
 /**
- * Contextual bulk-action bar, shared by Needs Attention, People, Documentation and Travel.
+ * Contextual bulk-action bar, shared by Action, People, Documentation and Travel.
  *
  * Phase 1/2 actions only: Mark Documentation Reviewed, Add / Remove tag, Export selected / filtered.
  * Everything that changes participation, travel exceptions, registration, passport/visa values, assistance,
@@ -78,8 +78,8 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
       setResult({
         title: 'Documentation review',
         summary: summarizeBulkResults(results),
-        // Bulk review records the acknowledgement only. Needs Attention is recalculated by the canonical rules.
-        note: 'Reviewing records that staff looked at what is missing. Registration, visa, passport and travel issues are unaffected, so those people stay in Needs Attention.',
+        // Bulk review records the acknowledgement only. Action is recalculated by the canonical rules.
+        note: 'Reviewing records that staff looked at what is missing. Registration, visa, passport and travel issues are unaffected, so those people stay in Action when another canonical reason still applies.',
       })
     } catch (err) {
       setResult({ title: 'Documentation review', error: err.message || 'Could not save' })

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
 import { useICPLCImport, IMPORT_STEPS, isMatchedRow } from '../hooks/useICPLCImport.js'
 import { RESIDENCY_STATUS_LABELS } from '../../registration/icplcDocReadiness.js'
+import RegistrationsPage from './RegistrationsPage.jsx'
 
 // Minimal RFC4180-style CSV parser (quoted fields, CRLF).
 function parseCsv(text) {
@@ -526,7 +527,7 @@ function CMPSyncPanel() {
   )
 }
 
-export default function ImportsPage() {
+export default function ImportsPage({ canWrite }) {
   const { config } = useICPLC()
   const fileRef = useRef(null)
   const [source, setSource] = useState('csv')
@@ -544,6 +545,7 @@ export default function ImportsPage() {
         {[
           { key: 'working-list', label: 'Working List CSV' },
           { key: 'csv', label: 'Registration CSV' },
+          { key: 'registration-sources', label: 'Registration Sources' },
           { key: 'cmp', label: 'CMP Documentation Sync', maturity: 'beta' },
         ].map((s) => (
           <button
@@ -568,6 +570,18 @@ export default function ImportsPage() {
       </div>
 
       {source === 'working-list' && <WorkingListPanel fileRef={fileRef} config={config} onReset={() => {}} />}
+
+      {source === 'registration-sources' && (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div>
+            <h3 style={{ margin: '0 0 6px' }}>Registration Sources</h3>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13 }}>
+              Review raw registration submissions, confirm possible matches, and add unmatched source records to the Working List.
+            </p>
+          </div>
+          <RegistrationsPage canWrite={canWrite} />
+        </div>
+      )}
 
       {source === 'cmp' && <CMPSyncPanel />}
 
