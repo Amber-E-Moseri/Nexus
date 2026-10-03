@@ -47,10 +47,9 @@ where n.nspname = 'public' and p.proname in (
   'icplc_has_event_team_membership', 'icplc_resolve_unmatched_row', 'icplc_backfill_participants_from_import')
 order by 1, 2;
 
--- 8. Which migrations production believes it has applied (to compare with the repository's 784 + hardening files)
+-- 8. Which migrations production believes it has applied (versions and names only; compare with supabase/migrations)
 select count(*) as applied_count, max(version) as latest_version from supabase_migrations.schema_migrations;
-select version from supabase_migrations.schema_migrations
-where version >= '20270718000000' order by version;
+select version, name from supabase_migrations.schema_migrations order by version;
 
 -- 9. Does anything in production reference sprint_id on sprint_team_members (column default / dependent objects)?
 select 'view/function mentions sprint_team_members.sprint_id' as what, p.proname as name

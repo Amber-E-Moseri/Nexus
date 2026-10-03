@@ -25,8 +25,10 @@ must not wait for the daily clean-up job.
 * Team rows are never deleted/changed by expiry; renewing (later end date, or non-temporary) restores access.
 * Any non-`active` status (inactive, archived, invited, pending_activation) loses sprint/team-derived ICPLC access.
 * Unchanged on purpose: platform roles, the Programs department, the service role, the generic `is_sprint_member()` used across
-  Nexus, and **Group Pastor** access (participant-derived, not sprint-derived). Open follow-up: should an inactive Group Pastor
-  keep their own-subgroup read? Not decided here.
+  Nexus. **Group Pastor** access is participant-derived, and now (`20271005000005`) also requires an active account: only the two
+  policy arms that GRANT a GP read (participants, participant tags) use `icplc_gp_has_active_access()`; `icplc_gp_is_authorized()` is
+  unchanged because it is also used as a RESTRICTION (no GP writes/imports). The participant row is never altered by account status;
+  reactivation restores access while the relationship is valid; duplicate/ambiguous GP mappings still fail closed.
 * The helpers that take an explicit user id are service-role only, so signed-in users cannot probe other people's access.
 * Consequence worth knowing before population: newly invited people (`invited` / `pending_activation`) have no ICPLC
   sprint/team access until their account is `active`.

@@ -159,7 +159,7 @@ beforeAll(async () => {
     return
   }
   await mkUser('superAdmin', 'super_admin')
-  for (const k of ['x', 'xm', 'xf', 'writerB', 'staff1', 'staff2', 'staff3', 'target', 'lead', 'plainMember', 'stranger', 'multi', 'permM', 'tempOk', 'tempExp', 'tempExp2', 'tempRenew', 'inactiveU', 'teamOnly', 'tempFin']) await mkUser(k)
+  for (const k of ['x', 'xm', 'xf', 'writerB', 'staff1', 'staff2', 'staff3', 'target', 'lead', 'plainMember', 'stranger', 'multi', 'permM', 'tempOk', 'tempExp', 'tempExp2', 'tempRenew', 'inactiveU', 'teamOnly', 'tempFin', 'gp1', 'gpDup', 'activeOther']) await mkUser(k)
   await mkUser('manager', 'super_admin')
 
   await mkSprint('A', `ICPLC ${TAG} A`); await mkSprint('B', `ICPLC ${TAG} B`)
@@ -720,5 +720,84 @@ describe('atomic sprint team membership', () => {
     } finally {
       await sql('alter table public.sprint_team_members drop column if exists sprint_id')
     }
+  })
+})
+
+// ═════════════════════════ 8. GROUP PASTOR ACCESS REQUIRES AN ACTIVE ACCOUNT ═════════════════════════════
+describe('Group Pastor subgroup access requires an active account', () => {
+  const CENTRAL = 'BLW Central Subgroup A'; const WEST = 'BLW West Subgroup B'
+  let tagId
+  const gpRow = (event, name, nexusUser, subgroup = CENTRAL, leadership = 'Group Pastor') => sql(
+    'insert into public.icplc_participants (event_id, full_name, subgroup, leadership, nexus_user_id) values ($1,$2,$3,$4,$5)',
+    [ev[event], name, subgroup, leadership, nexusUser ? users[nexusUser] : null])
+  const gpRelationship = async (user) => (await sql("select count(*)::int n from public.icplc_participants where nexus_user_id = $1 and lower(btrim(leadership)) = 'group pastor'", [users[user]])).rows[0].n
+  const tagsVisible = async (user) => {
+    const { data, error } = await clients[user].from('icplc_participant_tags').select('participant_id, tag_id')
+    if (error) throw new Error(error.message)
+    return data.length
+  }
+
+  beforeAll(async () => {
+    if (!available) return
+    // event G is NOT linked to any sprint: GP access is participant-derived, never sprint-derived
+    await mkEvent('G', `ICPLC ${TAG} G`, null)
+    await gpRow('G', 'G pastor', 'gp1'); await gpRow('G', 'G central member', null, CENTRAL, null); await gpRow('G', 'G west member', null, WEST, null)
+    await gpRow('G', 'Dup pastor row 1', 'gpDup'); await gpRow('G', 'Dup pastor row 2', 'gpDup', WEST) // ambiguous mapping
+    tagId = id()
+    await sql('insert into public.icplc_tags (id, event_id, name) values ($1,$2,$3)', [tagId, ev.G, `${TAG} tag`])
+    const central = (await sql("select id from public.icplc_participants where event_id = $1 and full_name = 'G central member'", [ev.G])).rows[0].id
+    await sql('insert into public.icplc_participant_tags (participant_id, tag_id) values ($1,$2)', [central, tagId])
+  })
+
+  it('active GP sees exactly their own subgroup (existing rules), cannot write, and sees its tags', async (ctx) => {
+    need(ctx)
+    expect(await read('gp1', 'G')).toEqual(['Dup pastor row 1', 'G central member', 'G pastor']) // not the West subgroup
+    expect(await write('gp1', 'G')).toBe(0)
+    expect(await tagsVisible('gp1')).toBe(1)
+  })
+
+  it('inactive, archived, invited and pending-activation GPs get nothing; the GP relationship is not altered', async (ctx) => {
+    need(ctx)
+    const before = await gpRelationship('gp1')
+    for (const status of ['inactive', 'archived', 'invited', 'pending_activation']) {
+      await sql('update public.users set status = $2 where id = $1', [users.gp1, status])
+      expect(await read('gp1', 'G'), status).toEqual([])
+      expect(await tagsVisible('gp1'), status).toBe(0)
+      expect(await gpRelationship('gp1'), status).toBe(before) // participant record untouched
+    }
+  })
+
+  it('a reactivated GP gets access back while the relationship is still valid', async (ctx) => {
+    need(ctx)
+    await sql("update public.users set status = 'active' where id = $1", [users.gp1])
+    expect(await read('gp1', 'G')).toEqual(['Dup pastor row 1', 'G central member', 'G pastor'])
+    // relationship no longer valid (not a Group Pastor any more) -> no access even though the account is active
+    await sql("update public.icplc_participants set leadership = null where nexus_user_id = $1", [users.gp1])
+    expect(await read('gp1', 'G')).toEqual([])
+    await sql("update public.icplc_participants set leadership = 'Group Pastor' where nexus_user_id = $1", [users.gp1])
+    expect(await read('gp1', 'G')).toEqual(['Dup pastor row 1', 'G central member', 'G pastor'])
+  })
+
+  it('an unrelated active user is denied; a duplicate/ambiguous GP mapping still fails closed', async (ctx) => {
+    need(ctx)
+    expect(await read('activeOther', 'G')).toEqual([])
+    expect(await read('gpDup', 'G')).toEqual([]) // two Group Pastor rows -> existing fail-closed behaviour preserved
+    expect(await tagsVisible('gpDup')).toBe(0)
+  })
+
+  it('platform behaviour is unchanged: a platform role still reads the event regardless of the GP rules', async (ctx) => {
+    need(ctx)
+    expect((await read('superAdmin', 'G')).length).toBe(5)
+  })
+
+  it('the GP write restriction still applies to an active GP who is also a team writer', async (ctx) => {
+    need(ctx)
+    await sql("update public.users set status = 'active' where id = $1", [users.gp1])
+    await sql('delete from public.sprint_team_members where user_id = $1 and team_id = $2', [users.gp1, tm.tA]).catch(() => {})
+    await join('tA', 'gp1')
+    await sql('update public.event_configs set sprint_id = $2 where id = $1', [ev.G, sp.A])
+    expect(await write('gp1', 'G')).toBe(0) // restriction not loosened
+    await sql('update public.event_configs set sprint_id = null where id = $1', [ev.G])
+    await leave('tA', 'gp1')
   })
 })
