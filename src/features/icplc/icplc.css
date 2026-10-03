@@ -507,7 +507,7 @@
   .icplc-tab { padding: 7px 9px; font-size: 11px; }
 }
 
-/* ── Working List: compact status-tinted table (never collapses to cards) ── */
+/* ── Working List: compact status-tinted desktop table + mobile cards ── */
 .icplc-wl-wrap { overflow-x: auto; border: 1px solid var(--icplc-border); border-radius: 8px; background: var(--icplc-surface); }
 .icplc-wl-table { width: 100%; border-collapse: collapse; min-width: 640px; }
 .icplc-wl-table th {
@@ -529,6 +529,124 @@
 /* Strikethrough is reserved for people staff explicitly marked absent. */
 .is-absent .icplc-wl-name { text-decoration: line-through; color: var(--icplc-text-soft); }
 .is-unregistered td:not(.icplc-wl-num) { opacity: 0.85; }
+
+.icplc-wl-mobile { display: none; }
+.icplc-wl-mobile-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--icplc-border);
+  border-radius: 8px;
+  background: var(--icplc-surface);
+  font-size: 12px;
+  color: var(--icplc-text-soft);
+}
+.icplc-wl-mobile-list {
+  display: grid;
+  gap: 10px;
+}
+.icplc-wl-mobile-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--icplc-text-soft);
+  border: 1px solid var(--icplc-border);
+  border-radius: 8px;
+  background: var(--icplc-surface);
+}
+.icplc-wl-card {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--icplc-border);
+  border-left: 4px solid #9A93AE;
+  border-radius: 8px;
+  background: var(--icplc-surface);
+  cursor: pointer;
+  min-width: 0;
+}
+.icplc-wl-card:hover { background: var(--icplc-grey-bg); }
+.icplc-wl-card:focus-visible {
+  outline: 2px solid var(--icplc-purple);
+  outline-offset: 2px;
+}
+.icplc-wl-card.is-registered {
+  border-left-color: #1F8A4C;
+  background: #F2FAF5;
+}
+.icplc-wl-card.is-unregistered {
+  background: #FAFAFC;
+}
+.icplc-wl-card.is-absent .icplc-wl-card-name {
+  text-decoration: line-through;
+  color: var(--icplc-text-soft);
+}
+.icplc-wl-card-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 9px;
+}
+.icplc-wl-card-person { min-width: 0; }
+.icplc-wl-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--icplc-text);
+  overflow-wrap: anywhere;
+}
+.icplc-wl-card-meta {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--icplc-text-soft);
+  overflow-wrap: anywhere;
+}
+.icplc-wl-card-status,
+.icplc-wl-card-tags,
+.icplc-wl-card-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.icplc-wl-card-attention {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--icplc-amber);
+}
+.icplc-wl-card-attention span {
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--icplc-amber-bg);
+  overflow-wrap: anywhere;
+}
+.icplc-wl-card-footer {
+  justify-content: space-between;
+  gap: 8px;
+}
+.icplc-wl-card-tags .fchip {
+  font-size: 10.5px;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icplc-wl-card-tag-more {
+  font-size: 11px;
+  color: var(--icplc-text-soft);
+}
+.icplc-wl-card-absent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  margin-left: auto;
+  font-size: 11.5px;
+}
 
 /* The profile drawer and dialogs render in a Radix portal (outside .icplc-root),
    so they need the ICPLC tokens themselves or buttons/inputs lose colour and borders. */
@@ -670,3 +788,22 @@
 /* Bulk selection column (People, Documentation, Travel tables). */
 .icplc-wl-select { width: 34px; min-width: 34px; text-align: center; padding-left: 8px; padding-right: 4px; }
 .icplc-select-box { width: 16px; height: 16px; cursor: pointer; accent-color: var(--icplc-purple, #4C2A92); }
+
+@media (max-width: 768px) {
+  .icplc-wl-wrap { display: none; }
+  .icplc-wl-mobile { display: block; }
+  .icplc-wl-card-top {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .icplc-wl-card-top > span:last-child {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .icplc-wl-card-status > span {
+    max-width: 100%;
+  }
+  .icplc-wl-card-absent {
+    width: 100%;
+    justify-content: center;
+  }
+}
