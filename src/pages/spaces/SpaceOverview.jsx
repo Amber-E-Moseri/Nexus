@@ -1715,7 +1715,22 @@ function SpaceTasksPanel({ spaceId, spaceName, canManage, viewMode = 'kanban', s
   )
 }
 
-function SpaceMembersTab({ members, spaceId, spaceType, canTransferOwnership, onOwnershipTransferred }) {
+function formatDepartmentRole(member) {
+  const role = member?.space_role ?? member?.role ?? 'member'
+  return role
+    .split('_')
+    .map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : part)
+    .join(' ')
+}
+
+function isDepartmentLead(member) {
+  return ['dept_lead', 'owner', 'manager'].includes(member?.space_role ?? member?.role)
+}
+
+export function SpaceMembersTab({ members, spaceId, spaceName, spaceType, canManage, membersLoading, membersError, canTransferOwnership, onOwnershipTransferred }) {
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('all')
+
   // For group spaces, show the member management panel
   if (spaceType === 'group') {
     return (
@@ -1727,27 +1742,113 @@ function SpaceMembersTab({ members, spaceId, spaceType, canTransferOwnership, on
     )
   }
 
+  const visibleMembers = members
+    .filter((member) => {
+      if (filter === 'leads') return isDepartmentLead(member)
+      if (filter === 'members') return !isDepartmentLead(member)
+      return true
+    })
+    .filter((member) => {
+      const needle = query.trim().toLowerCase()
+      if (!needle) return true
+      return [member.name, member.email, formatDepartmentRole(member)]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(needle))
+    })
+
   // For other spaces, show the standard members list
   return (
-    <div style={{ overflow: 'hidden', borderRadius: 24, border: '1px solid var(--border)', background: '#fff', boxShadow: 'var(--card-shadow)' }}>
-      {members.length === 0 ? (
-        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>No members found.</div>
-      ) : members.map((member, i) => (
-        <div key={member.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 20px', borderTop: i === 0 ? 'none' : '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: member.avatar_color ?? '#5B34C7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-              {getInitials(member.name ?? member.email)}
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.email}</div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="m-0 text-lg font-semibold text-[var(--text-primary)]">Members</h2>
+            <span className="rounded-full bg-[var(--surface-secondary)] px-2 py-0.5 text-xs font-semibold text-[var(--text-secondary)]">{members.length}</span>
+          </div>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">People who belong to the {spaceName} department.</p>
+        </div>
+        <button
+          type="button"
+          disabled={!canManage}
+          className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          + Add member
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative min-w-[220px] flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search members..."
+            className="w-full rounded-xl border border-[var(--border)] bg-white py-2.5 pl-9 pr-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+          />
+        </div>
+        <div className="flex rounded-xl border border-[var(--border)] bg-white p-1">
+          {[
+            ['all', 'All'],
+            ['leads', 'Leads'],
+            ['members', 'Members'],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setFilter(value)}
+              className={[
+                'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                filter === value ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]',
+              ].join(' ')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ overflow: 'hidden', borderRadius: 16, border: '1px solid var(--border)', background: '#fff', boxShadow: 'var(--card-shadow)' }}>
+        {membersLoading ? (
+          <div className="flex justify-center py-12"><LoadingSpinner label="Loading members" /></div>
+        ) : membersError ? (
+          <div className="flex items-start gap-3 px-5 py-4 text-sm" style={{ background: 'var(--coral-light)', color: 'var(--coral-dark)' }}>
+            <CircleAlert size={18} />
+            <div>
+              <div className="font-semibold">Members could not be loaded.</div>
+              <div className="mt-1 text-xs">{membersError}</div>
             </div>
           </div>
-          <span style={{ borderRadius: 99, background: '#EFE7FF', padding: '3px 12px', fontSize: 12, fontWeight: 600, color: '#6B3FD4', flexShrink: 0 }}>
-            {member.space_role ?? member.role}
-          </span>
-        </div>
-      ))}
+        ) : members.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <div className="text-sm font-semibold text-[var(--text-primary)]">No members yet</div>
+            <div className="mt-1 text-sm text-[var(--text-secondary)]">Add people to this department to start collaborating.</div>
+            <button
+              type="button"
+              disabled={!canManage}
+              className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              + Add member
+            </button>
+          </div>
+        ) : visibleMembers.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-[var(--text-secondary)]">No matching members.</div>
+        ) : visibleMembers.map((member, i) => (
+          <div key={member.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 20px', borderTop: i === 0 ? 'none' : '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: member.avatar_color ?? '#5B34C7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                {getInitials(member.name ?? member.email)}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name ?? member.email}</div>
+                {member.email ? <div style={{ fontSize: 13, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.email}</div> : null}
+              </div>
+            </div>
+            <span style={{ borderRadius: 99, background: isDepartmentLead(member) ? '#EFE7FF' : 'var(--surface-secondary)', padding: '3px 12px', fontSize: 12, fontWeight: 600, color: isDepartmentLead(member) ? '#6B3FD4' : 'var(--text-secondary)', flexShrink: 0 }}>
+              {formatDepartmentRole(member)}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -1882,6 +1983,8 @@ export default function SpaceOverview() {
   const [canManage, setCanManage] = useState(null)
   const [calendarEvents, setCalendarEvents] = useState([])
   const [spaceMembers, setSpaceMembers] = useState([])
+  const [spaceMembersLoading, setSpaceMembersLoading] = useState(false)
+  const [spaceMembersError, setSpaceMembersError] = useState('')
   const [spaceSprints, setSpaceSprints] = useState([])
   const [spaceMeetings, setSpaceMeetings] = useState([])
   const [spaceTasks, setSpaceTasks] = useState([])
@@ -1979,9 +2082,31 @@ export default function SpaceOverview() {
   }, [effectiveRole, profile?.id])
 
   useEffect(() => {
-    if (!detail?.space) return
+    let active = true
+    if (!detail?.space || detail.space.id !== spaceId) {
+      setSpaceMembers([])
+      setSpaceMembersError('')
+      setSpaceMembersLoading(false)
+      return () => { active = false }
+    }
 
-    getSpaceMembers(detail.space).then(setSpaceMembers).catch(() => setSpaceMembers([]))
+    setSpaceMembersLoading(true)
+    setSpaceMembersError('')
+    setSpaceMembers([])
+    getSpaceMembers(detail.space)
+      .then((members) => {
+        if (!active) return
+        setSpaceMembers(members)
+      })
+      .catch((error) => {
+        if (!active) return
+        console.error('Failed to load space members', error)
+        setSpaceMembers([])
+        setSpaceMembersError(error?.message ?? 'Failed to load members.')
+      })
+      .finally(() => {
+        if (active) setSpaceMembersLoading(false)
+      })
     getSpaceSprints(spaceId).then(setSpaceSprints).catch(() => setSpaceSprints([]))
     getSpaceMeetings(spaceId).then(setSpaceMeetings).catch(() => setSpaceMeetings([]))
     getSpaceTasks(spaceId)
@@ -1999,6 +2124,8 @@ export default function SpaceOverview() {
     Promise.all([getFolders(spaceId), getLists(spaceId)])
       .then(([folders, lists]) => setTreeData({ folders: folders ?? [], lists: lists ?? [] }))
       .catch(() => setTreeData({ folders: [], lists: [] }))
+
+    return () => { active = false }
   }, [detail?.space, spaceId])
 
   useEffect(() => {
@@ -2160,7 +2287,11 @@ export default function SpaceOverview() {
           <SpaceMembersTab
             members={spaceMembers}
             spaceId={spaceId}
+            spaceName={space.name}
             spaceType={space.space_type}
+            canManage={canManage}
+            membersLoading={spaceMembersLoading}
+            membersError={spaceMembersError}
             canTransferOwnership={effectiveRole === 'super_admin' || space.owner_id === profile?.id}
             onOwnershipTransferred={(updatedSpace) => {
               setDetail((current) => current ? { ...current, space: { ...current.space, ...updatedSpace } } : current)
