@@ -535,6 +535,8 @@ function EmailSection({ participant, canWrite }) {
       await updateProfile.mutateAsync({
         id: participant.id,
         fields: makePrimaryPayload(participant),
+        // override_fields in the payload is ignored by the mutation; the swap of the two keys happens atomically on the server.
+        swapOverrideKeys: ['email', 'alternate_email'],
       })
     } catch (err) {
       if (isOwnershipConflict(err)) {

@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
-import { setOverridePatch, clearOverridePatch } from '../lib/fieldAuthority.js'
 import { REGISTRATION_LINK_SOURCE_TYPES, REGISTRATION_SOURCE_TYPE, registrationLinkedParticipantIds } from '../lib/reconciliation.js'
 
 const PROFILE_KEY = (id) => ['icplc_profile', id]
@@ -108,28 +107,44 @@ export function useICPLCActivity(participantId) {
 
 /**
  * Mutation: update participant fields, optionally setting an override.
+ *
+ * override_fields is NEVER written from the browser as a whole object: that was a read-merge-write over a cached
+ * copy and could erase another staff member's overrides. Overrides are changed on the server, key by key and
+ * atomically (icplc_apply_override_changes / icplc_swap_override_keys). Protection is recorded BEFORE the field
+ * changes so a failed second step can leave a field protected but never changed-and-unprotected; a key swap runs
+ * AFTER the values it describes were stored.
  */
 export function useUpdateProfile() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, fields, setOverride, overrideField, overrideFields, userId }) => {
-      let update = { ...fields }
+    mutationFn: async ({ id, fields, setOverride, overrideField, overrideFields, userId, swapOverrideKeys }) => {
+      const { override_fields: _dropped, ...columns } = fields || {}
       const fieldsToOverride = overrideFields || (overrideField ? [overrideField] : [])
+
       if (setOverride && fieldsToOverride.length && userId) {
-        const current = qc.getQueryData(PROFILE_KEY(id))
-        const existing = current?.override_fields || {}
-        update.override_fields = fieldsToOverride.reduce(
-          (acc, field) => ({ ...acc, ...setOverridePatch(field, userId) }),
-          { ...existing },
-        )
+        const { error } = await supabase.rpc('icplc_apply_override_changes', {
+          p_participant_id: id,
+          p_set_fields: fieldsToOverride,
+          p_clear_fields: [],
+        })
+        if (error) throw error
       }
-      const { data, error } = await supabase
-        .from('icplc_participants')
-        .update(update)
-        .eq('id', id)
-        .select()
-        .single()
+      const query = Object.keys(columns).length
+        ? supabase.from('icplc_participants').update(columns).eq('id', id)
+        : supabase.from('icplc_participants').select().eq('id', id)
+      const { data, error } = await query.select().single()
       if (error) throw error
+
+      // Provenance travels with the VALUES: swap the override keys only once the new values are stored (the email
+      // update can fail on an ownership conflict, and keys must not be swapped for values that did not change).
+      if (swapOverrideKeys) {
+        const { error: swapError } = await supabase.rpc('icplc_swap_override_keys', {
+          p_participant_id: id,
+          p_key_a: swapOverrideKeys[0],
+          p_key_b: swapOverrideKeys[1],
+        })
+        if (swapError) throw swapError
+      }
       return data
     },
     onSuccess: (data) => {
@@ -140,23 +155,20 @@ export function useUpdateProfile() {
 }
 
 /**
- * Mutation: clear a field override ("Resume source sync").
+ * Mutation: clear a field override ("Resume source sync"). Removes only that key, atomically on the server.
  */
 export function useClearFieldOverride() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, field }) => {
-      const current = qc.getQueryData(PROFILE_KEY(id))
-      const existing = current?.override_fields || {}
-      const patch = { ...existing }
-      delete patch[field]
-      const { data, error } = await supabase
-        .from('icplc_participants')
-        .update({ override_fields: patch })
-        .eq('id', id)
-        .select()
-        .single()
+      const { error } = await supabase.rpc('icplc_apply_override_changes', {
+        p_participant_id: id,
+        p_set_fields: [],
+        p_clear_fields: [field],
+      })
       if (error) throw error
+      const { data, error: readError } = await supabase.from('icplc_participants').select().eq('id', id).single()
+      if (readError) throw readError
       return data
     },
     onSuccess: (data) => {

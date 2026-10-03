@@ -5,20 +5,13 @@
  * authorize anything on event B. Membership is a SET: a person may be on many teams of the same sprint (or none), so
  * outcomes may never depend on team order or assume one team per person.
  *
- * Database tests build a THROWAWAY database (created and dropped by this file; the target database is never
- * modified) from the repo's real migration SQL plus minimal stub data tables, then query as each persona through
- * `set role authenticated` + a JWT subject, exactly like PostgREST. They are skipped when no Postgres is reachable
- * (set ICPLC_RLS_ADMIN_URL; ICPLC_REQUIRE_DB=1 turns a skip into a failure). Static tests always run.
+ * Database tests use the throwaway-database harness (helpers/rlsHarness.js) and are skipped when no Postgres is
+ * reachable (ICPLC_REQUIRE_DB=1 turns a skip into a failure). Static tests always run.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import pg from 'pg'
+import { MIG, openThrowawayDb } from './helpers/rlsHarness.js'
 
-const MIG = (f) => readFileSync(resolve(process.cwd(), 'supabase/migrations', f), 'utf8')
 const F2 = '20271004000001_icplc_event_scoped_authorization.sql'
-const ADMIN_URL = process.env.ICPLC_RLS_ADMIN_URL || process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
-const REQUIRE_DB = process.env.ICPLC_REQUIRE_DB === '1'
 const code = (sql) => sql.replace(/--[^\n]*/g, '').replace(/'[^']*'/g, "''") // match SQL calls, not comments or message text
 
 // ── Static guarantees (no database) ───────────────────────────────────────────────────────────────────────────
@@ -72,45 +65,6 @@ const SP_A = '50000000-0000-0000-0000-00000000000a'
 const SP_B = '50000000-0000-0000-0000-00000000000b'
 const T = (n) => `70000000-0000-0000-0000-${String(n).padStart(12, '0')}`
 
-const STUB = `
-create schema auth;
-create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-create function auth.jwt() returns jsonb language sql stable as $$ select '{}'::jsonb $$;
-create function auth.role() returns text language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'authenticated') $$;
-grant usage on schema auth, public to anon, authenticated;
-grant execute on all functions in schema auth to anon, authenticated;
-create table public.departments (id uuid primary key, name text, is_programs boolean default false);
-create table public.users (id uuid primary key, role text, department_id uuid);
-create table public.event_configs (id uuid primary key, event_name text, sprint_pattern text);
-create table public.sprints (id uuid primary key, name text);
-create table public.sprint_members (sprint_id uuid, user_id uuid, role text);
-create table public.sprint_teams (id uuid primary key, sprint_id uuid, name text);
-create table public.sprint_team_members (team_id uuid, user_id uuid);
-create table public.icplc_participants (
-  id uuid primary key default gen_random_uuid(), event_id uuid not null, full_name text, email text, subgroup text,
-  leadership text, nexus_user_id uuid, passport_country text, participation_status text default 'tracking');
-create table public.icplc_participant_tags (participant_id uuid, tag_id uuid);
-create table public.icplc_tags (id uuid primary key default gen_random_uuid(), event_id uuid, name text);
-create table public.icplc_identity_maps (id uuid primary key default gen_random_uuid(), event_id uuid not null, participant_id uuid, source_type text, source_key text);
-create table public.icplc_import_batches (id uuid primary key default gen_random_uuid(), event_id uuid not null);
-create table public.icplc_import_rows (id uuid primary key default gen_random_uuid(), batch_id uuid not null);
-create table public.icplc_email_claims (id uuid primary key default gen_random_uuid(), participant_id uuid);
-create table public.activity_log (id uuid primary key default gen_random_uuid(), entity_type text, entity_id uuid);
-create table public.communication_email_templates (id uuid primary key default gen_random_uuid(), event_config_id uuid);
-do $$ declare t text; begin
-  foreach t in array array['icplc_participants','icplc_participant_tags','icplc_tags','icplc_identity_maps','icplc_import_batches','icplc_import_rows','icplc_email_claims','activity_log','communication_email_templates'] loop
-    execute format('alter table public.%I enable row level security', t);
-    execute format('grant select, insert, update, delete on public.%I to authenticated', t);
-    execute format('grant select on public.%I to anon', t);
-  end loop; end $$;
-`
-
-const CURRENT_USER_ROLE = (() => {
-  const s = MIG('20270720000006_current_user_helpers_db_first.sql')
-  const a = s.indexOf('create or replace function public.current_user_role()')
-  return s.slice(a, s.indexOf('$$;', s.indexOf('$$', a) + 2) + 3)
-})()
-
 const SEED = `
 insert into public.departments values ('d0000000-0000-0000-0000-000000000001','Programs',true),('d0000000-0000-0000-0000-000000000002','Media',false);
 insert into public.users values
@@ -149,71 +103,33 @@ insert into public.icplc_participant_tags select id, (select id from public.icpl
 insert into public.communication_email_templates (event_config_id) values ('${EV_A}'),('${EV_B}'),(null);
 `
 
-let admin = null
-let db = null
-let dbName = ''
-let available = false
-let skipReason = ''
 
-function urlFor(name) { const u = new URL(ADMIN_URL); u.pathname = `/${name}`; return u.toString() }
+let H
+beforeAll(async () => { H = await openThrowawayDb({ seed: SEED }) }, 60_000)
+afterAll(async () => { if (H) await H.close() })
 
-async function asUser(uid, fn, role = 'authenticated') {
-  await db.query('begin')
-  try {
-    await db.query(`set local role ${role}`)
-    await db.query("select set_config('request.jwt.claim.sub', $1, true)", [uid ?? ''])
-    return await fn((q, p) => db.query(q, p))
-  } finally { await db.query('rollback') }
-}
 const names = async (uid, table = 'icplc_participants', col = 'full_name') =>
-  asUser(uid, async (q) => (await q(`select ${col} as v from public.${table} order by 1`)).rows.map((r) => r.v))
-const updated = (uid, ev) => asUser(uid, async (q) => (await q('update public.icplc_participants set participation_status = participation_status where event_id = $1 returning id', [ev])).rowCount)
-
-beforeAll(async () => {
-  try {
-    admin = new pg.Client({ connectionString: ADMIN_URL }); await admin.connect()
-  } catch (e) { skipReason = `no Postgres reachable at ${ADMIN_URL}: ${e.code || e.message}`; admin = null; return }
-  dbName = `icplc_rls_${Date.now()}_${Math.floor(Math.random() * 1e6)}`
-  await admin.query(`create database ${dbName}`)
-  db = new pg.Client({ connectionString: urlFor(dbName) }); await db.connect()
-  for (const role of ['anon', 'authenticated', 'service_role']) {
-    await admin.query(`do $$ begin if not exists (select 1 from pg_roles where rolname='${role}') then create role ${role} nologin; end if; end $$`)
-  }
-  await db.query(STUB)
-  await db.query(CURRENT_USER_ROLE)
-  // The policy/function state as shipped BEFORE this fix, in migration order.
-  for (const f of ['20270930000031_icplc_programs_department_access.sql', '20271003000001_icplc_group_pastor_authorization.sql',
-    '20271003000012_icplc_gp_auth_normalization.sql', '20271003000002_icplc_sprint_member_direct_read.sql']) await db.query(MIG(f))
-  await db.query(SEED)
-  available = true
-}, 60_000)
-
-afterAll(async () => {
-  try { if (db) await db.end() } catch { /* ignore */ }
-  try { if (admin && dbName) await admin.query(`drop database if exists ${dbName}`) } catch { /* ignore */ }
-  try { if (admin) await admin.end() } catch { /* ignore */ }
-})
-
-const needDb = (ctx) => { if (!available) { if (REQUIRE_DB) throw new Error(skipReason); ctx.skip(skipReason) } }
+  H.asUser(uid, async (q) => (await q(`select ${col} as v from public.${table} order by 1`)).rows.map((r) => r.v))
+const updated = (uid, ev) => H.asUser(uid, async (q) => (await q('update public.icplc_participants set participation_status = participation_status where event_id = $1 returning id', [ev])).rowCount)
 
 describe('F2 cross-event isolation (database)', () => {
   it('CONTROL: before the migration, membership in event B authorizes reads and writes of event A (the defect)', async (ctx) => {
-    needDb(ctx)
+    H.need(ctx)
     expect((await names(U(17))).filter((n) => n.startsWith('A '))).not.toEqual([]) // event-B-only member reads event A rows
     expect(await updated(U(17), EV_A)).toBeGreaterThan(0) // ...and writes them
   })
 
   describe('after the migration', () => {
-    beforeAll(async () => { if (available) await db.query(MIG(F2)) })
+    beforeAll(async () => { if (H.available) await H.db.query(MIG(F2)) })
 
     it('read: each member sees only their own event', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       expect(await names(U(10))).toEqual(['A Central', 'A Group Pastor', 'A West'])
       expect(await names(U(17))).toEqual(['B Central', 'B West'])
     })
 
     it('write: Registration of A updates A and cannot touch B', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       expect(await updated(U(10), EV_A)).toBe(3)
       expect(await updated(U(10), EV_B)).toBe(0)
       expect(await updated(U(17), EV_A)).toBe(0)
@@ -221,7 +137,7 @@ describe('F2 cross-event isolation (database)', () => {
     })
 
     it('multi-team: access is the union over the whole membership set', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       expect(await updated(U(11), EV_A)).toBe(0) // Transportation only: read-only
       expect(await updated(U(12), EV_A)).toBe(3) // Registration + Transportation: Registration grants write
       expect(await updated(U(13), EV_A)).toBe(0) // Transportation + Hospitality: neither grants write
@@ -231,53 +147,53 @@ describe('F2 cross-event isolation (database)', () => {
     })
 
     it('membership order is never significant', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       expect(await names(U(15))).toEqual(await names(U(16)))
       expect(await updated(U(15), EV_A)).toBe(await updated(U(16), EV_A))
     })
 
     it('no team assignment is also supported: a direct sprint member reads their event only', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       expect(await names(U(20))).toEqual(['A Central', 'A Group Pastor', 'A West'])
       expect(await updated(U(20), EV_A)).toBe(0)
     })
 
     it('group pastor stays confined to own subgroup AND own event', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       expect(await names(U(21))).toEqual(['A Central', 'A Group Pastor'])
       expect(await updated(U(21), EV_A)).toBe(0)
     })
 
     it('outsider and anonymous see nothing', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       expect(await names(U(22))).toEqual([])
-      expect(await asUser(null, async (q) => (await q('select 1 from public.icplc_participants')).rowCount, 'anon')).toBe(0)
+      expect(await H.asUser(null, async (q) => (await q('select 1 from public.icplc_participants')).rowCount, 'anon')).toBe(0)
     })
 
     it('platform roles are intentionally event-independent (super_admin, Programs department)', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       expect((await names(U(1))).length).toBe(5)
       expect((await names(U(2))).length).toBe(5)
     })
 
     it('dependent tables follow the same event boundary', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       expect(await names(U(10), 'icplc_identity_maps', 'source_key')).toEqual(['A Central', 'A West'])
       expect(await names(U(17), 'icplc_identity_maps', 'source_key')).toEqual(['B Central', 'B West'])
       expect(await names(U(10), 'icplc_tags', 'name')).toEqual(['A tag', 'org tag']) // org-wide default tag stays visible
-      expect((await asUser(U(10), async (q) => (await q('select batch_id from public.icplc_import_rows')).rows)).map((r) => r.batch_id)).toEqual(['b0000000-0000-0000-0000-00000000000a'])
-      expect((await asUser(U(10), async (q) => (await q('select event_id from public.icplc_import_batches')).rows)).map((r) => r.event_id)).toEqual([EV_A])
-      expect((await asUser(U(10), async (q) => (await q('select event_config_id from public.communication_email_templates')).rows)).map((r) => r.event_config_id).sort()).toEqual([null, EV_A].sort())
-      expect((await asUser(U(10), async (q) => (await q('select tag_id from public.icplc_participant_tags')).rowCount))).toBe(2)
+      expect((await H.asUser(U(10), async (q) => (await q('select batch_id from public.icplc_import_rows')).rows)).map((r) => r.batch_id)).toEqual(['b0000000-0000-0000-0000-00000000000a'])
+      expect((await H.asUser(U(10), async (q) => (await q('select event_id from public.icplc_import_batches')).rows)).map((r) => r.event_id)).toEqual([EV_A])
+      expect((await H.asUser(U(10), async (q) => (await q('select event_config_id from public.communication_email_templates')).rows)).map((r) => r.event_config_id).sort()).toEqual([null, EV_A].sort())
+      expect((await H.asUser(U(10), async (q) => (await q('select tag_id from public.icplc_participant_tags')).rowCount))).toBe(2)
     })
 
     it('the event-scoped helpers fail closed', async (ctx) => {
-      needDb(ctx)
+      H.need(ctx)
       const one = (q, sql, p) => q(sql, p).then((r) => r.rows[0].v)
-      expect(await asUser(U(10), (q) => one(q, 'select public.icplc_can_read_participants(null::uuid) as v'))).toBe(false)
-      expect(await asUser(U(10), (q) => one(q, "select public.icplc_can_write_participants('00000000-0000-0000-0000-000000000000') as v"))).toBe(false)
-      expect(await asUser(U(10), (q) => one(q, 'select public.icplc_can_import($1) as v', [EV_B]))).toBe(false)
-      expect(await asUser(U(10), (q) => one(q, 'select public.icplc_can_import($1) as v', [EV_A]))).toBe(true)
+      expect(await H.asUser(U(10), (q) => one(q, 'select public.icplc_can_read_participants(null::uuid) as v'))).toBe(false)
+      expect(await H.asUser(U(10), (q) => one(q, "select public.icplc_can_write_participants('00000000-0000-0000-0000-000000000000') as v"))).toBe(false)
+      expect(await H.asUser(U(10), (q) => one(q, 'select public.icplc_can_import($1) as v', [EV_B]))).toBe(false)
+      expect(await H.asUser(U(10), (q) => one(q, 'select public.icplc_can_import($1) as v', [EV_A]))).toBe(true)
     })
   })
 })
