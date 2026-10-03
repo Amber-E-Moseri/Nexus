@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import { deriveItineraryStatus, deriveTravelStatus } from '../lib/readinessEngine.js'
-import { flightNotRequired } from '../lib/flightRequirement.js'
+import { flightNotRequired, isTravelRelevant } from '../lib/flightRequirement.js'
 import { fmtTime, groupByDate, groupIntoBands } from '../lib/travelGrouping.js'
 import { printTravelManifest } from '../lib/printTravelManifest.js'
 import { SUBGROUP_OPTIONS } from '../lib/subgroups.js'
@@ -22,15 +22,36 @@ export default function TravelPage({ canWrite }) {
   const [subgroupFilter, setSubgroupFilter] = useState('All')
   const [view, setView] = useState('manifest') // 'manifest' | 'byday'
   const [dayMode, setDayMode] = useState('arrivals') // 'arrivals' | 'departures' | 'full'
+  const [showAbsent, setShowAbsent] = useState(false)
 
   const subgroups = useMemo(() => {
     const present = new Set((allParticipants || []).map((p) => p.subgroup).filter(Boolean))
     return [...new Set([...SUBGROUP_OPTIONS, ...present])]
   }, [allParticipants])
-  const participants = useMemo(
-    () => subgroupFilter === 'All' ? allParticipants : (allParticipants || []).filter((p) => p.subgroup === subgroupFilter),
-    [allParticipants, subgroupFilter],
+
+  const absentTravelCount = useMemo(
+    () => (allParticipants || []).filter((p) => p.participation_status === 'not_attending').length,
+    [allParticipants],
   )
+
+  const participants = useMemo(() => {
+    const base = subgroupFilter === 'All' ? allParticipants : (allParticipants || []).filter((p) => p.subgroup === subgroupFilter)
+    return (base || []).filter((p) => showAbsent || p.participation_status !== 'not_attending')
+  }, [allParticipants, subgroupFilter, showAbsent])
+
+  // For manifest view: participants needing travel action sort first.
+  // Uses isTravelRelevant (canonical) to guard: not_attending and active FNR are NOT travel work.
+  // Superseded FNR (reason set but real flight submitted) → isTravelRelevant=true, deriveItineraryStatus='received' → OK.
+  // Not Attending conflict (not_attending + flight) → isTravelRelevant=false → not promoted as travel work.
+  const manifestParticipants = useMemo(() => {
+    if (!participants) return []
+    return [...participants].sort((a, b) => {
+      const aOk = !isTravelRelevant(a) || deriveItineraryStatus(a) === 'received'
+      const bOk = !isTravelRelevant(b) || deriveItineraryStatus(b) === 'received'
+      if (aOk !== bOk) return aOk ? 1 : -1
+      return (a.full_name || '').localeCompare(b.full_name || '')
+    })
+  }, [participants])
   const toggleLock = (p) => lockMutation.mutate({ participant: p, lock: !isTravelLocked(p), userId: authProfile?.id })
 
   const byArrival = useMemo(
@@ -100,8 +121,20 @@ export default function TravelPage({ canWrite }) {
         </details>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-        <div role="status" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          Flight manifest — {participants.length} participants
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div role="status" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Flight manifest — {participants.length} participant{participants.length !== 1 ? 's' : ''}
+          </div>
+          {absentTravelCount > 0 && (
+            <button
+              type="button"
+              className="icplc-chip"
+              aria-pressed={showAbsent}
+              onClick={() => setShowAbsent((v) => !v)}
+            >
+              {showAbsent ? 'Hiding not attending' : `Include not attending (${absentTravelCount})`}
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <button type="button" className="icplc-btn" onClick={() => refetch()} disabled={isFetching}>
@@ -165,7 +198,7 @@ export default function TravelPage({ canWrite }) {
               </tr>
             </thead>
             <tbody>
-              {participants.map((p) => {
+              {manifestParticipants.map((p) => {
                 const itinerary = deriveItineraryStatus(p)
                 const travel = deriveTravelStatus(p)
                 return (

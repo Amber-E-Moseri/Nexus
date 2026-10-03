@@ -11,6 +11,7 @@ import WorkingListTable from '../components/WorkingListTable.jsx'
 import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import StatusKey from '../components/StatusKey.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
+import BoardPage from './BoardPage.jsx'
 import BulkActionBar from '../components/BulkActionBar.jsx'
 import ICPLCEmailComposer, { EmailParticipantsButton, canEstimateICPLCEmail } from '../components/ICPLCEmailComposer.jsx'
 import { deriveReadiness } from '../lib/readinessEngine.js'
@@ -18,7 +19,7 @@ import { applyClientFilters, countAttentionCategories } from '../lib/participant
 import { filterParticipantsByWorkingListView } from '../lib/reconciliation.js'
 import { needsAttentionNow } from '../lib/attentionModel.js'
 
-export default function PeoplePage({ canWrite }) {
+export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
@@ -52,7 +53,10 @@ export default function PeoplePage({ canWrite }) {
     subgroup: filters.subgroup,
   })
 
-  const attentionCounts = useMemo(() => countAttentionCategories(participantsWithRegistrationCoverage), [participantsWithRegistrationCoverage])
+  const attentionCounts = useMemo(
+    () => countAttentionCategories(participantsWithRegistrationCoverage),
+    [participantsWithRegistrationCoverage],
+  )
 
   const targets = useICPLCTargets(eventId)
 
@@ -70,17 +74,61 @@ export default function PeoplePage({ canWrite }) {
     { targets },
   ), [eventId, filters, participantsWithRegistrationCoverage, registrationMaps, registrations, targets])
 
+  const viewToggle = (
+    <div
+      role="group"
+      aria-label="People view"
+      style={{ display: 'flex', gap: 2, border: '1px solid var(--icplc-border)', borderRadius: 6, padding: 2, background: 'var(--icplc-grey-bg)' }}
+    >
+      <button
+        type="button"
+        aria-pressed={view === 'list'}
+        className={`icplc-view-btn${view === 'list' ? ' icplc-view-btn--active' : ''}`}
+        onClick={() => onViewChange?.('list')}
+      >
+        List
+      </button>
+      <button
+        type="button"
+        aria-pressed={view === 'board'}
+        className={`icplc-view-btn${view === 'board' ? ' icplc-view-btn--active' : ''}`}
+        onClick={() => onViewChange?.('board')}
+      >
+        Board
+      </button>
+    </div>
+  )
+
+  // Board view: render BoardPage inline (it manages its own drawer)
+  if (view === 'board') {
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--icplc-text, var(--text-primary))' }}>People</div>
+          {viewToggle}
+        </div>
+        <BoardPage canWrite={canWrite} />
+      </div>
+    )
+  }
+
+  // List view
   return (
     <div>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--icplc-text, var(--text-primary))' }}>Registrations</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {canEmail && <EmailParticipantsButton count={displayedParticipants.length} disabled={displayedParticipants.length === 0} onClick={() => { setEmailSelectedOnly(false); setShowEmail(true) }} />}
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--icplc-text, var(--text-primary))' }}>People</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {viewToggle}
+          {canEmail && (
+            <EmailParticipantsButton
+              count={displayedParticipants.length}
+              disabled={displayedParticipants.length === 0}
+              onClick={() => { setEmailSelectedOnly(false); setShowEmail(true) }}
+            />
+          )}
           {canWrite && (
-            <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary" style={{ flexShrink: 0 }}>
+            <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary">
               <UserPlus size={14} aria-hidden /> Add Participant
             </button>
           )}
@@ -97,8 +145,8 @@ export default function PeoplePage({ canWrite }) {
 
       <StatusKey />
 
-      {/* View toggle + Count */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      {/* Count */}
+      <div style={{ marginBottom: 12 }}>
         <div role="status" style={{ fontSize: 12, color: 'var(--icplc-text-soft, var(--text-secondary))' }}>
           {displayedParticipants.length} participant{displayedParticipants.length !== 1 ? 's' : ''}
         </div>

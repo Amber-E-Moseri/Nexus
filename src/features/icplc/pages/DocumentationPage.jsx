@@ -4,7 +4,7 @@ import { useICPLCParticipants } from '../hooks/useICPLCParticipants.js'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import { humanize, rowOpenProps } from '../components/ParticipantTable.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
-import { deriveDocumentation, SUPPORTING_DOC } from '../lib/documentationRules.js'
+import { deriveDocumentation, SUPPORTING_DOC, documentationActionRequired } from '../lib/documentationRules.js'
 import { PASSPORT_REGION_LABELS } from '../lib/passportRegion.js'
 import {
   DOCUMENT_READINESS_LABELS,
@@ -37,9 +37,14 @@ export default function DocumentationPage({ canWrite }) {
     return [...new Set(participants.map((p) => p.subgroup).filter(Boolean))].sort()
   }, [participants])
 
+  const absentDocCount = useMemo(() => {
+    if (!participants) return 0
+    return participants.filter((p) => p.participation_status === 'not_attending').length
+  }, [participants])
+
   const filtered = useMemo(() => {
     if (!participants) return []
-    return participants.filter((p) => {
+    const base = participants.filter((p) => {
       if (!showAbsent && p.participation_status === 'not_attending') return false
       if (search && !p.full_name?.toLowerCase().includes(search.toLowerCase())) return false
       if (subgroupFilter && p.subgroup !== subgroupFilter) return false
@@ -50,6 +55,13 @@ export default function DocumentationPage({ canWrite }) {
         if (d.visa.requirement !== visaFilter) return false
       }
       return true
+    })
+    // Problems-first: participants needing documentation action sort before those who are OK
+    return [...base].sort((a, b) => {
+      const aNeeds = documentationActionRequired(a) ? 0 : 1
+      const bNeeds = documentationActionRequired(b) ? 0 : 1
+      if (aNeeds !== bNeeds) return aNeeds - bNeeds
+      return (a.full_name || '').localeCompare(b.full_name || '')
     })
   }, [participants, search, subgroupFilter, canadaFilter, passportFilter, visaFilter, showAbsent])
 
@@ -147,17 +159,23 @@ export default function DocumentationPage({ canWrite }) {
             Clear
           </button>
         )}
-        <button
-          type="button"
-          className="icplc-chip"
-          aria-pressed={showAbsent}
-          onClick={() => setShowAbsent((v) => !v)}
-          title={showAbsent ? 'Hide participants marked Not Attending' : 'Show participants marked Not Attending'}
-        >
-          {showAbsent ? 'Hiding absent' : 'Include absent'}
-        </button>
+        {absentDocCount > 0 && (
+          <button
+            type="button"
+            className="icplc-chip"
+            aria-pressed={showAbsent}
+            onClick={() => setShowAbsent((v) => !v)}
+          >
+            {showAbsent ? 'Hiding not attending' : `Include not attending (${absentDocCount})`}
+          </button>
+        )}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-secondary)' }}>
-          {filtered.length} of {participants?.length ?? 0}
+          {filtered.length} participant{filtered.length !== 1 ? 's' : ''}
+          {filtered.filter(documentationActionRequired).length > 0 && (
+            <span style={{ color: 'var(--icplc-orange, #C97820)', fontWeight: 600, marginLeft: 6 }}>
+              · {filtered.filter(documentationActionRequired).length} need action
+            </span>
+          )}
         </span>
       </div>
 

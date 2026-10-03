@@ -10,9 +10,49 @@ import DocumentationTab from './tabs/DocumentationTab.jsx'
 import TravelTab from './tabs/TravelTab.jsx'
 import ActivityTab from './tabs/ActivityTab.jsx'
 import Badge from '../../../components/ui/Badge.jsx'
-import { registrationState, REGISTRATION_STATE_LABELS, REGISTRATION_URGENT_LABELS } from '../lib/documentationRules.js'
-import { deriveReadiness, readinessTone, readinessLabel, effectiveParticipationStatus } from '../lib/readinessEngine.js'
-import { attendanceEvidence } from '../lib/flightRequirement.js'
+import {
+  registrationState,
+  REGISTRATION_STATE_LABELS,
+  REGISTRATION_URGENT_LABELS,
+  attentionCategoryKeys,
+  attentionTier,
+  attentionCategoryDef,
+  documentationActionRequired,
+  ATTENTION_CATEGORIES,
+} from '../lib/documentationRules.js'
+import {
+  deriveReadiness,
+  readinessTone,
+  readinessLabel,
+  effectiveParticipationStatus,
+  deriveItineraryStatus,
+} from '../lib/readinessEngine.js'
+import { attendanceEvidence, flightNotRequired } from '../lib/flightRequirement.js'
+import { needsAttentionNow } from '../lib/attentionModel.js'
+
+const INFORMATIONAL = new Set(
+  ATTENTION_CATEGORIES.filter((c) => c.informational).map((c) => c.key),
+)
+
+// Presentation-level next action (see NeedsAttentionPage for the canonical copy)
+const NEXT_ACTION = {
+  registration_missing:    'Complete ICPLC registration',
+  not_registered:          'Complete ICPLC registration',
+  visa_unknown:            'Follow up on Nigerian visa process',
+  visa_not_started:        'Follow up on Nigerian visa process',
+  visa_blocked:            'Follow up on Nigerian visa process',
+  non_ecowas_review:       'Follow up on Nigerian visa process',
+  passport_incomplete:     'Review passport status',
+  travel_incomplete:       'Complete required travel information',
+  canadian_status_unknown: 'Review Canadian status information',
+  canadian_status_review:  'Review Canadian status',
+  canadian_docs_review:    'Review Canadian document expiry',
+  pr_card:                 'Verify PR card status',
+  study_permit:            'Verify study permit status',
+  pgwp:                    'Verify PGWP status',
+  work_permit:             'Verify work permit status',
+  documentation_incomplete:'Collect missing documentation information',
+}
 
 const PARTICIPATION_TONES = {
   tracking: 'mute', likely: 'in_progress', confirmed: 'done',
@@ -23,35 +63,116 @@ const PARTICIPATION_LABELS = {
   uncertain: 'Uncertain', not_attending: 'Not Attending',
 }
 
-export function DrawerStatusBadges({ participant }) {
-  const { readiness } = deriveReadiness(participant)
-  const regState = registrationState(participant) // the one canonical derivation, shared with every other view
+/**
+ * Compact 4-dimension summary + action banner for the drawer header.
+ * Participation, Registration, Documentation, Travel are independent — not a funnel.
+ */
+function DrawerOperationalSummary({ participant }) {
+  const regState = registrationState(participant)
   const registered = regState === 'registered'
-  // Registration is mandatory and can't be waived: an incomplete one is always urgent, even for a confirmed participant.
-  const urgent = !registered && participant.participation_status !== 'not_attending'
-  const regTone = registered ? 'done' : urgent ? 'blocked' : 'at_risk'
-  const regLabel = registered ? REGISTRATION_STATE_LABELS.registered : urgent ? REGISTRATION_URGENT_LABELS[regState] : REGISTRATION_STATE_LABELS[regState]
+  const isNA = participant.participation_status === 'not_attending'
+  const urgent = !registered && !isNA
 
   const effective = effectiveParticipationStatus(participant)
   const evidence = attendanceEvidence(participant)
 
+  const hasDocAction = documentationActionRequired(participant)
+  const fnr = flightNotRequired(participant)
+  const itinerary = deriveItineraryStatus(participant)
+
+  // Actionable attention keys (informational excluded)
+  const actionableKeys = isNA
+    ? []
+    : attentionCategoryKeys(participant).filter((k) => !INFORMATIONAL.has(k))
+  const hasAction = actionableKeys.length > 0
+  const primaryKey = actionableKeys[0]
+  const tier = primaryKey ? attentionTier(primaryKey) : 1
+  const isUrgent = tier === 0
+  const actionCount = actionableKeys.length
+
+  // Participation dimension
+  const partTone = PARTICIPATION_TONES[effective] || 'mute'
+  const partLabel = PARTICIPATION_LABELS[effective] || effective
+
+  // Registration dimension
+  const regTone = registered ? 'done' : urgent ? 'blocked' : 'at_risk'
+  const regLabel = registered
+    ? REGISTRATION_STATE_LABELS.registered
+    : urgent
+      ? REGISTRATION_URGENT_LABELS[regState]
+      : REGISTRATION_STATE_LABELS[regState]
+
+  // Documentation dimension
+  const docTone = hasDocAction ? 'at_risk' : 'done'
+  const docLabel = hasDocAction ? 'Action required' : 'OK'
+
+  // Travel dimension (independent of documentation)
+  const travelTone = isNA ? 'mute'
+    : fnr ? 'mute'
+    : itinerary === 'received' ? 'done'
+    : 'at_risk'
+  const travelLabel = isNA ? 'N/A'
+    : fnr ? 'Not required'
+    : itinerary === 'received' ? 'Flight received'
+    : 'Missing'
+
+  const dims = [
+    { label: 'Participation', tone: partTone, value: partLabel, extra: evidence },
+    { label: 'Registration',  tone: regTone,  value: regLabel },
+    { label: 'Documentation', tone: docTone,  value: docLabel },
+    { label: 'Travel',        tone: travelTone, value: travelLabel },
+  ]
+
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-      <Badge
-        tone={PARTICIPATION_TONES[effective] || 'mute'}
-        label={PARTICIPATION_LABELS[effective] || (effective || 'Unknown')}
-      />
-      {evidence && (
-        <Badge
-          tone={evidence.type === 'conflict' ? 'at_risk' : 'in_progress'}
-          label={evidence.label}
-        />
+    <div style={{ marginTop: 10, marginBottom: 2 }}>
+      {/* Action banner — only shown when something needs attention */}
+      {hasAction && (
+        <div style={{
+          marginBottom: 10, padding: '10px 12px',
+          background: isUrgent ? 'var(--icplc-red-bg)' : 'var(--icplc-orange-bg)',
+          borderRadius: 8,
+          border: `1px solid ${isUrgent ? '#F3BDB8' : '#FDE68A'}`,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3, color: isUrgent ? 'var(--icplc-red)' : 'var(--icplc-orange)' }}>
+            Action Required
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--icplc-text)', marginBottom: 2 }}>
+            {attentionCategoryDef(primaryKey)?.label || primaryKey}
+            {actionCount > 1 && (
+              <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--icplc-text-soft)', marginLeft: 6 }}>
+                +{actionCount - 1} more
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--icplc-text-soft)' }}>
+            Next action: {NEXT_ACTION[primaryKey] || 'Review participant status'}
+          </div>
+        </div>
       )}
-      <Badge tone={regTone} label={regLabel} />
-      <Badge tone={readinessTone(readiness)} label={readinessLabel(readiness)} />
+
+      {/* 4 independent dimensions — not a sequential funnel */}
+      <div className="icplc-dim-grid">
+        {dims.map(({ label, tone, value, extra }) => (
+          <React.Fragment key={label}>
+            <span className="icplc-dim-label">{label}</span>
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+              <Badge tone={tone} label={value} />
+              {extra && (
+                <Badge
+                  tone={extra.type === 'conflict' ? 'at_risk' : 'in_progress'}
+                  label={extra.label}
+                />
+              )}
+            </span>
+          </React.Fragment>
+        ))}
+      </div>
     </div>
   )
 }
+
+// DrawerOperationalSummary is exported for testing: it is the production drawer header component.
+export { DrawerOperationalSummary }
 
 const TABS = [
   { key: 'overview',       label: 'Overview' },
@@ -68,13 +189,11 @@ const TABS = [
  */
 export default function ParticipantProfileDrawer({ participantId, initialTab = 'overview', onClose, canWrite }) {
   const [activeTab, setActiveTab] = useState(initialTab)
-  // The drawer opens programmatically (no Dialog.Trigger), so remember the opener to restore focus.
   const openerRef = useRef(typeof document !== 'undefined' ? document.activeElement : null)
   const { data: participant, isLoading, error } = useICPLCProfile(participantId)
-  // 'admin' tier = super admin / regional secretary: the only roles that may merge or delete (also enforced in the DB).
   const { accessTier } = useICPLC()
   const canManageRecord = accessTier === 'admin'
-  const [dialog, setDialog] = useState(null) // 'merge' | 'delete' | null
+  const [dialog, setDialog] = useState(null)
 
   return (
     <Dialog.Root open={!!participantId} onOpenChange={(open) => { if (!open) onClose() }}>
@@ -100,8 +219,8 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
             borderBottom: '1px solid var(--icplc-border, var(--border))',
             flexShrink: 0,
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 {isLoading ? (
                   <div style={{ height: 22, width: 200, background: 'var(--icplc-grey-bg, var(--surface-2))', borderRadius: 4 }} />
                 ) : (
@@ -114,7 +233,10 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
                     {[participant.subgroup, participant.leadership || participant.region].filter(Boolean).join(' · ')}
                   </div>
                 )}
-                {participant && <DrawerStatusBadges participant={participant} />}
+
+                {/* Operational summary: action banner + 4 dimensions */}
+                {participant && <DrawerOperationalSummary participant={participant} />}
+
                 {participant && canManageRecord && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button type="button" className="icplc-btn" onClick={() => setDialog('merge')}
@@ -163,21 +285,11 @@ export default function ParticipantProfileDrawer({ participantId, initialTab = '
             {error && <div style={{ color: 'var(--text-secondary)' }}>Failed to load profile.</div>}
             {participant && (
               <>
-                {activeTab === 'overview' && (
-                  <OverviewTab participant={participant} canWrite={canWrite} />
-                )}
-                {activeTab === 'registration' && (
-                  <RegistrationTab participant={participant} canWrite={canWrite} />
-                )}
-                {activeTab === 'documentation' && (
-                  <DocumentationTab participant={participant} canWrite={canWrite} />
-                )}
-                {activeTab === 'travel' && (
-                  <TravelTab participant={participant} canWrite={canWrite} />
-                )}
-                {activeTab === 'activity' && (
-                  <ActivityTab participant={participant} canWrite={canWrite} />
-                )}
+                {activeTab === 'overview' && <OverviewTab participant={participant} canWrite={canWrite} />}
+                {activeTab === 'registration' && <RegistrationTab participant={participant} canWrite={canWrite} />}
+                {activeTab === 'documentation' && <DocumentationTab participant={participant} canWrite={canWrite} />}
+                {activeTab === 'travel' && <TravelTab participant={participant} canWrite={canWrite} />}
+                {activeTab === 'activity' && <ActivityTab participant={participant} canWrite={canWrite} />}
               </>
             )}
           </div>
