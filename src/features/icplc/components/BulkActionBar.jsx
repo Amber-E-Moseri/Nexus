@@ -7,7 +7,7 @@ import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
 import { buildReviewItems, classifyForReview, partitionForReview, RESULT_LABELS, CANNOT_REVIEW_REASONS, summarizeBulkResults } from '../lib/bulkReview.js'
 import { downloadBulkExport } from '../lib/bulkExport.js'
 
-const selectStyle = { minHeight: 34, width: 'auto', maxWidth: 170 }
+const selectStyle = { width: 'auto', maxWidth: 170 }
 const STATUS_ORDER = ['updated', 'already_reviewed', 'no_change', 'skipped_stale', 'skipped_ineligible', 'failed']
 
 /**
@@ -21,7 +21,7 @@ const STATUS_ORDER = ['updated', 'already_reviewed', 'no_change', 'skipped_stale
  * (never a bare "Success"). Nothing here sends a notification.
  *
  * @param selection     controller from useRowSelection()
- * @param context       'needs_attention' | 'people' | 'documentation' | 'travel'
+ * @param context       'needs_attention' (Action) | 'people' | 'documentation' | 'travel'
  * @param filteredRows  every row currently shown, used by Export filtered
  */
 export default function BulkActionBar({ eventId, selection, context, canWrite, filteredRows = [], canEmail = false, onEmail }) {
@@ -60,6 +60,7 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
   const who = `${count} ${count === 1 ? 'person' : 'people'}`
   const showReview = canWrite && context !== 'travel'
   const reviewIsPrimary = context === 'documentation' || context === 'needs_attention'
+  const nameOf = (id) => selection.selectedRows.find((r) => r.id === id)?.full_name || canonById.get(id)?.full_name || 'Unknown participant'
 
   function dismiss() { setResult(null); setPending(null) }
 
@@ -113,21 +114,12 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
   const partition = pending?.kind === 'review' ? pending.partition : null
 
   return (
-    <div
-      role="region"
-      aria-label="Bulk actions"
-      style={{
-        position: 'sticky', bottom: 12, zIndex: 15, marginTop: 12,
-        background: 'var(--icplc-surface, #fff)', border: '1px solid var(--icplc-purple, #4C2A92)',
-        borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.16)', padding: '10px 12px',
-        display: 'flex', flexDirection: 'column', gap: 8,
-      }}
-    >
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        {count > 0 && <strong style={{ fontSize: 13, color: 'var(--icplc-purple, #4C2A92)' }}>{count} selected</strong>}
+    <div role="region" aria-label="Bulk actions" className="icplc-bulk">
+      <div className="icplc-bulk-row">
+        {count > 0 && <strong className="icplc-bulk-count">{count} selected</strong>}
 
         {count > 0 && !pending && (
-          <>
+          <div className="icplc-bulk-bar-group" role="group" aria-label="Bulk Manage">
             {showReview && (
               <button
                 type="button"
@@ -136,17 +128,6 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
                 onClick={startReview}
               >
                 <ClipboardCheck size={14} aria-hidden /> Mark reviewed
-              </button>
-            )}
-
-            {canEmail && (
-              <button
-                type="button"
-                className="icplc-btn"
-                disabled={busy}
-                onClick={onEmail}
-              >
-                <Mail size={14} aria-hidden /> Email selected
               </button>
             )}
 
@@ -167,7 +148,13 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
               </select>
             )}
 
-            <div style={{ position: 'relative' }}>
+            {canEmail && (
+              <button type="button" className="icplc-btn" disabled={busy} onClick={onEmail}>
+                <Mail size={14} aria-hidden /> Email selected
+              </button>
+            )}
+
+            <div className="icplc-bulk-more">
               <button
                 type="button"
                 className="icplc-btn"
@@ -178,14 +165,7 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
                 <MoreHorizontal size={14} aria-hidden /> More
               </button>
               {menuOpen && (
-                <div
-                  role="menu"
-                  style={{
-                    position: 'absolute', bottom: '110%', left: 0, minWidth: 220, zIndex: 20,
-                    background: 'var(--icplc-surface, #fff)', border: '1px solid var(--icplc-border, #ddd)',
-                    borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.16)', padding: 6, display: 'flex', flexDirection: 'column', gap: 4,
-                  }}
-                >
+                <div role="menu" className="icplc-bulk-menu">
                   {canWrite && (
                     <select
                       className="icplc-input"
@@ -207,10 +187,13 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
                   <button type="button" role="menuitem" className="icplc-btn" disabled={filteredRows.length === 0} onClick={() => exportRows('filtered', filteredRows)}>
                     <Download size={14} aria-hidden /> Export filtered ({filteredRows.length})
                   </button>
+                  <div className="icplc-bulk-note">
+                    Participation, readiness and registration are not bulk-editable: readiness and registration are derived, and participation is changed per person from the profile.
+                  </div>
                 </div>
               )}
             </div>
-          </>
+          </div>
         )}
 
         {pending?.kind === 'tag' && (
@@ -223,7 +206,7 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
 
         <span style={{ flex: 1 }} />
         {count > 0 && (
-          <button type="button" className="icplc-btn" onClick={() => { selection.clear(); setPending(null); setMenuOpen(false) }} aria-label="Clear selection">
+          <button type="button" className="icplc-btn icplc-bulk-clear" onClick={() => { selection.clear(); setPending(null); setMenuOpen(false) }} aria-label="Clear selection">
             <X size={14} aria-hidden /> Clear
           </button>
         )}
@@ -270,8 +253,13 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
           {result.summary && (
             <>
               <div>
-                {STATUS_ORDER.filter((s) => result.summary.counts[s]).map((s) => `${result.summary.counts[s]} ${RESULT_LABELS[s]}`).join(' · ') || 'No participants'}
+                {`${result.summary.total} processed · `}{STATUS_ORDER.filter((s) => result.summary.counts[s]).map((s) => `${result.summary.counts[s]} ${RESULT_LABELS[s]}`).join(' · ') || 'No participants'}
               </div>
+              {result.summary.problems?.length > 0 && (
+                <ul aria-label="Needs follow-up" style={{ margin: 0, paddingLeft: 18, color: 'var(--icplc-red, #B42318)' }}>
+                  {result.summary.problems.map((r) => <li key={`${r.id}:${r.status}`}>{nameOf(r.id)} — {RESULT_LABELS[r.status] || r.status}{r.reason ? ` (${r.reason.replace(/_/g, ' ')})` : ''}</li>)}
+                </ul>
+              )}
               {result.summary.reasons.length > 0 && (
                 <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--icplc-text-soft, #666)' }}>
                   {result.summary.reasons.map((r) => <li key={`${r.status}:${r.reason}`}>{r.label} — {r.count}</li>)}
