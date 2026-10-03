@@ -332,19 +332,18 @@ Deno.serve(async (req) => {
 
   if (!authorized) {
     const { data: eventConfig } = await supabase
-      .from('event_configs').select('sprint_pattern').eq('id', event_id).maybeSingle()
+      .from('event_configs').select('sprint_id').eq('id', event_id).maybeSingle()
 
-    if (eventConfig?.sprint_pattern) {
+    // Authoritative link only: a NULL sprint_id fails closed (no sprint_pattern name matching).
+    if (eventConfig?.sprint_id) {
       const { data: memberships } = await supabase
         .from('sprint_team_members')
-        .select('user_id, sprint_teams!inner(name, sprints!inner(name))')
+        .select('user_id, sprint_teams!inner(name, sprint_id)')
         .eq('user_id', user.user.id)
 
       authorized = (memberships || []).some((m: any) => {
         const teamName = String(m.sprint_teams?.name || '')
-        const sprintName = String(m.sprint_teams?.sprints?.name || '')
-        const pattern = String(eventConfig.sprint_pattern).replace(/%/g, '').toLowerCase()
-        return sprintName.toLowerCase().includes(pattern)
+        return m.sprint_teams?.sprint_id === eventConfig.sprint_id
           && !/finance|transportation|accommodation|hospitality/i.test(teamName)
       })
     }

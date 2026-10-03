@@ -223,6 +223,8 @@ describe('CMP documentation sync edge authorization', () => {
     const sprint = (await pgExec(
       `INSERT INTO public.sprints(name, status) VALUES ('cmp-auth sprint', 'active') RETURNING id`,
     )).rows[0]
+    // Authorization follows the explicit event -> sprint link, never the name pattern.
+    await pgExec('UPDATE public.event_configs SET sprint_id = $1 WHERE id = $2', [sprint.id, EVENT_ID])
     for (const user of Object.values(USERS).filter((u) => u.team)) {
       const team = (await pgExec(
         `INSERT INTO public.sprint_teams(sprint_id, name) VALUES ($1, $2) RETURNING id`,
