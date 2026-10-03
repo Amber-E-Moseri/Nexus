@@ -262,8 +262,9 @@ describe('every view agrees on the same participant', () => {
 
   it('Working List column shows the canonical state', () => {
     render(<WorkingListTable participants={people} loading={false} onOpen={() => {}} />)
+    const table = screen.getByRole('table')
     for (const p of people) {
-      const row = screen.getByText(p.full_name).closest('tr')
+      const row = within(table).getByText(p.full_name).closest('tr')
       const label = REGISTRATION_STATE_LABELS[expected[p.id]]
       expect(within(row).getByTitle(new RegExp(`Filter by registered: ${label}$`))).toBeTruthy()
     }

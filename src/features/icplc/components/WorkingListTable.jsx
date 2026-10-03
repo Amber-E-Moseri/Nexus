@@ -2,11 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, XCircle, ArrowUp, ArrowDown, X, UserX, UserCheck } from 'lucide-react'
 import { rowOpenProps } from './ParticipantTable.jsx'
 import SelectCheckbox from './SelectCheckbox.jsx'
-import { attentionCategoryKeys } from '../lib/documentationRules.js'
+import Badge from '../../../components/ui/Badge.jsx'
+import { deriveFlightStatus, deriveReadiness, flightStatusLabel, flightStatusTone, readinessLabel, readinessTone } from '../lib/readinessEngine.js'
+import { attentionCategoryDef, attentionCategoryKeys } from '../lib/documentationRules.js'
 import { groupForSubgroup } from '../lib/subgroups.js'
 import { registrationState, REGISTRATION_STATE, REGISTRATION_STATE_LABELS } from '../lib/documentationRules.js'
 
 const DASH = <span className="icplc-wl-muted">—</span>
+const REGISTRATION_TONES = { registered: 'done', registration_missing: 'blocked', not_registered: 'at_risk' }
+const PARTICIPATION = {
+  confirmed: { label: 'Confirmed', tone: 'done' },
+  likely: { label: 'Likely', tone: 'in_progress' },
+  tracking: { label: 'Tracking', tone: 'mute' },
+  uncertain: { label: 'Uncertain', tone: 'mute' },
+  not_attending: { label: 'Not Attending', tone: 'blocked' },
+}
 
 const isAbsent = (p) => p.participation_status === 'not_attending'
 
@@ -21,6 +31,7 @@ function phoneOf(p) {
 const handleOf = (p) => (p.kingschat_username ? String(p.kingschat_username).replace(/^@/, '') : '')
 const attentionOf = (p) => attentionCategoryKeys(p).filter((k) => k !== 'not_registered' && k !== 'registration_missing')
 const humanize = (k) => k.replace(/_/g, ' ')
+const labelOf = (k) => attentionCategoryDef(k)?.label || humanize(k)
 
 // Column definitions: how to sort, and (optionally) which values a cell click can filter on.
 const groupOf = (p) => groupForSubgroup(p.subgroup) || p.group_name || ''
@@ -250,6 +261,121 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
           </tbody>
         </table>
       </div>
+
+      <div className="icplc-wl-mobile" role="region" aria-label="Mobile participant list">
+        {selection && (
+          <div className="icplc-wl-mobile-bar">
+            <SelectCheckbox
+              checked={selection.allShownSelected}
+              indeterminate={selection.someSelected}
+              onChange={selection.toggleAllShown}
+              label={`Select all mobile list rows (${rows.length})`}
+            />
+            <span>{rows.length} shown</span>
+            {selection.count > 0 && <strong>{selection.count} selected</strong>}
+          </div>
+        )}
+        {rows.length === 0 ? (
+          <div role="status" className="icplc-wl-mobile-empty">No participants match these column filters.</div>
+        ) : (
+          <div className="icplc-wl-mobile-list">
+            {rows.map((p) => (
+              <MobileParticipantCard
+                key={p.id}
+                participant={p}
+                selected={selection?.isSelected(p.id)}
+                onSelect={selection ? () => selection.toggle(p.id) : null}
+                onOpen={() => onOpen(p.id)}
+                onToggleAbsent={onToggleAbsent}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
+  )
+}
+
+function MobileParticipantCard({ participant: p, selected, onSelect, onOpen, onToggleAbsent }) {
+  const registration = regStateOf(p)
+  const { readiness } = deriveReadiness(p)
+  const flightStatus = deriveFlightStatus(p)
+  const participation = PARTICIPATION[p.participation_status] || { label: humanize(p.participation_status || 'tracking'), tone: 'mute' }
+  const attention = attentionOf(p)
+  const tags = Array.isArray(p.tags) ? p.tags : []
+  const subgroup = p.subgroup || groupOf(p)
+
+  return (
+    <article
+      className={`icplc-wl-card ${isRegistered(p) ? 'is-registered' : 'is-unregistered'}${isAbsent(p) ? ' is-absent' : ''}`}
+      tabIndex={0}
+      aria-label={`Open ${p.full_name}`}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() }
+      }}
+    >
+      <div className="icplc-wl-card-top">
+        {onSelect && (
+          <SelectCheckbox
+            checked={Boolean(selected)}
+            onChange={onSelect}
+            label={`Select ${p.full_name}`}
+          />
+        )}
+        <div className="icplc-wl-card-person">
+          <div className="icplc-wl-card-name">{p.full_name}</div>
+          <div className="icplc-wl-card-meta">
+            {p.email || 'No email'}
+            {subgroup && <span aria-hidden="true"> | </span>}
+            {subgroup && <span>{subgroup}</span>}
+          </div>
+        </div>
+        <Badge tone={readinessTone(readiness)} label={readinessLabel(readiness)} />
+      </div>
+
+      <div className="icplc-wl-card-status" aria-label={`${p.full_name} operational status`}>
+        <Badge tone={REGISTRATION_TONES[registration]} label={REGISTRATION_STATE_LABELS[registration]} />
+        <Badge tone={participation.tone} label={participation.label} />
+        <Badge tone={flightStatusTone(flightStatus)} label={flightStatusLabel(flightStatus)} />
+      </div>
+
+      {attention.length > 0 && (
+        <div className="icplc-wl-card-attention">
+          {attention.slice(0, 2).map((k) => <span key={k}>{labelOf(k)}</span>)}
+          {attention.length > 2 && <span>+{attention.length - 2} more</span>}
+        </div>
+      )}
+
+      {(tags.length > 0 || onToggleAbsent) && (
+        <div className="icplc-wl-card-footer">
+          {tags.length > 0 && (
+            <div className="icplc-wl-card-tags" aria-label={`${p.full_name} tags`}>
+              {tags.slice(0, 2).map((tag) => (
+                <span key={tag.id || tag.name} className="fchip" style={{ background: tag.color || 'var(--surface-2)' }}>
+                  {tag.name}
+                </span>
+              ))}
+              {tags.length > 2 && <span className="icplc-wl-card-tag-more">+{tags.length - 2}</span>}
+            </div>
+          )}
+          {onToggleAbsent && (
+            <button
+              type="button"
+              className="icplc-wl-filter icplc-wl-card-absent"
+              title={isAbsent(p) ? 'Not attending - click to clear' : 'Mark not attending (absent)'}
+              aria-pressed={isAbsent(p)}
+              aria-label={isAbsent(p) ? `Clear not attending for ${p.full_name}` : `Mark ${p.full_name} not attending`}
+              onClick={(e) => { e.stopPropagation(); onToggleAbsent(p) }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              {isAbsent(p) ? <UserX size={16} color="#B42318" aria-hidden /> : <UserCheck size={16} color="#9A93AE" aria-hidden />}
+              <span>{isAbsent(p) ? 'Not attending' : 'Attending'}</span>
+            </button>
+          )}
+        </div>
+      )}
+    </article>
   )
 }
