@@ -43,6 +43,7 @@ const COLUMNS = {
 export default function WorkingListTable({ participants, loading, onOpen, onToggleAbsent, selection }) {
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
   const [cellFilters, setCellFilters] = useState([]) // [{ column, value }]
+  const selectionEnabled = Boolean(selection)
 
   const rows = useMemo(() => {
     let list = participants || []
@@ -164,7 +165,7 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={(onToggleAbsent ? 10 : 9) + (selection ? 1 : 0)} style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>No participants match these column filters.</td></tr>
+              <tr><td colSpan={(onToggleAbsent ? 10 : 9) + (selectionEnabled ? 1 : 0)} style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>No participants match these column filters.</td></tr>
             )}
             {rows.map((p, i) => {
               const registered = isRegistered(p)

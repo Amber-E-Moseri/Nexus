@@ -4,7 +4,6 @@ import { useToast } from '../../../context/ToastContext'
 import { formatRelativeDate } from '../../../lib/dateUtils'
 import { recordActivity } from '../../../lib/activityFeed'
 import { createComment, deleteComment, getTaskComments } from '../lib/tasks'
-import { sendTaskPushNotification } from '../../notifications'
 import { supabase } from '../../../lib/supabase'
 
 function formatRelativeTime(dateStr) {
@@ -250,16 +249,7 @@ export default function TaskComments({ taskId, subtaskId, onMentionAssigned }) {
             }
             const result = Array.isArray(data) ? data[0] : data
             if (result?.notify_sent) {
-              const title = isSubtask
-                ? `${profile.name ?? 'Someone'} assigned you a subtask`
-                : `${profile.name ?? 'Someone'} assigned you a task`
-              sendTaskPushNotification(mentioned.id, {
-                taskId,
-                title,
-                message: task?.title ?? 'New assignment',
-                url: `/tasks/${taskId}`,
-                type: 'mention',
-              }).catch(() => {})
+              // Push + in-app are produced server-side from the notification row the RPC inserted.
             } else if (result && !result.notify_sent) {
               console.log(`[${rpcName}] assigned but no notification sent for`, mentioned.name, '(self-mention or opted out)')
             }

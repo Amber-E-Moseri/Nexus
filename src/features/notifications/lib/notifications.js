@@ -158,7 +158,7 @@ export async function sendBrowserPushNotification(title, options = {}) {
   }
 }
 
-export async function testPushNotifications(userId) {
+export async function testPushNotifications() {
   try {
     const { data: session } = await supabase.auth.getSession()
     const token = session?.session?.access_token
@@ -170,7 +170,7 @@ export async function testPushNotifications(userId) {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ user_id: userId }),
+        body: JSON.stringify({}), // recipient is always the authenticated caller (server ignores any user_id)
       },
     )
     return await response.json()
@@ -180,66 +180,10 @@ export async function testPushNotifications(userId) {
   }
 }
 
-export async function sendTaskPushNotification(userId, data) {
-  try {
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData?.session?.access_token
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-task-push-notification`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          userId,
-          taskId: data.taskId,
-          title: data.title,
-          message: data.message,
-          url: data.url,
-          type: data.type || 'task',
-        }),
-      }
-    )
-
-    const result = await response.json()
-    if (result.sent) {
-      console.log('Push notification sent:', result)
-    }
-    return result
-  } catch (err) {
-    console.error('Failed to send push notification:', err)
-    return { error: err.message }
-  }
-}
-
-// Fire-and-forget: mobile push is best-effort and must never block or fail
-// in-app notification creation. sendTaskPushNotification already no-ops
-// server-side when the user has no active push subscription.
-// Checks the user's mobile pref internally so any call site (createNotification
-// or direct RPC callers) can call this without a separate pref lookup.
-export function dispatchPush(userId, notification) {
-  if (typeof userId !== 'string' || !notification) return
-  const def = NOTIFICATION_TYPES[notification.type]
-  supabase
-    .from('user_notification_prefs')
-    .select('mobile')
-    .eq('user_id', userId)
-    .eq('notification_type', notification.type)
-    .single()
-    .then(({ data: pref }) => {
-      if (!(pref?.mobile ?? false)) return
-      sendTaskPushNotification(userId, {
-        taskId: notification.payload?.task_id,
-        title: def?.label ?? 'BLW CAN NEXUS',
-        message: formatNotificationMessage(notification),
-        url: '/inbox',
-        type: notification.type,
-      }).catch(() => {})
-    })
-    .catch(() => {})
-}
+// Client-initiated push was removed (Phase 0 security closure). Push is dispatched
+// only server-side by the dispatch_push_on_notification_insert trigger, which calls
+// send-task-push-notification with a stored notification_id. A browser can no longer
+// choose a recipient, title, body or URL.
 
 export function formatNotificationMessage(notification) {
   const { type, payload } = notification

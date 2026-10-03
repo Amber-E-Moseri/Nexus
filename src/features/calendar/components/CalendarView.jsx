@@ -69,14 +69,6 @@ export default function CalendarView({
     </div>
   ) : (
     <div className="space-y-5">
-      {onAddEvent ? (
-        <div className="flex justify-end">
-          <button type="button" onClick={onAddEvent} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white">
-            + Add Event
-          </button>
-        </div>
-      ) : null}
-
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_300px]">
         <CalendarGrid
           year={year}
@@ -89,6 +81,7 @@ export default function CalendarView({
           onNextMonth={onNextMonth}
           onToday={onToday}
           onDateReschedule={readOnly ? undefined : onDateReschedule}
+          onAddEvent={!readOnly ? onAddEvent : undefined}
         />
 
         <div className="space-y-4">

@@ -31,6 +31,7 @@ const LEGACY_KEY = 'legacy'
 export default function ICPLCPortal({
   config,
   accessTier,
+  scopedSubgroup = null,
   legacyContent,
   financeAccess,
   onConfigReload,
@@ -76,7 +77,7 @@ export default function ICPLCPortal({
   const isLegacyTab = resolvedTab === LEGACY_KEY
 
   return (
-    <ICPLCProvider config={config} accessTier={accessTier}>
+    <ICPLCProvider config={config} accessTier={accessTier} scopedSubgroup={scopedSubgroup}>
       <div className="icplc-root">
         <header className="icplc-header">
           <div className="icplc-header-left">
@@ -85,6 +86,17 @@ export default function ICPLCPortal({
               <div className="icplc-title">{config?.event_name || 'ICPLC'}</div>
               <div className="icplc-subtitle">International Campus Pastors and Leaders Conference</div>
             </div>
+          </div>
+          <div className="icplc-header-right">
+            <a
+              href="https://nexus.lwcanada.org/icplc26"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="icplc-header-link"
+              title="Go to ICPLC 26"
+            >
+              ICPLC 26
+            </a>
           </div>
         </header>
 
@@ -117,6 +129,22 @@ export default function ICPLCPortal({
           )}
         </div>
 
+        {scopedSubgroup && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '7px 20px',
+            background: '#F5F0FF',
+            borderBottom: '1px solid #E0D5FA',
+            fontSize: 12,
+            color: '#5B3DA8',
+            fontWeight: 500,
+          }}>
+            <span aria-hidden>🔵</span>
+            Viewing <strong>{scopedSubgroup}</strong> — your subgroup
+          </div>
+        )}
         <div role="tabpanel" className="icplc-panel">
           {isLegacyTab && (
             <div data-icplc-legacy-tab={LEGACY_KEY}>

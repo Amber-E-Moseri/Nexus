@@ -67,7 +67,7 @@ export async function getMySprints() {
     .select(`
       role,
       sprint:sprints(
-        id, name, description, goal, status,
+        id, name, description, goal, status, icon,
         start_date, end_date, created_at, archived_at, is_archived, category
       )
     `)
@@ -86,7 +86,7 @@ export async function getMySprints() {
 export async function getAllSprints() {
   const { data, error } = await supabase
     .from('sprints')
-    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
+    .select('id, name, description, goal, status, icon, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -99,7 +99,7 @@ export async function getSprintDetail(sprintId) {
   const [sprintRes, teamsRes, membersRes, reviewRes] = await Promise.all([
     supabase
       .from('sprints')
-      .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
+      .select('id, name, description, goal, status, icon, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
       .eq('id', sprintId)
       .single(),
     supabase.from('sprint_teams').select(SPRINT_TEAM_SELECT).eq('sprint_id', sprintId).order('created_at'),
@@ -155,7 +155,7 @@ export async function createSprint(data, createdBy, callerRole = null) {
   const { data: sprint, error } = await supabase
     .from('sprints')
     .insert({ ...data, created_by: createdBy })
-    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
+    .select('id, name, description, goal, status, icon, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
     .single()
 
   if (error) throw error
@@ -208,7 +208,7 @@ export async function updateSprint(sprintId, updates) {
     .from('sprints')
     .update(updates)
     .eq('id', sprintId)
-    .select('id, name, description, goal, status, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
+    .select('id, name, description, goal, status, icon, start_date, end_date, created_at, archived_at, is_archived, department_id, created_by, category')
     .single()
 
   if (error) throw error
@@ -332,6 +332,20 @@ export async function updateSprintTeam(teamId, updates) {
 }
 
 export async function deleteSprintTeam(teamId) {
+  const { error: rpcError } = await supabase.rpc('delete_sprint_team', { p_team_id: teamId })
+  if (!rpcError) return
+
+  // PGRST202 = function not found in schema cache (migration not yet deployed)
+  if (rpcError.code !== 'PGRST202') throw rpcError
+
+  // RPC not deployed — pre-delete children while parent still exists to avoid
+  // RLS CASCADE self-reference failures on sprint_team_members and file_attachment_access
+  const { error: accessError } = await supabase.from('file_attachment_access').delete().eq('sprint_team_id', teamId)
+  if (accessError) throw accessError
+
+  const { error: membersError } = await supabase.from('sprint_team_members').delete().eq('team_id', teamId)
+  if (membersError) throw membersError
+
   const { error } = await supabase.from('sprint_teams').delete().eq('id', teamId)
   if (error) throw error
 }

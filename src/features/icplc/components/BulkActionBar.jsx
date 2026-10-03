@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ClipboardCheck, Download, MoreHorizontal, X } from 'lucide-react'
+import { ClipboardCheck, Download, Mail, MoreHorizontal, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useBulkMarkDocumentationReviewed, useBulkSetTag } from '../hooks/useICPLCBulk.js'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
@@ -24,7 +24,7 @@ const STATUS_ORDER = ['updated', 'already_reviewed', 'no_change', 'skipped_stale
  * @param context       'needs_attention' | 'people' | 'documentation' | 'travel'
  * @param filteredRows  every row currently shown, used by Export filtered
  */
-export default function BulkActionBar({ eventId, selection, context, canWrite, filteredRows = [] }) {
+export default function BulkActionBar({ eventId, selection, context, canWrite, filteredRows = [], canEmail = false, onEmail }) {
   const count = selection.count
   const [pending, setPending] = useState(null) // { kind, text, run, partition? }
   const [result, setResult] = useState(null) // { title, summary, note, error }
@@ -136,6 +136,17 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
                 onClick={startReview}
               >
                 <ClipboardCheck size={14} aria-hidden /> Mark reviewed
+              </button>
+            )}
+
+            {canEmail && (
+              <button
+                type="button"
+                className="icplc-btn"
+                disabled={busy}
+                onClick={onEmail}
+              >
+                <Mail size={14} aria-hidden /> Email selected
               </button>
             )}
 

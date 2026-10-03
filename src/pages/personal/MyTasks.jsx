@@ -190,7 +190,7 @@ export default function MyTasks() {
     if (!profile?.id) return
     try {
       const [spacesData] = await Promise.all([
-        getMySpaces(profile.id, role, profile.department_id),
+        getMySpaces(profile.id, role, profile.department_id, profile.is_programs_member),
       ])
       const activeDepts = spacesData.filter((space) => space.status === 'active')
       setDepartments(activeDepts)

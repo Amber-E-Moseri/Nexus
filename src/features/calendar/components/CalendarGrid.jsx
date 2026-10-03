@@ -48,6 +48,7 @@ export default function CalendarGrid({
   onNextMonth,
   onToday,
   onDateReschedule,
+  onAddEvent,
 }) {
   const sensors = useDndSensors()
   const [expandedDay, setExpandedDay] = useState(null)
@@ -88,6 +89,21 @@ export default function CalendarGrid({
             {new Date(year, month, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })}
           </div>
           <div className="flex items-center gap-2">
+            {onAddEvent && (
+              <button
+                type="button"
+                onClick={onAddEvent}
+                className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white"
+                style={{ background: 'var(--purple-700)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--purple-600)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--purple-700)' }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Add event
+              </button>
+            )}
             <button type="button" aria-label="Jump to today" onClick={onToday} className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-secondary)]">
               Today
             </button>

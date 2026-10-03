@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { UserPlus } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
+import { useAuth } from '../../../hooks/useAuth.js'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useCreateParticipant } from '../hooks/useICPLCParticipants.js'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
@@ -14,6 +15,7 @@ import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import StatusKey from '../components/StatusKey.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import BoardPage from './BoardPage.jsx'
+import ICPLCEmailComposer, { EmailParticipantsButton, canEstimateICPLCEmail } from '../components/ICPLCEmailComposer.jsx'
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import { applyClientFilters, countAttentionCategories } from '../lib/participantFilters.js'
 import { filterParticipantsByWorkingListView } from '../lib/reconciliation.js'
@@ -25,8 +27,12 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
   const [showAdd, setShowAdd] = useState(false)
   // Operational People view hides Not Attending by default, like Needs Attention, Documentation and Travel.
   const [showAbsent, setShowAbsent] = useState(false)
-  const updateProfile = useUpdateProfile()
   const [notice, setNotice] = useState(null) // { ok, text } feedback for the per-row Absent toggle
+  const [showEmail, setShowEmail] = useState(false)
+  const [emailSelectedOnly, setEmailSelectedOnly] = useState(false)
+  const { profile } = useAuth()
+  const canEmail = canEstimateICPLCEmail(profile)
+  const updateProfile = useUpdateProfile()
 
   // Same hook (and cache keys) as the Overview, so opening the Working List after the Overview
   // reuses the already-fetched participants, registrations and identity maps instead of refetching.
@@ -134,11 +140,18 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--icplc-text, var(--text-primary))' }}>People</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {viewToggle}
+          {canEmail && (
+            <EmailParticipantsButton
+              count={displayedParticipants.length}
+              disabled={displayedParticipants.length === 0}
+              onClick={() => { setEmailSelectedOnly(false); setShowEmail(true) }}
+            />
+          )}
           {canWrite && (
             <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary">
-              <UserPlus size={14} aria-hidden /> Add
+              <UserPlus size={14} aria-hidden /> Add Participant
             </button>
           )}
         </div>
@@ -195,7 +208,15 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
         selection={selection}
       />
 
-      <BulkActionBar eventId={eventId} selection={selection} context="people" canWrite={canWrite} filteredRows={displayedParticipants} />
+      <BulkActionBar
+        eventId={eventId}
+        selection={selection}
+        context="people"
+        canWrite={canWrite}
+        filteredRows={displayedParticipants}
+        canEmail={canEmail}
+        onEmail={() => { setEmailSelectedOnly(true); setShowEmail(true) }}
+      />
 
       {activeProfileId && (
         <ParticipantProfileDrawer
@@ -203,6 +224,17 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
           initialTab={activeProfileTab}
           onClose={closeProfile}
           canWrite={canWrite}
+        />
+      )}
+
+      {showEmail && canEmail && (
+        <ICPLCEmailComposer
+          eventId={eventId}
+          eventName={config?.event_name}
+          sourceLabel={emailSelectedOnly ? 'Selected people' : 'Current list'}
+          participants={emailSelectedOnly ? selection.selectedRows : displayedParticipants}
+          open
+          onClose={() => { setShowEmail(false); setEmailSelectedOnly(false) }}
         />
       )}
 

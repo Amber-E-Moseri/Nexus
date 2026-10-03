@@ -105,6 +105,14 @@ function validateTaskFields(fields: string[], body: Record<string, unknown>) {
         return { valid: false, error: 'source_name must be 200 characters or fewer' }
       }
     }
+
+    if (field === 'assignee_id') {
+      if (value !== null && typeof value !== 'string') return { valid: false, error: 'assignee_id must be a valid UUID or null' }
+      if (typeof value === 'string') {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        if (!uuidRegex.test(value)) return { valid: false, error: 'assignee_id must be a valid UUID' }
+      }
+    }
   }
 
   return { valid: true, error: null }
@@ -195,7 +203,7 @@ Deno.serve(async (request) => {
 
       const body = await request.json()
       const validation = validateTaskFields(
-        ['title', 'description', 'priority', 'due_date', 'source_name'],
+        ['title', 'description', 'priority', 'due_date', 'source_name', 'assignee_id'],
         body as Record<string, unknown>,
       )
 
@@ -215,6 +223,23 @@ Deno.serve(async (request) => {
         return jsonResponse(403, { error: 'sprint_id is outside this API key scope' })
       }
 
+      const sprintId = body.sprint_id ?? keyRecord.sprint_id ?? null
+      const departmentId = body.department_id ?? keyRecord.department_id ?? null
+
+      if (body.assignee_id) {
+        const { data: assignee, error: assigneeError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', body.assignee_id)
+          .maybeSingle()
+
+        if (assigneeError) throw assigneeError
+        if (!assignee) {
+          return jsonResponse(400, { error: 'assignee not found' })
+        }
+        // assignee eligibility is governed by Nexus set_task_assignees() RPC authorization
+      }
+
       if (body.external_unique_key) {
         const { data: existing } = await supabase
           .from('tasks')
@@ -231,8 +256,6 @@ Deno.serve(async (request) => {
         }
       }
 
-      const sprintId = body.sprint_id ?? keyRecord.sprint_id ?? null
-      const departmentId = body.department_id ?? keyRecord.department_id ?? null
       const taskData = {
         title: body.title.trim(),
         description: body.description?.trim() || null,
@@ -248,6 +271,7 @@ Deno.serve(async (request) => {
         source_name: body.source_name ?? null,
         source_type: body.source_type ?? null,
         external_unique_key: body.external_unique_key ?? null,
+        assignee_id: body.assignee_id ?? null,
         is_personal: false,
       }
 

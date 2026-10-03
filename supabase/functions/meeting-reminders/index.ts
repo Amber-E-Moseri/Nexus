@@ -18,6 +18,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { isTrustedInternalCaller } from '../_shared/internalAuth.ts'
 
 Deno.serve(async (req) => {
   const cors = getCorsHeaders(req)
@@ -34,7 +35,7 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get('Authorization')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  if (!authHeader || authHeader.replace('Bearer ', '') !== serviceRoleKey) {
+  if (!authHeader || !isTrustedInternalCaller(req)) {
     return jsonResponse(401, { error: 'Unauthorized' })
   }
 

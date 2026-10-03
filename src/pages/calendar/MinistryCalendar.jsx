@@ -16,19 +16,19 @@ import CalendarSidebar from '../../features/calendar/components/CalendarSidebar'
 import SubscribeButton from '../../features/calendar/components/SubscribeButton'
 import { FONT_BODY, FONT_HEADING } from '../../features/calendar/lib/fonts'
 
-function useIsProgramsMember(profile) {
-  const [isProgramsMember, setIsProgramsMember] = useState(false)
+function useIsProgramsMemberLocal(profile) {
+  const [val, setVal] = useState(false)
   useEffect(() => {
     if (!profile?.department_id) return
     supabase.from('departments').select('id').eq('is_programs', true).maybeSingle()
-      .then(({ data }) => setIsProgramsMember(!!data && profile.department_id === data.id))
+      .then(({ data }) => setVal(!!data && profile.department_id === data.id))
   }, [profile?.department_id])
-  return isProgramsMember
+  return val
 }
 
 export default function MinistryCalendar() {
   const { effectiveRole, profile } = useAuth()
-  const isProgramsMember = useIsProgramsMember(profile)
+  const isProgramsMember = useIsProgramsMemberLocal(profile)
   const { showToast } = useToast()
   const location = useLocation()
   const navigate = useNavigate()
