@@ -17,7 +17,6 @@ import {
 import { normalizeTaskFieldSettings } from '../../../lib/taskFieldSettings'
 import { FONT_BODY, FONT_HEADING } from '../../../lib/fonts'
 import { createIndividuallyAssignedTasks, createTask, deleteTask, getAllOrgMembers, getSubtasks, getTaskBlockers, updateTask } from '../lib/tasks'
-import { dispatchPush } from '../../notifications'
 import {
   getTaskStatusId,
   listTaskStatuses,
@@ -466,7 +465,7 @@ export default function TaskModal({
 
   useEffect(() => {
     if (mode === 'create' && profile?.id && role) {
-      getMySpaces(profile.id, role, profile.department_id)
+      getMySpaces(profile.id, role, profile.department_id, profile.is_programs_member)
         .then((data) => {
           setSpaces(data.filter((space) => space.status === 'active'))
         })

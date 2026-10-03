@@ -23,6 +23,7 @@ const cardEnter = {
 }
 
 const FILTERS = ['all', 'active', 'planning', 'completed', 'review', 'archived']
+const FILTER_LABELS = { all: 'All status', active: 'Active', planning: 'Planning', completed: 'Completed', review: 'In Review', archived: 'Archived' }
 const CATEGORY_FILTERS = ['all', 'group', 'regional']
 const CATEGORY_LABELS = { all: 'All categories', group: 'Group', regional: 'Regional' }
 const EMPTY_STATE = {
@@ -245,13 +246,13 @@ export default function SprintsList() {
         ) : null}
       </div>
 
-      <div className="flex gap-2 flex-wrap items-center">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search sprints"
-          className="min-w-[220px] rounded-full px-4 py-1.5 text-sm"
+          className="w-full rounded-full px-4 py-1.5 text-sm sm:w-auto sm:min-w-[220px]"
           style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)' }}
         />
         <select
@@ -261,9 +262,7 @@ export default function SprintsList() {
           style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)' }}
         >
           {FILTERS.map((option) => (
-            <option key={option} value={option}>
-              {option.charAt(0).toUpperCase() + option.slice(1)}
-            </option>
+            <option key={option} value={option}>{FILTER_LABELS[option]}</option>
           ))}
         </select>
         <select
@@ -285,7 +284,7 @@ export default function SprintsList() {
           Loading...
         </div>
       ) : filtered.length > 0 ? (
-        <motion.div variants={gridStagger} initial="hidden" animate="show" className="grid gap-4 lg:grid-cols-3">
+        <motion.div variants={gridStagger} initial="hidden" animate="show" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((sprint) => (
             <motion.div key={sprint.id} variants={cardEnter}>
               <SprintCard

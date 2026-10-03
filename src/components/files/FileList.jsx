@@ -138,62 +138,62 @@ export default function FileList({ entityType, entityId, showUpload = false, spr
       )}
 
       {loading ? (
-        <div style={{ color: '#9E9488', fontSize: 13 }}>Loading files...</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#9E9488', fontSize: 13 }}>
+          <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #EDE8DC', borderTopColor: '#4C2A92', animation: 'spin 0.7s linear infinite' }} />
+          Loading files…
+          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+        </div>
       ) : files.length === 0 ? (
-        <div style={{ color: '#9E9488', fontSize: 13, padding: '16px 0' }}>No files uploaded yet.</div>
+        <div style={{ textAlign: 'center', padding: '32px 16px', color: '#9E9488' }}>
+          <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.5 }}>📎</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#6B6355', marginBottom: 4 }}>No files yet</div>
+          <div style={{ fontSize: 12 }}>{showUpload ? 'Upload a file to share with the sprint team.' : 'No files have been uploaded to this sprint.'}</div>
+        </div>
       ) : (
-        <div style={{ background: '#FFFFFF', borderRadius: 8, border: '1px solid #EDE8DC', overflow: 'hidden' }}>
-          {files.map((file) => (
+        <div style={{ borderRadius: 10, border: '1px solid #EDE8DC', overflow: 'hidden' }}>
+          {files.map((file, idx) => (
             <div key={file.id}>
               <div
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid #EDE8DC', background: '#FFFFFF' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderBottom: idx < files.length - 1 ? '1px solid #EDE8DC' : 'none', background: '#FFFFFF', transition: 'background 0.1s' }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#F9F7F1' }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF' }}
               >
-                {/* File type icon */}
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: '#F4F1EA', color: '#4C2A92', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', flexShrink: 0 }}>
-                  {getFileIconLabel(file.mime_type)}
-                </div>
+                <FileTypeIcon mimeType={file.mime_type} />
 
                 {/* Name + meta */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: '#2D2A22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 }} title={file.file_name}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#2D2A22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={file.file_name}>
                     {truncateFileName(file.file_name)}
                   </div>
-                  <div style={{ fontSize: 11, color: '#9E9488', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {formatFileSize(file.file_size)} • {uploaderMap[file.uploaded_by] || 'Unknown'} • {formatTimeAgo(file.created_at)}
+                  <div style={{ fontSize: 11, color: '#9E9488', marginTop: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '2px 6px' }}>
+                    <span>{formatFileSize(file.file_size)}</span>
+                    <span style={{ opacity: 0.5 }}>·</span>
+                    <span>{uploaderMap[file.uploaded_by] || 'Unknown'}</span>
+                    <span style={{ opacity: 0.5 }}>·</span>
+                    <span>{formatTimeAgo(file.created_at)}</span>
                     <AccessBadge file={file} accessMap={accessMap} sprintMembers={sprintMembers} sprintTeams={sprintTeams} />
                   </div>
                 </div>
 
                 {/* Actions */}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {/* Edit access — uploader only, sprint files only */}
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                   {user?.id === file.uploaded_by && (sprintMembers.length > 0 || sprintTeams.length > 0) && (
-                    <button
-                      type="button"
-                      onClick={() => setEditingAccessId(editingAccessId === file.id ? null : file.id)}
+                    <IconBtn
                       title="Edit access"
-                      style={{ width: 32, height: 32, border: '1px solid #EDE8DC', background: editingAccessId === file.id ? '#F0EBF8' : '#FFFFFF', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4C2A92' }}
+                      active={editingAccessId === file.id}
+                      onClick={() => setEditingAccessId(editingAccessId === file.id ? null : file.id)}
                     >
                       <Lock size={13} />
-                    </button>
+                    </IconBtn>
                   )}
-                  <button type="button" onClick={() => handleDownload(file)} title="Download" style={{ width: 32, height: 32, border: '1px solid #EDE8DC', background: '#FFFFFF', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4C2A92' }}>
-                    <Download size={14} />
-                  </button>
-                  <button type="button" onClick={() => setPreviewFile(file)} title="Preview" style={{ width: 32, height: 32, border: '1px solid #EDE8DC', background: '#FFFFFF', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4C2A92' }}>
-                    <Eye size={14} />
-                  </button>
+                  <IconBtn title="Preview" onClick={() => setPreviewFile(file)}><Eye size={13} /></IconBtn>
+                  <IconBtn title="Download" onClick={() => handleDownload(file)}><Download size={13} /></IconBtn>
                   {canDelete(file) && (
-                    <button type="button" onClick={() => handleDelete(file)} title="Delete" style={{ width: 32, height: 32, border: '1px solid #EDE8DC', background: '#FFFFFF', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#DC2626' }}>
-                      <Trash2 size={14} />
-                    </button>
+                    <IconBtn title="Delete" danger onClick={() => handleDelete(file)}><Trash2 size={13} /></IconBtn>
                   )}
                 </div>
               </div>
 
-              {/* Inline access editor */}
               {editingAccessId === file.id && (
                 <AccessEditor
                   file={file}
@@ -211,6 +211,62 @@ export default function FileList({ entityType, entityId, showUpload = false, spr
 
       {previewFile && <FilePreviewModal attachment={previewFile} onClose={() => setPreviewFile(null)} />}
     </div>
+  )
+}
+
+const FILE_TYPE_COLORS = {
+  pdf: { bg: '#FEE2E2', color: '#B91C1C' },
+  doc: { bg: '#DBEAFE', color: '#1D4ED8' },
+  docx: { bg: '#DBEAFE', color: '#1D4ED8' },
+  xls: { bg: '#DCFCE7', color: '#15803D' },
+  xlsx: { bg: '#DCFCE7', color: '#15803D' },
+  csv: { bg: '#DCFCE7', color: '#15803D' },
+  ppt: { bg: '#FFEDD5', color: '#C2410C' },
+  pptx: { bg: '#FFEDD5', color: '#C2410C' },
+  jpg: { bg: '#EDE9FE', color: '#6D28D9' },
+  jpeg: { bg: '#EDE9FE', color: '#6D28D9' },
+  png: { bg: '#EDE9FE', color: '#6D28D9' },
+  gif: { bg: '#EDE9FE', color: '#6D28D9' },
+  svg: { bg: '#EDE9FE', color: '#6D28D9' },
+  mp4: { bg: '#FCE7F3', color: '#9D174D' },
+  mov: { bg: '#FCE7F3', color: '#9D174D' },
+  zip: { bg: '#F3F4F6', color: '#374151' },
+  default: { bg: '#F4F1EA', color: '#4C2A92' },
+}
+
+function FileTypeIcon({ mimeType }) {
+  const label = getFileIconLabel(mimeType)
+  const ext = mimeType?.split('/')?.[1]?.split('.')?.[1] || mimeType?.split('/')?.[1] || 'file'
+  const colors = FILE_TYPE_COLORS[label.toLowerCase()] || FILE_TYPE_COLORS[ext] || FILE_TYPE_COLORS.default
+  return (
+    <div style={{ width: 34, height: 34, borderRadius: 8, background: colors.bg, color: colors.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, letterSpacing: '0.04em', flexShrink: 0 }}>
+      {label}
+    </div>
+  )
+}
+
+function IconBtn({ children, title, onClick, danger, active }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: 30, height: 30,
+        border: '1px solid',
+        borderColor: active ? 'var(--accent)' : hovered ? (danger ? '#FCA5A5' : '#D8D0C4') : '#EDE8DC',
+        background: active ? '#F0EBF8' : hovered ? (danger ? '#FEF2F2' : '#F4F1EA') : '#FFFFFF',
+        borderRadius: 6, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: active ? 'var(--accent)' : danger ? (hovered ? '#DC2626' : '#C94830') : '#4C2A92',
+        transition: 'all 0.1s',
+      }}
+    >
+      {children}
+    </button>
   )
 }
 

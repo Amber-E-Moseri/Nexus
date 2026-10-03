@@ -39,9 +39,10 @@ const COLUMNS = {
  * Compact Working List table. Click a header to sort; click a Subgroup / Campus /
  * Registered / Attention value to filter to it (click again, or the chip, to clear).
  */
-export default function WorkingListTable({ participants, loading, onOpen, onToggleAbsent }) {
+export default function WorkingListTable({ participants, loading, onOpen, onToggleAbsent, selectedIds, onToggleSelect, onSetSelection }) {
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
   const [cellFilters, setCellFilters] = useState([]) // [{ column, value }]
+  const selectionEnabled = selectedIds && onToggleSelect
 
   const rows = useMemo(() => {
     let list = participants || []
@@ -75,6 +76,8 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
   }
 
   const isFiltered = (column, value) => cellFilters.some((f) => f.column === column && f.value === value)
+  const allVisibleSelected = selectionEnabled && rows.length > 0 && rows.every((p) => selectedIds.has(p.id))
+  const someVisibleSelected = selectionEnabled && rows.some((p) => selectedIds.has(p.id))
 
   function FilterCell({ column, value, children }) {
     const active = isFiltered(column, value)
@@ -134,6 +137,21 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
         <table className="icplc-wl-table">
           <thead>
             <tr>
+              {selectionEnabled && (
+                <th scope="col" style={{ width: 36, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    aria-label={allVisibleSelected ? 'Clear visible selection' : 'Select visible participants'}
+                    checked={allVisibleSelected}
+                    ref={(el) => { if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected }}
+                    onChange={(e) => {
+                      const visibleIds = rows.map((p) => p.id)
+                      if (e.target.checked) onSetSelection?.([...new Set([...(selectedIds || []), ...visibleIds])])
+                      else onSetSelection?.([...(selectedIds || [])].filter((id) => !visibleIds.includes(id)))
+                    }}
+                  />
+                </th>
+              )}
               <th scope="col" className="icplc-wl-num">#</th>
               <Th k="name" />
               <Th k="group" />
@@ -148,7 +166,7 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={onToggleAbsent ? 10 : 9} style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>No participants match these column filters.</td></tr>
+              <tr><td colSpan={(onToggleAbsent ? 10 : 9) + (selectionEnabled ? 1 : 0)} style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>No participants match these column filters.</td></tr>
             )}
             {rows.map((p, i) => {
               const registered = isRegistered(p)
@@ -162,6 +180,17 @@ export default function WorkingListTable({ participants, loading, onOpen, onTogg
                   {...rowOpenProps(p.full_name, () => onOpen(p.id))}
                   className={`icplc-row icplc-wl-row ${registered ? 'is-registered' : 'is-unregistered'}${isAbsent(p) ? ' is-absent' : ''}`}
                 >
+                  {selectionEnabled && (
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${p.full_name}`}
+                        checked={selectedIds.has(p.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => onToggleSelect(p.id)}
+                      />
+                    </td>
+                  )}
                   <td className="icplc-wl-num">{i + 1}</td>
                   <td className="icplc-wl-name">{p.full_name}</td>
                   <td className="icplc-wl-muted">{groupOf(p) ? <FilterCell column="group" value={groupOf(p)} /> : DASH}</td>

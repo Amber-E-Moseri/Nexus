@@ -1,55 +1,130 @@
-import { useState, useEffect } from 'react'
-import { Plus, Trash2, AlertCircle } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Trash2, AlertCircle, Crown, Search } from 'lucide-react'
 import { getGroupSpaceMembers, addGroupSpaceMember, removeGroupSpaceMember, getMySpaces, transferGroupSpaceOwnership } from '../lib/spaces'
 import { useAuth } from '../../../hooks/useAuth'
 import { supabase } from '../../../lib/supabase'
+
+function getInitials(name) {
+  if (!name) return '?'
+  return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+}
+
+function Avatar({ member, size = 40 }) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: member.avatar_color ?? '#5B34C7',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: size * 0.3,
+        fontWeight: 700,
+        flexShrink: 0,
+      }}
+    >
+      {getInitials(member.name ?? member.email)}
+    </div>
+  )
+}
+
+function Feedback({ error, success }) {
+  if (error) return (
+    <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', color: '#B91C1C', fontSize: 13 }}>
+      {error}
+    </div>
+  )
+  if (success) return (
+    <div style={{ padding: '10px 14px', borderRadius: 10, background: '#F0FDF4', color: '#15803D', fontSize: 13 }}>
+      {success}
+    </div>
+  )
+  return null
+}
+
+const SECTION_LABEL = {
+  fontSize: 11,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+  color: 'var(--text-tertiary)',
+  marginBottom: 10,
+}
 
 export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwnership, onOwnershipTransferred }) {
   const { profile, role } = useAuth()
   const [members, setMembers] = useState([])
   const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [usersError, setUsersError] = useState(null)
+
+  // Add member state
+  const [pickerQuery, setPickerQuery] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState('')
-  const [selectedNewOwnerId, setSelectedNewOwnerId] = useState('')
+  const [selectedUserName, setSelectedUserName] = useState('')
   const [selectedSpaceIds, setSelectedSpaceIds] = useState(new Set([groupSpaceId]))
   const [mySpaces, setMySpaces] = useState([])
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [addSaving, setAddSaving] = useState(false)
+  const [addError, setAddError] = useState('')
+  const [addSuccess, setAddSuccess] = useState('')
+
+  // Remove member state
+  const [removingId, setRemovingId] = useState(null)
+  const [removeError, setRemoveError] = useState('')
+
+  // Transfer ownership state
+  const [selectedNewOwnerId, setSelectedNewOwnerId] = useState('')
+  const [transferSaving, setTransferSaving] = useState(false)
+  const [transferError, setTransferError] = useState('')
+  const [transferSuccess, setTransferSuccess] = useState('')
+
+  const pickerRef = useRef(null)
 
   useEffect(() => {
     loadData()
   }, [groupSpaceId])
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
+        setPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   async function loadData() {
     setLoading(true)
     try {
       const [membersData, spacesData] = await Promise.all([
         getGroupSpaceMembers(groupSpaceId),
-        canTransferOwnership ? getMySpaces(profile?.id, role, profile?.department_id) : [],
+        canTransferOwnership ? getMySpaces(profile?.id, role, profile?.department_id, profile?.is_programs_member) : Promise.resolve([]),
       ])
-
       setMembers(membersData)
-
       if (canTransferOwnership) {
-        // Filter to only group spaces
-        const groupSpaces = spacesData.filter((s) => s.space_type === 'group')
-        setMySpaces(groupSpaces)
+        setMySpaces(spacesData.filter((s) => s.space_type === 'group'))
       }
 
-      // Fetch all users for the picker
-      const { data: users, error: usersError } = await supabase
+      // Load all users for the picker — catch silently and show inline error
+      const { data: users, error: uErr } = await supabase
         .from('users')
-        .select('id, name, email')
+        .select('id, name, email, avatar_url')
         .order('name')
 
-      if (!usersError && users) {
-        // Filter out already-members of the current space
+      if (uErr) {
+        setUsersError(uErr.message)
+      } else if (users) {
         const memberIds = new Set(membersData.map((m) => m.id))
         setAllUsers(users.filter((u) => !memberIds.has(u.id)))
+        setUsersError(null)
       }
     } catch (err) {
-      setError(err.message)
+      setRemoveError(err.message)
     } finally {
       setLoading(false)
     }
@@ -57,239 +132,386 @@ export default function GroupSpaceMembersPanel({ groupSpaceId, canTransferOwners
 
   async function handleAddMember() {
     if (!selectedUserId) {
-      setError('Please select a user')
+      setAddError('Please select a user first')
       return
     }
-
-    setSaving(true)
-    setError('')
-    setSuccess('')
-
+    setAddSaving(true)
+    setAddError('')
+    setAddSuccess('')
     try {
-      await Promise.all([...selectedSpaceIds].map(spaceId => addGroupSpaceMember(spaceId, selectedUserId)))
-
-      setSuccess(`Added to ${selectedSpaceIds.size} space${selectedSpaceIds.size > 1 ? 's' : ''}`)
+      await Promise.all([...selectedSpaceIds].map((sid) => addGroupSpaceMember(sid, selectedUserId)))
+      setAddSuccess(`${selectedUserName} added successfully`)
       setSelectedUserId('')
+      setSelectedUserName('')
+      setPickerQuery('')
       setSelectedSpaceIds(new Set([groupSpaceId]))
       await loadData()
     } catch (err) {
-      setError(err.message)
+      setAddError(err.message)
     } finally {
-      setSaving(false)
+      setAddSaving(false)
     }
   }
 
-  async function handleRemoveMember(userId) {
-    if (!window.confirm('Remove this member?')) return
-
-    setSaving(true)
-    setError('')
-
+  async function handleRemoveMember(userId, memberName) {
+    if (!window.confirm(`Remove ${memberName} from this group space?`)) return
+    setRemovingId(userId)
+    setRemoveError('')
     try {
       await removeGroupSpaceMember(groupSpaceId, userId)
       await loadData()
     } catch (err) {
-      setError(err.message)
+      setRemoveError(err.message)
     } finally {
-      setSaving(false)
+      setRemovingId(null)
     }
   }
 
   async function handleTransferOwnership() {
     if (!selectedNewOwnerId) {
-      setError('Please select the new owner')
+      setTransferError('Please select a new owner')
       return
     }
-
     if (!window.confirm('Transfer ownership of this group space? You will remain a member.')) return
-
-    setSaving(true)
-    setError('')
-    setSuccess('')
-
+    setTransferSaving(true)
+    setTransferError('')
+    setTransferSuccess('')
     try {
       const updatedSpace = await transferGroupSpaceOwnership(groupSpaceId, selectedNewOwnerId)
-      const newOwner = members.find((member) => member.id === selectedNewOwnerId)
+      const newOwner = members.find((m) => m.id === selectedNewOwnerId)
       setSelectedNewOwnerId('')
-      setSuccess(`Ownership transferred to ${newOwner?.name || newOwner?.email || 'the selected member'}`)
+      setTransferSuccess(`Ownership transferred to ${newOwner?.name ?? newOwner?.email ?? 'new owner'}`)
       await loadData()
       onOwnershipTransferred?.(updatedSpace)
     } catch (err) {
-      setError(err.message)
+      setTransferError(err.message)
     } finally {
-      setSaving(false)
+      setTransferSaving(false)
     }
   }
 
-  const ownerCandidates = members.filter((member) => member.id !== profile?.id)
+  const ownerCandidates = members.filter((m) => m.id !== profile?.id)
+
+  const filteredUsers = allUsers.filter((u) => {
+    const q = pickerQuery.trim().toLowerCase()
+    if (!q) return true
+    return (u.name ?? '').toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q)
+  })
 
   if (loading) {
-    return <div className="p-4 text-center text-sm text-[var(--text-secondary)]">Loading members...</div>
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+        Loading members…
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-4 rounded-lg border border-[var(--border)] bg-white p-4">
-      <div>
-        <h4 className="text-sm font-semibold text-[var(--text-primary)]">👥 Members</h4>
-        <p className="mt-1 text-xs text-[var(--text-secondary)]">
-          {members.length} {members.length === 1 ? 'member' : 'members'}
-        </p>
-      </div>
-
-      {error && (
-        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
-          {success}
-        </div>
-      )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
       {/* Members list */}
-      {members.length > 0 && (
-        <div className="space-y-2 rounded-lg bg-[var(--surface-secondary)] p-3">
-          {members.map((member) => (
-            <div key={member.id} className="flex items-center justify-between gap-2 text-sm">
-              <div>
-                <div className="flex items-center gap-2 font-medium text-[var(--text-primary)]">
-                  <span>{member.name || member.email}</span>
-                  {member.role === 'owner' ? (
-                    <span className="rounded-full bg-[rgba(91,52,199,0.12)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5B34C7]">
-                      Owner
-                    </span>
-                  ) : null}
+      <div style={{ borderRadius: 24, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={SECTION_LABEL}>Members</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{members.length} {members.length === 1 ? 'member' : 'members'}</div>
+          </div>
+        </div>
+
+        {removeError && (
+          <div style={{ margin: '12px 20px 0' }}>
+            <Feedback error={removeError} />
+          </div>
+        )}
+
+        <div>
+          {members.map((member, idx) => (
+            <div
+              key={member.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '14px 20px',
+                borderTop: idx === 0 ? 'none' : '1px solid var(--border)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <Avatar member={member} size={40} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {member.name ?? member.email}
+                    </div>
+                    {member.role === 'owner' && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 999, background: 'rgba(91,52,199,0.1)', color: '#5B34C7', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>
+                        <Crown size={9} />
+                        Owner
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {member.email}
+                  </div>
                 </div>
-                <div className="text-xs text-[var(--text-secondary)]">{member.email}</div>
               </div>
+
               {canTransferOwnership && member.role !== 'owner' && (
                 <button
                   type="button"
-                  onClick={() => handleRemoveMember(member.id)}
-                  disabled={saving}
-                  className="rounded p-1 hover:bg-red-50"
-                  title="Remove member"
+                  onClick={() => handleRemoveMember(member.id, member.name ?? member.email)}
+                  disabled={!!removingId}
+                  title={`Remove ${member.name ?? member.email}`}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: 'none',
+                    borderRadius: 8,
+                    background: 'transparent',
+                    cursor: removingId ? 'default' : 'pointer',
+                    color: '#DC2626',
+                    opacity: removingId && removingId !== member.id ? 0.4 : 1,
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => { if (!removingId) e.currentTarget.style.background = '#FEF2F2' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                 >
-                  <Trash2 size={14} className="text-red-600" />
+                  <Trash2 size={15} />
                 </button>
               )}
             </div>
           ))}
-        </div>
-      )}
 
-      {members.length === 0 && (
-        <div className="rounded-lg bg-[var(--surface-secondary)] p-3 text-center text-sm text-[var(--text-secondary)]">
-          No members yet (other than owner)
-        </div>
-      )}
-
-      {/* Add member section - only for owner */}
-      {canTransferOwnership && (
-        <div className="space-y-3 rounded-lg border-t border-[var(--border)] pt-4">
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-              Add member
-            </label>
-            <select
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-              disabled={saving}
-            >
-              <option value="">Select a user...</option>
-              {allUsers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name || user.email}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Add to multiple spaces */}
-          {mySpaces.length > 1 && (
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                Add to spaces
-              </label>
-              <div className="mt-2 space-y-1 rounded-lg bg-[var(--surface-secondary)] p-2">
-                {mySpaces.map((space) => (
-                  <label key={space.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedSpaceIds.has(space.id)}
-                      onChange={(e) => {
-                        const next = new Set(selectedSpaceIds)
-                        if (e.target.checked) {
-                          next.add(space.id)
-                        } else {
-                          next.delete(space.id)
-                        }
-                        setSelectedSpaceIds(next)
-                      }}
-                      className="rounded"
-                    />
-                    <span className="text-[var(--text-primary)]">{space.name}</span>
-                  </label>
-                ))}
-              </div>
-              <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                {selectedSpaceIds.size} space{selectedSpaceIds.size !== 1 ? 's' : ''} selected
-              </p>
+          {members.length === 0 && (
+            <div style={{ padding: '40px 20px', textAlign: 'center', fontSize: 13, color: 'var(--text-tertiary)' }}>
+              No members yet.
             </div>
           )}
+        </div>
+      </div>
 
-          <button
-            type="button"
-            onClick={handleAddMember}
-            disabled={!selectedUserId || saving}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            <Plus size={14} />
-            {saving ? 'Adding...' : 'Add member'}
-          </button>
+      {/* Add member (owner/admin only) */}
+      {canTransferOwnership && (
+        <div style={{ borderRadius: 24, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+            <div style={SECTION_LABEL}>Add Member</div>
+          </div>
+          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {ownerCandidates.length > 0 ? (
-            <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--surface-secondary)] p-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
-                  Transfer ownership
-                </div>
-                <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                  Choose an existing member to become the new owner of this group space.
-                </p>
+            <Feedback error={addError} success={addSuccess} />
+
+            {usersError ? (
+              <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FFF7ED', color: '#C2410C', fontSize: 13 }}>
+                Could not load users: {usersError}
               </div>
-              <select
-                value={selectedNewOwnerId}
-                onChange={(e) => setSelectedNewOwnerId(e.target.value)}
-                className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-                disabled={saving}
+            ) : null}
+
+            {/* Typeahead picker */}
+            <div ref={pickerRef} style={{ position: 'relative' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 12,
+                  background: 'var(--surface-tertiary)',
+                  cursor: 'text',
+                }}
+                onClick={() => { if (!selectedUserId) setPickerOpen(true) }}
               >
-                <option value="">Select new owner...</option>
-                {ownerCandidates.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name || member.email}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handleTransferOwnership}
-                disabled={!selectedNewOwnerId || saving}
-                className="w-full rounded-lg border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text-primary)] disabled:opacity-60"
-              >
-                {saving ? 'Transferring...' : 'Transfer ownership'}
-              </button>
+                <Search size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                {selectedUserId ? (
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{selectedUserName}</span>
+                ) : (
+                  <input
+                    type="text"
+                    value={pickerQuery}
+                    onChange={(e) => { setPickerQuery(e.target.value); setPickerOpen(true) }}
+                    onFocus={() => setPickerOpen(true)}
+                    placeholder={allUsers.length === 0 && !usersError ? 'No users available' : 'Search users…'}
+                    disabled={allUsers.length === 0 && !usersError}
+                    style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13, color: 'var(--text-primary)' }}
+                  />
+                )}
+                {selectedUserId && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setSelectedUserId(''); setSelectedUserName(''); setPickerQuery('') }}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 0, lineHeight: 1 }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                )}
+              </div>
+
+              {pickerOpen && !selectedUserId && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    left: 0,
+                    right: 0,
+                    background: 'white',
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    boxShadow: '0 8px 24px rgba(28,22,16,0.12)',
+                    maxHeight: 220,
+                    overflowY: 'auto',
+                    zIndex: 20,
+                  }}
+                >
+                  {filteredUsers.length === 0 ? (
+                    <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-tertiary)' }}>
+                      {pickerQuery ? 'No users match' : 'No users available'}
+                    </div>
+                  ) : (
+                    filteredUsers.slice(0, 40).map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          // Use mousedown to beat the document click-outside handler
+                          e.preventDefault()
+                          setSelectedUserId(user.id)
+                          setSelectedUserName(user.name ?? user.email)
+                          setPickerOpen(false)
+                          setPickerQuery('')
+                        }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--purple-tint, #EDE8F8)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                      >
+                        <Avatar member={user} size={28} />
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{user.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{user.email}</div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
-          ) : null}
+
+            {/* Add to multiple spaces */}
+            {mySpaces.length > 1 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 8 }}>
+                  Also add to
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 10px', background: 'var(--surface-secondary)', borderRadius: 10 }}>
+                  {mySpaces.map((space) => (
+                    <label key={space.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedSpaceIds.has(space.id)}
+                        onChange={(e) => {
+                          const next = new Set(selectedSpaceIds)
+                          if (e.target.checked) { next.add(space.id) } else { next.delete(space.id) }
+                          setSelectedSpaceIds(next)
+                        }}
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                      <span style={{ color: 'var(--text-primary)' }}>{space.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleAddMember}
+              disabled={!selectedUserId || addSaving}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                width: '100%',
+                padding: '10px 18px',
+                borderRadius: 12,
+                border: 'none',
+                background: 'var(--accent)',
+                color: 'white',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: !selectedUserId || addSaving ? 'default' : 'pointer',
+                opacity: !selectedUserId || addSaving ? 0.55 : 1,
+              }}
+            >
+              <Plus size={14} />
+              {addSaving ? 'Adding…' : 'Add Member'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer ownership (owner/admin only, needs at least one other member) */}
+      {canTransferOwnership && ownerCandidates.length > 0 && (
+        <div style={{ borderRadius: 24, border: '1px solid var(--border)', background: 'white', overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+            <div style={SECTION_LABEL}>Transfer Ownership</div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+              Pass ownership to another member. You'll remain in the group.
+            </div>
+          </div>
+          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Feedback error={transferError} success={transferSuccess} />
+
+            <select
+              value={selectedNewOwnerId}
+              onChange={(e) => setSelectedNewOwnerId(e.target.value)}
+              disabled={transferSaving}
+              style={{
+                width: '100%',
+                fontSize: 13,
+                padding: '10px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: 12,
+                background: 'var(--surface-tertiary)',
+                color: 'var(--text-primary)',
+                outline: 'none',
+              }}
+            >
+              <option value="">Select new owner…</option>
+              {ownerCandidates.map((m) => (
+                <option key={m.id} value={m.id}>{m.name ?? m.email}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleTransferOwnership}
+              disabled={!selectedNewOwnerId || transferSaving}
+              style={{
+                width: '100%',
+                padding: '10px 18px',
+                borderRadius: 12,
+                border: '1px solid var(--border)',
+                background: 'white',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: !selectedNewOwnerId || transferSaving ? 'default' : 'pointer',
+                opacity: !selectedNewOwnerId || transferSaving ? 0.55 : 1,
+              }}
+            >
+              {transferSaving ? 'Transferring…' : 'Transfer Ownership'}
+            </button>
+          </div>
         </div>
       )}
 
       {!canTransferOwnership && (
-        <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900">
-          <AlertCircle size={12} className="mb-1 inline" /> Only the group owner or a super admin can manage members
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 16px', borderRadius: 12, background: '#EFF6FF', color: '#1D4ED8', fontSize: 13 }}>
+          <AlertCircle size={14} style={{ marginTop: 1, flexShrink: 0 }} />
+          Only the group owner or a super admin can manage members and transfer ownership.
         </div>
       )}
     </div>

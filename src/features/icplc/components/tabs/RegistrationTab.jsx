@@ -6,18 +6,9 @@ import { ClipboardCheck, Link2 } from 'lucide-react'
 import { Card, EditButton } from './tabUi.jsx'
 import Badge from '../../../../components/ui/Badge.jsx'
 import { useAuth } from '../../../../hooks/useAuth'
-import { useUpdateProfile, useClearFieldOverride } from '../../hooks/useICPLCProfile.js'
-import { getOverrideMeta } from '../../lib/fieldAuthority.js'
+import { useUpdateProfile } from '../../hooks/useICPLCProfile.js'
 import { registrationState, REGISTRATION_STATE_LABELS } from '../../lib/documentationRules.js'
 
-// The stored value has four raw values, but only three states are ever shown: an empty / `unknown` value carries no
-// sign of registration activity, so it reads as Not Registered. `issue` means registration was started but is not complete.
-const REGISTRATION_OPTIONS = [
-  ['not_registered', 'Not registered'],
-  ['issue', 'Registration missing (started, not complete)'],
-  ['registered', 'Registered'],
-]
-const storedRegistrationLabel = (v) => (v === 'registered' ? 'Registered' : v === 'issue' ? 'Registration missing' : 'Not registered')
 const REGISTRATION_STATE_NOTES = {
   registered: null,
   registration_missing: 'Registration was started but is not complete. It still needs to be completed.',
@@ -28,11 +19,9 @@ const PARTICIPATION_OPTIONS = ['tracking', 'likely', 'confirmed', 'uncertain', '
 export default function RegistrationTab({ participant, canWrite }) {
   const { profile: authProfile } = useAuth()
   const updateProfile = useUpdateProfile()
-  const clearOverride = useClearFieldOverride()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     participation_status: participant.participation_status,
-    registration_status: participant.registration_status,
   })
   const { data: linkedMaps = [] } = useQuery({
     queryKey: ['icplc_participant_registration_links', participant.id],
@@ -50,33 +39,18 @@ export default function RegistrationTab({ participant, canWrite }) {
   const isLinked = linkedMaps.length > 0
   const regState = registrationState({ ...participant, registration_link_status: isLinked ? 'registered' : 'not_registered' })
 
-  const registrationOverride = getOverrideMeta(participant, 'registration_status')
   const registrationSource = participant.source_values?.registration_source
   const registrationStatusSource = participant.source_values?.registration_status
 
   async function handleSave() {
-    const changed = {}
-    if (form.participation_status !== participant.participation_status)
-      changed.participation_status = form.participation_status
-    if (form.registration_status !== participant.registration_status)
-      changed.registration_status = form.registration_status
-
-    if (Object.keys(changed).length === 0) { setEditing(false); return }
-
-    // If registration_status changed manually, set an override
-    const setOverride = 'registration_status' in changed
+    if (form.participation_status === participant.participation_status) { setEditing(false); return }
     await updateProfile.mutateAsync({
       id: participant.id,
-      fields: changed,
-      setOverride,
-      overrideField: setOverride ? 'registration_status' : undefined,
+      fields: { participation_status: form.participation_status },
+      setOverride: false,
       userId: authProfile?.id,
     })
     setEditing(false)
-  }
-
-  async function handleResumeSync(field) {
-    await clearOverride.mutateAsync({ id: participant.id, field })
   }
 
   return (
@@ -124,27 +98,6 @@ export default function RegistrationTab({ participant, canWrite }) {
       </div>
       <div style={{ marginTop: 14 }}>
 
-      <Field
-        label="Recorded registration status"
-        sourceValue={participant.source_values?.registration_status}
-        override={registrationOverride}
-        onResumeSync={canWrite ? () => handleResumeSync('registration_status') : null}
-      >
-        {editing && canWrite ? (
-          <select
-            aria-label="Registration status"
-            value={form.registration_status === 'unknown' ? 'not_registered' : form.registration_status}
-            onChange={(e) => setForm((f) => ({ ...f, registration_status: e.target.value }))}
-            style={selectStyle}
-          >
-            {REGISTRATION_OPTIONS.map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        ) : (
-          <span style={{ fontSize: 13 }}>{storedRegistrationLabel(participant.registration_status)}</span>
-        )}
-      </Field>
       </div>
       </Card>
 
@@ -160,7 +113,7 @@ export default function RegistrationTab({ participant, canWrite }) {
   )
 }
 
-function Field({ label, staffManaged, sourceValue, override, onResumeSync, children }) {
+function Field({ label, staffManaged, children }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
@@ -170,34 +123,8 @@ function Field({ label, staffManaged, sourceValue, override, onResumeSync, child
             Staff-managed
           </span>
         )}
-        {override && (
-          <span style={{ fontSize: 10, background: '#FFF3CD', borderRadius: 4, padding: '1px 5px', color: '#856404' }}>
-            Override active
-          </span>
-        )}
       </div>
       {children}
-      {/* Source disagreement panel */}
-      {sourceValue && override && (
-        <div style={{
-          marginTop: 8, padding: '8px 10px', background: 'var(--surface-2)',
-          borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)',
-          border: '1px solid var(--border)',
-        }}>
-          <div>Source value: <strong>{sourceValue.value}</strong> (from {sourceValue.source}, {new Date(sourceValue.observed_at).toLocaleDateString()})</div>
-          <div style={{ marginTop: 2 }}>Staff override by {override.by?.slice(0, 8)} on {new Date(override.at).toLocaleDateString()}</div>
-          {onResumeSync && (
-            <button
-              type="button"
-              onClick={onResumeSync}
-              className="icplc-btn"
-              style={{ marginTop: 6, border: 'none', color: 'var(--accent)', padding: 0, minHeight: 32, justifyContent: 'flex-start' }}
-            >
-              Resume source sync →
-            </button>
-          )}
-        </div>
-      )}
     </div>
   )
 }

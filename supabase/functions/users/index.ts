@@ -42,9 +42,9 @@ serve(async (request) => {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, full_name, email')
+      .select('id, name, email')
       .eq('status', 'active')
-      .order('full_name', { ascending: true })
+      .order('name', { ascending: true })
 
     if (error) {
       console.error('Users query error:', error)

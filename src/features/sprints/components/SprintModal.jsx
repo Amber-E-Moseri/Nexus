@@ -34,9 +34,16 @@ const labelStyle = {
   marginBottom: 6,
 }
 
+function TwEmoji({ emoji, size = 18 }) {
+  const pts = [...emoji].map((c) => c.codePointAt(0).toString(16)).filter((h) => h !== 'fe0f')
+  const src = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${pts.join('-')}.svg`
+  return <img src={src} alt={emoji} width={size} height={size} style={{ display: 'block', pointerEvents: 'none' }} />
+}
+
 export default function SprintModal({ mode = 'create', sprint = null, initialDepartmentId = null, initialName = '', onSaved, onClose }) {
   const { profile } = useAuth()
   const [name, setName] = useState(sprint?.name ?? initialName ?? '')
+  const [icon, setIcon] = useState(sprint?.icon ?? '')
   const [goal, setGoal] = useState(sprint?.goal ?? '')
   const [description, setDescription] = useState(sprint?.description ?? '')
   const [startDate, setStartDate] = useState(sprint?.start_date?.slice(0, 10) ?? '')
@@ -57,6 +64,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
     const departmentId = template === 'single' ? selectedDepts[0] : null
     const sprintPayload = {
       name: name.trim(),
+      icon: icon.trim() || null,
       goal: goal.trim() || null,
       description: description.trim() || null,
       start_date: startDate || null,
@@ -166,8 +174,11 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
             )
 
             if (result) {
-              if (category) {
-                await updateSprint(result.sprint_id, { category })
+              const templateUpdates = {}
+              if (category) templateUpdates.category = category
+              if (icon.trim()) templateUpdates.icon = icon.trim()
+              if (Object.keys(templateUpdates).length) {
+                await updateSprint(result.sprint_id, templateUpdates)
               }
               saved = {
                 id: result.sprint_id,
@@ -198,6 +209,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
           // Custom template - no auto-creation
           const payload = {
             name: name.trim(),
+            icon: icon.trim() || null,
             goal: goal.trim() || null,
             description: description.trim() || null,
             start_date: startDate || null,
@@ -212,6 +224,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
       } else {
         const payload = {
           name: name.trim(),
+          icon: icon.trim() || null,
           goal: goal.trim() || null,
           description: description.trim() || null,
           start_date: startDate || null,
@@ -421,6 +434,46 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
                     placeholder="Healing Streams"
                     style={{ ...inputStyle, fontSize: 15, padding: '10px 12px' }}
                   />
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>Icon</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                      background: category === 'group' ? '#0891B2' : '#7C3AED',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <TwEmoji emoji={icon || (category === 'group' ? '👥' : category === 'regional' ? '✈️' : '⚡')} size={20} />
+                    </div>
+                    <input
+                      type="text"
+                      value={icon}
+                      onChange={(e) => {
+                        const chars = [...e.target.value]
+                        setIcon(chars[0] ?? '')
+                      }}
+                      placeholder="Paste or type an emoji"
+                      style={{ ...inputStyle, width: 200 }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {['⚡','✈️','🎯','🚀','🎤','🎵','🎭','🔥','🏆','💡','👥','🌍','📋','🎉','🙏','✝️','🕊️','🌿','🏃','📣'].map((e) => (
+                      <button
+                        key={e}
+                        type="button"
+                        onClick={() => setIcon(icon === e ? '' : e)}
+                        style={{
+                          width: 32, height: 32, borderRadius: 6, cursor: 'pointer', fontSize: 16,
+                          border: icon === e ? '2px solid var(--accent)' : '1px solid var(--border)',
+                          background: icon === e ? 'var(--accent-light, #EDE9FE)' : 'white',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <TwEmoji emoji={e} size={18} />
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div style={{ marginBottom: 14 }}>

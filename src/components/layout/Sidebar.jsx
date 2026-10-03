@@ -292,11 +292,12 @@ export default function Sidebar({ isMobileDrawer = false }) {
   // Spaces — shared React Query cache (same key as Dashboard's MySpacesWidget).
   // Sidebar fires first (Shell > Outlet), so the cache is always warm by the
   // time the Dashboard widget mounts.
+  const isProgramsDept = profile?.is_programs_member ?? false
   const { data: rawSpaces = [] } = useQuery({
-    queryKey: ['my-spaces', userId, role ?? null, departmentId],
+    queryKey: ['my-spaces', userId, role ?? null, departmentId, isProgramsDept],
     enabled: Boolean(userId && role),
     staleTime: 5 * 60_000,
-    queryFn: () => getMySpaces(userId, role, departmentId),
+    queryFn: () => getMySpaces(userId, role, departmentId, isProgramsDept),
   })
 
   const spaceGroups = useMemo(() => ({
@@ -356,8 +357,8 @@ export default function Sidebar({ isMobileDrawer = false }) {
   // communications, map), no people management, and no Sprints unless they've
   // been added to a specific sprint (RLS scopes displayedSprints to theirs).
   const isGroupMember = role === 'group_member'
-  // ICPLC event system.
-  const canSeeICPLC = ['super_admin', 'regional_secretary', 'pastor'].includes(role)
+  // ICPLC event system: super_admin, regional_secretary, pastor, or anyone in Programs department
+  const canSeeICPLC = ['super_admin', 'regional_secretary', 'pastor'].includes(role) || isProgramsMember(profile)
   const hasAnyPlatformAccess =
     showAdminPlatform ||
     role === 'pastor' ||

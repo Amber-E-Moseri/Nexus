@@ -1,7 +1,7 @@
 import { supabase } from '../../../lib/supabase'
 import { normalizeTaskRow } from '../../../lib/taskStatuses'
 
-export async function getMySpaces(userId, role, departmentId) {
+export async function getMySpaces(userId, role, departmentId, isProgramsMember = false) {
   const { data, error } = await supabase
     .from('departments')
     .select('id, name, color, health_status, space_type, visibility, status, description, owner_id, start_date, end_date')
@@ -28,7 +28,12 @@ export async function getMySpaces(userId, role, departmentId) {
 
   return spaces.filter((space) => {
     if (space.space_type === 'personal') return space.owner_id === userId
-    if (space.space_type === 'department') return role === 'super_admin' || role === 'regional_secretary' || space.id === departmentId
+    if (space.space_type === 'department') {
+      if (role === 'super_admin' || role === 'regional_secretary') return true
+      if (space.id === departmentId) return true
+      if (isProgramsMember && space.name === 'Media') return true
+      return false
+    }
     // group: only owner, members, and super_admin can see (never org-visible)
     if (space.space_type === 'group') {
       return role === 'super_admin' || space.owner_id === userId || memberGroupIds.has(space.id)
@@ -39,8 +44,8 @@ export async function getMySpaces(userId, role, departmentId) {
   })
 }
 
-export async function getSpacesByType(userId, role, departmentId) {
-  const spaces = await getMySpaces(userId, role, departmentId)
+export async function getSpacesByType(userId, role, departmentId, isProgramsMember = false) {
+  const spaces = await getMySpaces(userId, role, departmentId, isProgramsMember)
   return {
     department: spaces.filter((space) => space.space_type === 'department' && space.status === 'active'),
     program: spaces.filter((space) => space.space_type === 'program' && space.status === 'active'),
@@ -226,7 +231,7 @@ export async function getSpaceMembers(space) {
   if (space.space_type === 'department') {
     const { data, error } = await supabase
       .from('users')
-      .select('id, name, email, role, department_id, status')
+      .select('id, name, email, role, department_id, status, avatar_url')
       .eq('department_id', space.id)
       .order('name')
 
@@ -234,13 +239,21 @@ export async function getSpaceMembers(space) {
     return data ?? []
   }
 
+  if (space.space_type === 'group') {
+    const { data, error } = await supabase
+      .from('group_space_members')
+      .select('user_id, role, users!user_id(id, name, email, avatar_url)')
+      .eq('group_space_id', space.id)
+    if (error) throw error
+    return (data ?? [])
+      .filter((m) => m.users?.id)
+      .map((m) => ({ ...m.users, space_role: m.role }))
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+  }
+
   const { data, error } = await supabase
     .from('space_members')
-    .select(`
-      role,
-      created_at,
-      user:users(id, name, email, role, department_id, status)
-    `)
+    .select('role, created_at, user:users(id, name, email, role, department_id, status, avatar_url)')
     .eq('space_id', space.id)
 
   if (error) throw error
@@ -251,7 +264,7 @@ export async function getSpaceMembers(space) {
       ...member.user,
       space_role: member.role,
     }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
 }
 
 export async function canManageSpace(spaceId) {

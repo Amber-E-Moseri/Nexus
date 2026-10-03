@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { AlertTriangle, User, Mail, FileText, Plane, Tag, Pencil } from 'lucide-react'
+import { AlertTriangle, User, Mail, FileText, Plane, Tag, Pencil, Link2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { attentionItems } from '../../lib/attentionModel.js'
 import { deriveReadiness, readinessTone, readinessLabel, deriveTravelStatus, deriveItineraryStatus } from '../../lib/readinessEngine.js'
@@ -7,6 +7,7 @@ import Badge from '../../../../components/ui/Badge.jsx'
 import { supabase } from '../../../../lib/supabase.js'
 import { useAddTag, useRemoveTag, useUpdateProfile } from '../../hooks/useICPLCProfile.js'
 import { useAuth } from '../../../../hooks/useAuth.js'
+import { useICPLC } from '../../ICPLCContext.jsx'
 import { makePrimaryPayload, isOwnershipConflict } from '../../lib/reconciliation.js'
 import { overrideFieldsForEdit } from '../../lib/fieldAuthority.js'
 import { SUBGROUP_OPTIONS } from '../../lib/subgroups.js'
@@ -69,6 +70,8 @@ export default function OverviewTab({ participant, canWrite }) {
     ? 'Not ready'
     : DOCUMENT_READINESS_LABELS[documentation.canadian.readiness] || 'Unknown'
   const [editIdentity, setEditIdentity] = useState(false)
+  const { accessTier } = useICPLC()
+  const canManageRecord = accessTier === 'admin'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -83,6 +86,8 @@ export default function OverviewTab({ participant, canWrite }) {
       <IdentitySection participant={participant} canWrite={canWrite} editing={editIdentity} setEditing={setEditIdentity} />
 
       <EmailSection participant={participant} canWrite={canWrite} />
+
+      {canManageRecord && <NexusAccountSection participant={participant} />}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
         <Card icon={FileText} title="Documentation">
@@ -105,6 +110,148 @@ export default function OverviewTab({ participant, canWrite }) {
 
       <TagsSection participant={participant} canWrite={canWrite} />
     </div>
+  )
+}
+
+// ─── Nexus Account Section ───────────────────────────────────────────────────
+// Admin-only: link/unlink a Nexus user account to the participant row
+// (sets nexus_user_id), which activates Group Pastor subgroup scoping
+// or grants unscoped sprint-member access depending on the leadership field.
+
+function NexusAccountSection({ participant }) {
+  const updateProfile = useUpdateProfile()
+  const [linking, setLinking] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const { data: linkedUser, isLoading: loadingUser } = useQuery({
+    queryKey: ['nexus_user', participant.nexus_user_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .eq('id', participant.nexus_user_id)
+        .single()
+      if (error) throw error
+      return data
+    },
+    enabled: !!participant.nexus_user_id,
+    staleTime: 60_000,
+  })
+
+  const { data: searchResults } = useQuery({
+    queryKey: ['nexus_users_search', query],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .or(`name.ilike.%${query}%,email.ilike.%${query}%`)
+        .limit(8)
+      if (error) throw error
+      return data || []
+    },
+    enabled: query.length >= 2,
+    staleTime: 20_000,
+  })
+
+  async function linkUser(userId) {
+    await updateProfile.mutateAsync({ id: participant.id, fields: { nexus_user_id: userId } })
+    setLinking(false)
+    setQuery('')
+  }
+
+  async function unlinkUser() {
+    await updateProfile.mutateAsync({ id: participant.id, fields: { nexus_user_id: null } })
+  }
+
+  return (
+    <Card icon={Link2} title="Nexus Account">
+      {participant.nexus_user_id ? (
+        loadingUser ? (
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Loading…</div>
+        ) : linkedUser ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{linkedUser.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{linkedUser.email}</div>
+            </div>
+            <button
+              type="button"
+              className="icplc-btn"
+              onClick={unlinkUser}
+              disabled={updateProfile.isPending}
+              style={{ fontSize: 12, padding: '4px 10px', color: '#991B1B', whiteSpace: 'nowrap' }}
+            >
+              Unlink
+            </button>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Linked (user not found)</div>
+        )
+      ) : !linking ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: 1 }}>Not linked</span>
+          <button
+            type="button"
+            className="icplc-btn"
+            onClick={() => setLinking(true)}
+            style={{ fontSize: 12, padding: '4px 10px' }}
+          >
+            Link account
+          </button>
+        </div>
+      ) : (
+        <div>
+          <input
+            autoFocus
+            className="icplc-input"
+            placeholder="Search name or email…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ display: 'block', width: '100%', marginBottom: 6 }}
+          />
+          {query.length >= 2 && searchResults?.length > 0 && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', marginBottom: 6 }}>
+              {searchResults.map((u, i) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  disabled={updateProfile.isPending}
+                  onClick={() => linkUser(u.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    width: '100%', textAlign: 'left', padding: '7px 12px',
+                    fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
+                    borderBottom: i < searchResults.length - 1 ? '1px solid var(--border)' : 'none',
+                    color: 'var(--text-primary)',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-2, #F3F4F6)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                >
+                  <span style={{ fontWeight: 500, flex: 1 }}>{u.name}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{u.email}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {query.length >= 2 && searchResults?.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>No users found</div>
+          )}
+          <button
+            type="button"
+            className="icplc-btn"
+            onClick={() => { setLinking(false); setQuery('') }}
+            style={{ fontSize: 12 }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {updateProfile.error && (
+        <div role="alert" style={{ marginTop: 6, fontSize: 12, color: '#991B1B' }}>
+          {updateProfile.error.message}
+        </div>
+      )}
+    </Card>
   )
 }
 

@@ -302,7 +302,7 @@ export default function Home() {
   // Spaces
   function loadSpaces() {
     if (!profile?.id || !role) return
-    getMySpaces(profile.id, role, profile.department_id)
+    getMySpaces(profile.id, role, profile.department_id, profile.is_programs_member)
       .then(spaces => {
         const active = spaces.filter(s => s.status !== 'archived')
         setSpaceCount(active.length)

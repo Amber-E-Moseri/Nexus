@@ -521,16 +521,16 @@ function QuickActionsWidget({ role }) {
 
 // ─── Home-merge coverage widgets ──────────────────────────────────────────────
 
-function MySpacesWidget({ userId, role, departmentId }) {
+function MySpacesWidget({ userId, role, departmentId, isProgramsMember = false }) {
   const navigate = useNavigate()
 
   // Shared query cache (BLW-05) — same key Sidebar uses; slice applied here
   // so the cache holds the full list and Sidebar doesn't get a truncated set.
   const { data: rawSpaces = null } = useQuery({
-    queryKey: ['my-spaces', userId, role, departmentId ?? null],
+    queryKey: ['my-spaces', userId, role ?? null, departmentId ?? null, isProgramsMember],
     enabled: Boolean(userId && role),
     staleTime: 5 * 60_000,
-    queryFn: () => getMySpaces(userId, role, departmentId).catch(() => []),
+    queryFn: () => getMySpaces(userId, role, departmentId, isProgramsMember).catch(() => []),
   })
   const spaces = rawSpaces?.slice(0, 6) ?? null
 
@@ -650,7 +650,7 @@ function addOrgUtilizationDefault(rows, role) {
 
 // ─── Widget card ──────────────────────────────────────────────────────────────
 
-function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigChange, onUnpin, data }) {
+function WidgetCard({ widgetKey, role, userId, departmentId, isProgramsMember, config, onConfigChange, onUnpin, data }) {
   const meta = WIDGET_META[widgetKey]
   if (!meta) return null
   const { title, Component, configurable } = meta
@@ -696,7 +696,7 @@ function WidgetCard({ widgetKey, role, userId, departmentId, config, onConfigCha
           {configurable ? (
             <Component config={config} onConfigChange={onConfigChange} />
           ) : (
-            <Component role={role} userId={userId} departmentId={departmentId} data={data} />
+            <Component role={role} userId={userId} departmentId={departmentId} isProgramsMember={isProgramsMember} data={data} />
           )}
         </Suspense>
       </WidgetErrorBoundary>
@@ -1146,6 +1146,7 @@ export default function Dashboard() {
                 role={role}
                 userId={profile?.id}
                 departmentId={profile?.department_id}
+                isProgramsMember={profile?.is_programs_member ?? false}
                 config={pref.config}
                 onConfigChange={(config) => handleConfigChange(pref.widget_key, config)}
                 onUnpin={handleUnpin}
@@ -1162,6 +1163,7 @@ export default function Dashboard() {
                   role={role}
                   userId={profile?.id}
                   departmentId={profile?.department_id}
+                  isProgramsMember={profile?.is_programs_member ?? false}
                   config={pref.config}
                   onConfigChange={(config) => handleConfigChange(pref.widget_key, config)}
                   onUnpin={handleUnpin}

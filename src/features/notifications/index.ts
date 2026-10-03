@@ -9,7 +9,5 @@ export {
   setNotificationPref,
   sendBrowserPushNotification,
   testPushNotifications,
-  sendTaskPushNotification,
   formatNotificationMessage,
-  dispatchPush,
 } from './lib/notifications'

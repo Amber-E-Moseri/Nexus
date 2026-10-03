@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { UserPlus } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
+import { useAuth } from '../../../hooks/useAuth.js'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useCreateParticipant } from '../hooks/useICPLCParticipants.js'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
@@ -11,6 +12,8 @@ import ParticipantFilters from '../components/ParticipantFilters.jsx'
 import StatusKey from '../components/StatusKey.jsx'
 import ParticipantProfileDrawer from '../components/ParticipantProfileDrawer.jsx'
 import BoardPage from './BoardPage.jsx'
+import BulkActionBar from '../components/BulkActionBar.jsx'
+import ICPLCEmailComposer, { EmailParticipantsButton, canEstimateICPLCEmail } from '../components/ICPLCEmailComposer.jsx'
 import { deriveReadiness } from '../lib/readinessEngine.js'
 import { applyClientFilters, countAttentionCategories } from '../lib/participantFilters.js'
 import { filterParticipantsByWorkingListView } from '../lib/reconciliation.js'
@@ -20,7 +23,19 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
   const { config, filters, activeProfileId, activeProfileTab, closeProfile, openProfile } = useICPLC()
   const eventId = config?.id
   const [showAdd, setShowAdd] = useState(false)
+  const [showEmail, setShowEmail] = useState(false)
+  const [emailSelectedOnly, setEmailSelectedOnly] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const { profile } = useAuth()
+  const canEmail = canEstimateICPLCEmail(profile)
   const updateProfile = useUpdateProfile()
+  const setSelection = useCallback((ids) => setSelectedIds(new Set(ids)), [])
+  const toggleSelect = useCallback((id) => setSelectedIds((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  }), [])
 
   // Same hook (and cache keys) as the Overview, so opening the Working List after the Overview
   // reuses the already-fetched participants, registrations and identity maps instead of refetching.
@@ -103,11 +118,18 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--icplc-text, var(--text-primary))' }}>People</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {viewToggle}
+          {canEmail && (
+            <EmailParticipantsButton
+              count={displayedParticipants.length}
+              disabled={displayedParticipants.length === 0}
+              onClick={() => { setEmailSelectedOnly(false); setShowEmail(true) }}
+            />
+          )}
           {canWrite && (
             <button type="button" onClick={() => setShowAdd(true)} className="icplc-btn icplc-btn-primary">
-              <UserPlus size={14} aria-hidden /> Add
+              <UserPlus size={14} aria-hidden /> Add Participant
             </button>
           )}
         </div>
@@ -146,8 +168,24 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
         participants={displayedParticipants}
         loading={loading}
         onOpen={openProfile}
+        selectedIds={canWrite || canEmail ? selectedIds : undefined}
+        onToggleSelect={canWrite || canEmail ? toggleSelect : undefined}
+        onSetSelection={setSelection}
         onToggleAbsent={canWrite ? (p) => updateProfile.mutate({ id: p.id, fields: { participation_status: p.participation_status === 'not_attending' ? 'tracking' : 'not_attending' } }) : undefined}
       />
+
+      {selectedIds.size > 0 && (
+        <BulkActionBar
+          eventId={eventId}
+          selectedIds={[...selectedIds]}
+          selectedParticipants={displayedParticipants.filter((p) => selectedIds.has(p.id))}
+          userId={profile?.id}
+          canWrite={canWrite}
+          canEmail={canEmail}
+          onEmail={() => { setEmailSelectedOnly(true); setShowEmail(true) }}
+          onClear={() => setSelectedIds(new Set())}
+        />
+      )}
 
       {activeProfileId && (
         <ParticipantProfileDrawer
@@ -155,6 +193,17 @@ export default function PeoplePage({ canWrite, view = 'list', onViewChange }) {
           initialTab={activeProfileTab}
           onClose={closeProfile}
           canWrite={canWrite}
+        />
+      )}
+
+      {showEmail && canEmail && (
+        <ICPLCEmailComposer
+          eventId={eventId}
+          eventName={config?.event_name}
+          sourceLabel={emailSelectedOnly ? 'Selected people' : 'Current list'}
+          participants={emailSelectedOnly ? displayedParticipants.filter((p) => selectedIds.has(p.id)) : displayedParticipants}
+          open
+          onClose={() => { setShowEmail(false); setEmailSelectedOnly(false) }}
         />
       )}
 

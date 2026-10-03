@@ -1,4 +1,4 @@
-﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
@@ -24,78 +24,47 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
 
-  const body = await req.json().catch(() => null) as { user_id?: string } | null
-  const userId = body?.user_id
+  // SELF-ONLY: the recipient is always the authenticated caller. A body-supplied
+  // user_id is ignored, so no caller can target another user. The anon key is a
+  // valid JWT but has no user, so it is rejected here.
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+  if (!token) return jsonResponse(401, { error: 'Unauthorized' })
+  const { data: authData, error: authError } = await supabase.auth.getUser(token)
+  const userId = authData?.user?.id
+  if (authError || !userId) return jsonResponse(401, { error: 'Unauthorized' })
 
-  if (!userId) {
-    return jsonResponse(400, { error: 'user_id is required' })
-  }
-
-  // Create a test in-app notification
-  const { error: notifError } = await supabase
+  // Create a test in-app notification for the authenticated caller. The DB triggers dispatch push and
+  // email from this stored row (id-only, trusted-caller contract) — this function no longer calls the
+  // email dispatcher with caller-shaped content.
+  const { data: inserted, error: notifError } = await supabase
     .from('notifications')
     .insert({
       user_id: userId,
       type: 'system',
       payload: {
-        message: '🎉 Test notification! Browser and email notifications are now enabled.',
+        message: 'Test notification! Browser and email notifications are now enabled.',
       },
     })
-
-  if (notifError) {
-    return jsonResponse(500, { error: notifError.message })
-  }
-
-  // Send test email notification
-  const { data: user } = await supabase
-    .from('users')
-    .select('email, name')
-    .eq('id', userId)
+    .select('id')
     .single()
 
-  if (user?.email) {
-    try {
-      const emailResponse = await fetch(
-        `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-notification-email`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            user_id: userId,
-            notification_type: 'system',
-            payload: {
-              message: 'Test email notification from BLW CAN NEXUS',
-            },
-          }),
-        }
-      )
+  if (notifError || !inserted) {
+    return jsonResponse(500, { error: 'Could not create test notification' })
+  }
 
-      const emailResult = await emailResponse.json()
-      console.log('[test-push] send-notification-email response:', JSON.stringify(emailResult))
-      return jsonResponse(200, {
-        success: true,
-        in_app: true,
-        email: emailResult.sent === true,
-        email_skipped: emailResult.skipped ?? false,
-        email_skip_reason: emailResult.reason ?? null,
-        email_error: emailResult.error ?? null,
-      })
-    } catch (err) {
-      console.error('[test-push] send-notification-email fetch error:', err)
-      return jsonResponse(200, {
-        success: true,
-        in_app: true,
-        email: false,
-        email_error: err.message,
-      })
-    }
+  // Report whether the pipeline emailed it (the email dispatcher stamps email_sent_at when it sends).
+  let emailSent = false
+  for (let i = 0; i < 6 && !emailSent; i++) {
+    await new Promise((r) => setTimeout(r, 700))
+    const { data: row } = await supabase.from('notifications').select('email_sent_at').eq('id', inserted.id).maybeSingle()
+    emailSent = !!row?.email_sent_at
   }
 
   return jsonResponse(200, {
     success: true,
     in_app: true,
+    email: emailSent,
+    email_skip_reason: emailSent ? null : 'Email not sent (disabled for this type, no address, or still queued)',
   })
 })

@@ -15,6 +15,19 @@ function json(status: number, body: unknown) {
   })
 }
 
+// Canonical completeness counts from SQL growth_week_summary() — the same definition the Growth
+// page uses. NEVER recompute X/Y or "outstanding" here (outstanding != expected - received).
+type WeekSummary = {
+  week_start: string
+  expected: number
+  received: number
+  missing: number
+  pending: number
+  flagged: number
+  outstanding: number
+  is_closed: boolean
+}
+
 type WeekRow = {
   church_name: string
   total_attendance: number
@@ -39,7 +52,7 @@ function delta(n: number | null): string {
 
 // ── PDF generation ─────────────────────────────────────────────────────────────
 
-async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array> {
+async function buildPDF(weekLabel: string, rows: WeekRow[], summary: WeekSummary): Promise<Uint8Array> {
   const doc  = await PDFDocument.create()
   let page = doc.addPage([612, 792])
   const { height } = page.getSize()
@@ -89,7 +102,7 @@ async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array>
   // Card 3: Centers Reporting
   page.drawRectangle({ x: 390, y: y - cardHeight, width: cardWidth, height: cardHeight, color: CREAM, borderColor: LINE, borderWidth: 0.5 })
   page.drawText('REPORTING', { x: 400, y: y - 12, font: bold, size: 8, color: GRAY })
-  page.drawText(`${reported.length}/${rows.length}`, { x: 400, y: y - 28, font: bold, size: 16, color: PURPLE })
+  page.drawText(`${summary.received}/${summary.expected}`, { x: 400, y: y - 28, font: bold, size: 16, color: PURPLE })
 
   y -= cardHeight + 20
 
@@ -119,7 +132,7 @@ async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array>
 
   const STATUS_LABEL: Record<string, string> = {
     reported: '✓ Reported', merged: '~ Merged',
-    did_not_meet: '◯ Did Not Meet', missing: '✕ Missing', current: '… In Progress',
+    did_not_meet: '◯ Did Not Meet', missing: '✕ Missing', current: '… Awaiting report',
   }
 
   const STATUS_COLOR: Record<string, any> = {
@@ -219,12 +232,14 @@ async function buildPDF(weekLabel: string, rows: WeekRow[]): Promise<Uint8Array>
 function buildEmail(
   weekLabel: string,
   rows: WeekRow[],
-  schedule: { church_name: string; church_unit_id: string }[]
+  schedule: { church_name: string; church_unit_id: string }[],
+  summary: WeekSummary
 ): string {
   const reported  = rows.filter(r => r.status === 'reported')
   const merged    = rows.filter(r => r.status === 'merged')
   const didntMeet = rows.filter(r => r.status === 'did_not_meet')
-  const missing   = rows.filter(r => r.status === 'missing')
+  // Outstanding = no report AND no manual flag ('missing' once the week has ended, 'current' before).
+  const missing   = rows.filter(r => r.status === 'missing' || r.status === 'current')
 
   const networkTotal    = reported.reduce((s, r) => s + r.total_attendance, 0)
   const networkFT       = reported.reduce((s, r) => s + r.first_timers, 0)
@@ -285,7 +300,7 @@ function buildEmail(
       </div>
       <div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9E9488;">Centers Reporting</div>
-        <div style="font-size:32px;font-weight:700;margin-top:4px;">${reported.length}<span style="font-size:16px;color:#9E9488;"> / ${rows.length}</span></div>
+        <div style="font-size:32px;font-weight:700;margin-top:4px;">${summary.received}<span style="font-size:16px;color:#9E9488;"> / ${summary.expected}</span></div>
       </div>
     </div>
   </div>
@@ -329,7 +344,7 @@ function buildEmail(
     ${flagSection('🟡 Merged Services', merged)}
     ${flagSection('⚪ Did Not Meet', didntMeet)}
     ${missing.length > 0 ? `
-    <h3 style="font-size:14px;font-weight:600;margin:24px 0 8px;color:#dc2626;">🔴 Missing Reports (${missing.length})</h3>
+    <h3 style="font-size:14px;font-weight:600;margin:24px 0 8px;color:#dc2626;">🔴 Outstanding Reports (${summary.outstanding})</h3>
     <ul style="margin:0;padding-left:20px;color:#4b4438;">
       ${missing.map(r => `<li style="margin-bottom:4px;">${r.church_name}</li>`).join('')}
     </ul>` : ''}
@@ -386,21 +401,31 @@ serve(async (req) => {
   let body: { week?: string } = {}
   try { body = await req.json() } catch { /* no body */ }
 
-  let weekStart: Date
+  // ONE week definition (SQL): growth_reporting_week() resolves in America/Toronto time —
+  // never derive the week from the UTC date here. An explicit `week` is normalised to its
+  // Monday by growth_week_start(). See migration 20271002000003.
+  let weekStartStr: string
   if (body.week) {
-    weekStart = new Date(body.week + 'T00:00:00Z')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(body.week)) return json(400, { error: 'week must be YYYY-MM-DD' })
+    const { data: ws, error: wsErr } = await supabase.rpc('growth_week_start', { p_date: body.week })
+    if (wsErr || !ws) return json(400, { error: 'Invalid week' })
+    weekStartStr = ws as string
   } else {
-    weekStart = new Date()
-    weekStart.setUTCHours(0, 0, 0, 0)
-    const day = weekStart.getUTCDay()
-    weekStart.setUTCDate(weekStart.getUTCDate() - (day === 0 ? 6 : day - 1))
+    const { data: rw, error: rwErr } = await supabase.rpc('growth_reporting_week')
+    if (rwErr || !rw) return json(500, { error: 'Could not resolve reporting week' })
+    weekStartStr = rw as string
   }
-  const weekStartStr = weekStart.toISOString().split('T')[0]
 
-  const weekLabel = weekStart.toLocaleDateString('en-CA', {
-    timeZone: 'America/Toronto',
+  // Calendar date (no time zone shift): format in UTC so Monday stays Monday.
+  const weekLabel = new Date(weekStartStr + 'T00:00:00Z').toLocaleDateString('en-CA', {
+    timeZone: 'UTC',
     year: 'numeric', month: 'long', day: 'numeric',
   })
+
+  // Canonical counts (same source as the Growth page)
+  const { data: summaryRows, error: sumErr } = await supabase.rpc('growth_week_summary', { p_week: weekStartStr })
+  if (sumErr || !summaryRows?.[0]) return json(500, { error: 'Summary query failed' })
+  const summary = summaryRows[0] as WeekSummary
 
   // Fetch this week's data from the view
   const { data: rows, error: viewErr } = await supabase
@@ -424,14 +449,14 @@ serve(async (req) => {
   if (recipErr) return json(500, { error: 'Recipients query failed', details: recipErr.message })
   if (!recipients || recipients.length === 0) return json(200, { message: 'No active recipients — email skipped' })
 
-  const html    = buildEmail(weekLabel, (rows ?? []) as WeekRow[], (schedule ?? []))
+  const html    = buildEmail(weekLabel, (rows ?? []) as WeekRow[], (schedule ?? []), summary)
   const subject = `BLW Canada — Weekly Growth Report · ${weekLabel}`
   const toAddresses = recipients.map((r: { email: string }) => r.email)
 
   // Generate PDF attachment
   let pdfAttachment: { filename: string; content: string } | undefined
   try {
-    const pdfBytes = await buildPDF(weekLabel, (rows ?? []) as WeekRow[])
+    const pdfBytes = await buildPDF(weekLabel, (rows ?? []) as WeekRow[], summary)
     let binary = ''
     for (const b of pdfBytes) binary += String.fromCharCode(b)
     pdfAttachment = {

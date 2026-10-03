@@ -11,6 +11,7 @@
 // );
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { isTrustedInternalCaller } from '../_shared/internalAuth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -28,14 +29,10 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   })
 }
 
+// Trusted internal callers only: CRON_SHARED_SECRET (canonical hosted pattern) or the
+// service-role key. See _shared/internalAuth.ts for why comparing to the env key alone fails.
 async function verifyServiceRole(req: Request): Promise<boolean> {
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader) return false
-
-  const token = authHeader.replace('Bearer ', '')
-  const expectedToken = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-
-  return token === expectedToken
+  return isTrustedInternalCaller(req)
 }
 
 async function triggerAutomationEngine(
@@ -119,6 +116,9 @@ async function processOverdueTasks(supabase: ReturnType<typeof createClient>): P
     )
     .lt('due_date', todayStr)
     .in('task_status_definitions.category', ['open', 'in_progress'])
+    // Never fire automations for deleted or archived tasks (category open/in_progress already excludes completed/cancelled).
+    .is('deleted_at', null)
+    .is('archived_at', null)
 
   if (tasksError) {
     console.error('Error fetching overdue tasks:', tasksError)
@@ -162,7 +162,7 @@ async function processOverdueTasks(supabase: ReturnType<typeof createClient>): P
 
   const { data: existingRuns, error: runsError } = await supabase
     .from('automation_run_log')
-    .select('id, trigger_payload->>task_id')
+    .select('id, task_id:trigger_payload->>task_id') // explicit alias: PostgREST names a JSON-path column by its key
     .eq('trigger_type', 'task_overdue')
     .gte('ran_at', oneDayAgo.toISOString())
 
@@ -173,7 +173,7 @@ async function processOverdueTasks(supabase: ReturnType<typeof createClient>): P
 
   const alreadyTriggeredTaskIds = new Set(
     (existingRuns || [])
-      .map((r) => r['trigger_payload->>task_id'])
+      .map((r) => r.task_id)
       .filter((id) => id)
   )
 
