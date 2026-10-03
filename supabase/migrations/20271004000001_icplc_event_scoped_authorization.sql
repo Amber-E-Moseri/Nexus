@@ -25,11 +25,16 @@
 --   The zero-argument helpers are left in place for any caller not yet migrated; they now mean "ICPLC member of any
 --   event" and must not be used for a row-level decision.
 --
--- KNOWN LIMIT (not changed here)
---   event_configs is linked to sprints only by name pattern (no FK). Two events whose sprint_pattern both match the
---   same sprint (for example the default '%ICPLC%') share that sprint's membership. Isolation therefore requires each
---   event's sprint_pattern to identify its own sprint(s). A real event_id on sprints would be a schema change and is
---   deliberately out of scope.
+-- HISTORICAL NOTE -- superseded by 20271004000004_event_configs_explicit_sprint_id.sql
+--   This migration originally resolves an event to its sprint(s) by name pattern
+--   (event_configs.sprint_pattern ILIKE sprints.name), because no explicit link existed when it was written.
+--   That resolution is replaced by migration 20271004000004, which adds the nullable foreign key
+--   event_configs.sprint_id and redefines icplc_event_sprint_ids() to resolve ONLY through it (NULL fails closed;
+--   sprint_pattern no longer takes part in authorization). Everything below is kept as originally written so that
+--   migration history stays truthful; the effective, final event -> sprint authority is event_configs.sprint_id.
+--
+--   The pattern-overlap limitation this migration originally documented (two events whose patterns match the same
+--   sprint sharing its membership) no longer applies once 20271004000004 is applied.
 --
 -- No data is read or written by this migration.
 
