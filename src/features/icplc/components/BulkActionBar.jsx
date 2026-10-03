@@ -114,22 +114,12 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
   const partition = pending?.kind === 'review' ? pending.partition : null
 
   return (
-    <div
-      role="region"
-      aria-label="Bulk actions"
-      style={{
-        position: 'sticky', bottom: 12, zIndex: 15, marginTop: 12,
-        background: 'var(--icplc-surface, #fff)', border: '1px solid var(--icplc-purple, #4C2A92)',
-        borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.16)', padding: '10px 12px',
-        display: 'flex', flexDirection: 'column', gap: 8,
-      }}
-    >
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        {count > 0 && <strong style={{ fontSize: 13, color: 'var(--icplc-purple, #4C2A92)' }}>{count} selected</strong>}
+    <div role="region" aria-label="Bulk actions" className="icplc-bulk">
+      <div className="icplc-bulk-row">
+        {count > 0 && <strong className="icplc-bulk-count">{count} selected</strong>}
 
         {count > 0 && !pending && (
           <div className="icplc-bulk-bar-group" role="group" aria-label="Bulk Manage">
-            <strong style={{ fontSize: 12, color: 'var(--icplc-text-soft, #666)' }}>Manage</strong>
             {showReview && (
               <button
                 type="button"
@@ -142,36 +132,20 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
             )}
 
             {canWrite && (
-              <>
-                <select
-                  className="icplc-input"
-                  style={selectStyle}
-                  aria-label="Add a tag to selected"
-                  value=""
-                  disabled={busy || tags.length === 0}
-                  onChange={(e) => {
-                    const t = tags.find((x) => x.id === e.target.value)
-                    if (t) startTag('add', t)
-                  }}
-                >
-                  <option value="">Add tag…</option>
-                  {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-                <select
-                  className="icplc-input"
-                  style={selectStyle}
-                  aria-label="Remove a tag from selected"
-                  value=""
-                  disabled={busy || tags.length === 0}
-                  onChange={(e) => {
-                    const t = tags.find((x) => x.id === e.target.value)
-                    if (t) startTag('remove', t)
-                  }}
-                >
-                  <option value="">Remove tag…</option>
-                  {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </>
+              <select
+                className="icplc-input"
+                style={selectStyle}
+                aria-label="Add a tag to selected"
+                value=""
+                disabled={busy || tags.length === 0}
+                onChange={(e) => {
+                  const t = tags.find((x) => x.id === e.target.value)
+                  if (t) startTag('add', t)
+                }}
+              >
+                <option value="">Add tag…</option>
+                {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
             )}
 
             {canEmail && (
@@ -180,11 +154,7 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
               </button>
             )}
 
-            <button type="button" className="icplc-btn" onClick={() => exportRows('selected', selection.selectedRows)}>
-              <Download size={14} aria-hidden /> Export selected
-            </button>
-
-            <div style={{ position: 'relative' }}>
+            <div className="icplc-bulk-more">
               <button
                 type="button"
                 className="icplc-btn"
@@ -195,19 +165,29 @@ export default function BulkActionBar({ eventId, selection, context, canWrite, f
                 <MoreHorizontal size={14} aria-hidden /> More
               </button>
               {menuOpen && (
-                <div
-                  role="menu"
-                  className="icplc-bulk-menu"
-                  style={{
-                    position: 'absolute', bottom: '110%', right: 0, zIndex: 20,
-                    background: 'var(--icplc-surface, #fff)', border: '1px solid var(--icplc-border, #ddd)',
-                    borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.16)', padding: 6, display: 'flex', flexDirection: 'column', gap: 4,
-                  }}
-                >
+                <div role="menu" className="icplc-bulk-menu">
+                  {canWrite && (
+                    <select
+                      className="icplc-input"
+                      aria-label="Remove a tag from selected"
+                      value=""
+                      disabled={busy || tags.length === 0}
+                      onChange={(e) => {
+                        const t = tags.find((x) => x.id === e.target.value)
+                        if (t) startTag('remove', t)
+                      }}
+                    >
+                      <option value="">Remove tag…</option>
+                      {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  )}
+                  <button type="button" role="menuitem" className="icplc-btn" onClick={() => exportRows('selected', selection.selectedRows)}>
+                    <Download size={14} aria-hidden /> Export selected ({count})
+                  </button>
                   <button type="button" role="menuitem" className="icplc-btn" disabled={filteredRows.length === 0} onClick={() => exportRows('filtered', filteredRows)}>
                     <Download size={14} aria-hidden /> Export filtered ({filteredRows.length})
                   </button>
-                  <div style={{ fontSize: 11.5, color: 'var(--icplc-text-soft, #666)', padding: '4px 6px' }}>
+                  <div className="icplc-bulk-note">
                     Participation, readiness and registration are not bulk-editable: readiness and registration are derived, and participation is changed per person from the profile.
                   </div>
                 </div>

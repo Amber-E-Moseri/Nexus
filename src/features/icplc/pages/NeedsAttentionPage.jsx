@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { SlidersHorizontal, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth.js'
-import Badge from '../../../components/ui/Badge.jsx'
 import { useICPLC } from '../ICPLCContext.jsx'
 import { useICPLCWorkingList } from '../hooks/useICPLCWorkingList.js'
 import { useICPLCTargets } from '../hooks/useICPLCTargets.js'
@@ -20,7 +19,7 @@ import {
   registrationState,
 } from '../lib/documentationRules.js'
 import { needsAttentionNow } from '../lib/attentionModel.js'
-import { deriveFlightStatus, deriveReadiness, effectiveParticipationStatus, flightStatusLabel, flightStatusTone, readinessLabel, readinessTone } from '../lib/readinessEngine.js'
+import { deriveFlightStatus, deriveReadiness, effectiveParticipationStatus, flightStatusLabel, readinessLabel } from '../lib/readinessEngine.js'
 import { deriveDocumentationActions, RISK_LABELS } from '../lib/documentationRisk.js'
 import { registrationDisplayName } from '../lib/reconciliation.js'
 import {
@@ -67,9 +66,8 @@ const PARTICIPATION_LABELS = {
 
 const PARAMS = FILTER_PARAMS
 
-const TIER_BORDER = { 0: '#C94830', 1: '#C97820', 2: '#2563EB', 3: '#9CA3AF' }
-const TIER_BG = { 0: '#FEF0ED', 1: '#FEF6E8', 2: '#EFF6FF', 3: '#F3F4F6' }
-const TIER_LABEL_COLOR = { 0: '#C94830', 1: '#C97820', 2: '#2563EB', 3: '#6B7280' }
+// Documented attention tiers (documentationRules.attentionTier): 0 urgent, 1 known operational problem, 2 staff once-over.
+const TIER_LABEL = { 0: 'Urgent', 1: 'Needs action', 2: 'Review', 3: 'Info' }
 
 function nextActionFor(primaryKey) {
   return NEXT_ACTION[primaryKey] || 'Review participant status'
@@ -102,12 +100,12 @@ function countBy(rows, key) {
   return out
 }
 
-function FilterSelect({ label, value, options, counts, onChange, allLabel = 'All' }) {
+function FilterSelect({ label, value, options, counts, onChange, allLabel = 'All', hideLabel = false }) {
   // A URL can carry a value that is no longer in the population; keep it visible so the select never lies.
   const known = !value || options.some((o) => o.value === value)
   return (
-    <label className="icplc-action-filter">
-      <span>{label}</span>
+    <label className={`icplc-action-filter${value ? ' has-value' : ''}`}>
+      <span className={hideLabel ? 'icplc-sr' : undefined}>{label}</span>
       <select className="icplc-input" value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">{allLabel}</option>
         {options.map((option) => (
@@ -217,10 +215,11 @@ export default function NeedsAttentionPage({ canWrite }) {
   const chipText = (key) => `${FILTER_LABELS[key]}: ${(chipValue[key] || ((v) => v))(filters[key])}`
 
   if (isLoading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {[1, 2, 3].map((i) => (
-        <div key={i} style={{ height: 80, background: 'var(--surface-2)', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
-      ))}
+    <div className="icplc-action" aria-busy="true" aria-label="Loading action items">
+      <div className="icplc-skel" style={{ height: 44, width: 220 }} />
+      <div className="icplc-skel" style={{ height: 64 }} />
+      <div className="icplc-skel" style={{ height: 52 }} />
+      {[1, 2, 3].map((i) => <div key={i} className="icplc-skel" style={{ height: 112 }} />)}
     </div>
   )
 
@@ -237,55 +236,58 @@ export default function NeedsAttentionPage({ canWrite }) {
     </div>
   )
 
-  const isEmpty = filteredQueue.length === 0 && ambiguousRegistrations.length === 0
+  const queueEmpty = baseQueue.length === 0
+  const noMatches = filteredQueue.length === 0 && !queueEmpty
+  const secondaryCount = SECONDARY_PARAMS.filter((k) => filters[k]).length
+  const needLabel = `${baseQueue.length} participant${baseQueue.length === 1 ? '' : 's'} need${baseQueue.length === 1 ? 's' : ''} follow-up`
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="icplc-action-header">
-        <div>
-          <h2>Action</h2>
-          <p>Operational queue for participants who need staff follow-up.</p>
-        </div>
-        <div role="status">{filteredQueue.length} of {baseQueue.length} action item{baseQueue.length === 1 ? '' : 's'}</div>
-      </div>
+    <div className="icplc-action">
+      <header className="icplc-action-head">
+        <h2>Action</h2>
+        <p><strong>{needLabel}</strong><span className="icplc-action-head-sub"> · Prioritized across registration, documentation and travel.</span></p>
+      </header>
 
-      <div className="icplc-action-summary" aria-label="Action summary">
+      <div className="icplc-action-summary" role="group" aria-label="Action summary">
         {Object.entries(SUMMARY_SHORTCUTS).map(([key, def]) => (
           <button
             key={key}
             type="button"
-            className={`icplc-action-stat${shortcut === key ? ' is-active' : ''}`}
+            className={`icplc-as${shortcut === key ? ' is-active' : ''}${key === 'urgent' && summary[key] > 0 ? ' is-urgent' : ''}`}
             aria-pressed={shortcut === key}
             onClick={() => writeParams(setSearchParams, def.patch)}
           >
-            <strong>{summary[key]}</strong><span>{def.label}</span>
+            <span className="icplc-as-label">{def.label}</span>
+            <strong>{summary[key]}</strong>
           </button>
         ))}
       </div>
 
-      <section className="icplc-action-filters" aria-label="Action filters">
-        <label className="icplc-action-filter icplc-action-filter-search">
-          <span>Search</span>
-          <input
-            type="search"
-            className="icplc-input"
-            value={filters.q}
-            placeholder="Search name, email, subgroup, reason, tag"
-            onChange={(e) => writeParams(setSearchParams, { q: e.target.value })}
-          />
-        </label>
-        <FilterSelect label="Subgroup" value={filters.subgroup} options={subgroupOptions} allLabel="All subgroups" onChange={(value) => writeParams(setSearchParams, { subgroup: value })} />
-        <FilterSelect label="Reason" value={filters.reason} options={reasonOptions} counts={reasonCounts} onChange={(value) => writeParams(setSearchParams, { reason: value })} />
-        <FilterSelect label="Readiness" value={filters.readiness} options={readinessOptions} counts={countBy(baseQueue, 'readiness')} onChange={(value) => writeParams(setSearchParams, { readiness: value })} />
-        <button
-          type="button"
-          className="icplc-btn icplc-action-more"
-          aria-expanded={moreOpen}
-          aria-controls="icplc-action-more-filters"
-          onClick={() => setMoreOpen((v) => !v)}
-        >
-          <SlidersHorizontal size={14} aria-hidden /> More filters{secondaryActive ? ` (${SECONDARY_PARAMS.filter((k) => filters[k]).length})` : ''}
-        </button>
+      <section className="icplc-action-toolbar" aria-label="Action filters">
+        <div className="icplc-action-primary">
+          <label className="icplc-action-filter icplc-action-filter-search">
+            <span className="icplc-sr">Search</span>
+            <input
+              type="search"
+              className="icplc-input"
+              value={filters.q}
+              placeholder="Search people, email, reason, tag"
+              onChange={(e) => writeParams(setSearchParams, { q: e.target.value })}
+            />
+          </label>
+          <FilterSelect label="Subgroup" value={filters.subgroup} options={subgroupOptions} allLabel="All subgroups" hideLabel onChange={(value) => writeParams(setSearchParams, { subgroup: value })} />
+          <FilterSelect label="Reason" value={filters.reason} options={reasonOptions} counts={reasonCounts} allLabel="All reasons" hideLabel onChange={(value) => writeParams(setSearchParams, { reason: value })} />
+          <FilterSelect label="Readiness" value={filters.readiness} options={readinessOptions} counts={countBy(baseQueue, 'readiness')} allLabel="All readiness" hideLabel onChange={(value) => writeParams(setSearchParams, { readiness: value })} />
+          <button
+            type="button"
+            className={`icplc-btn icplc-action-more${secondaryCount ? ' has-active' : ''}`}
+            aria-expanded={moreOpen}
+            aria-controls="icplc-action-more-filters"
+            onClick={() => setMoreOpen((v) => !v)}
+          >
+            <SlidersHorizontal size={14} aria-hidden /> More filters{secondaryCount ? ` · ${secondaryCount}` : ''}
+          </button>
+        </div>
         {moreOpen && (
           <div id="icplc-action-more-filters" className="icplc-action-more-panel" role="group" aria-label="More filters">
             <FilterSelect label="Category" value={filters.category} options={categoryOptions} counts={sectionCounts} onChange={(value) => writeParams(setSearchParams, { category: value })} />
@@ -299,28 +301,13 @@ export default function NeedsAttentionPage({ canWrite }) {
       </section>
 
       {activeFilters.length > 0 && (
-        <div className="icplc-action-active-filters" aria-label="Active filters">
+        <div className="icplc-action-chips" aria-label="Active filters">
           {activeFilters.map((key) => (
-            <button key={key} type="button" className="icplc-chip" aria-label={`Remove filter ${chipText(key)}`} onClick={() => writeParams(setSearchParams, { [key]: '' })}>
-              {chipText(key)} <X size={12} aria-hidden />
+            <button key={key} type="button" className="icplc-fchip" title={chipText(key)} aria-label={`Remove filter ${chipText(key)}`} onClick={() => writeParams(setSearchParams, { [key]: '' })}>
+              <span>{chipText(key)}</span> <X size={12} aria-hidden />
             </button>
           ))}
-          <button type="button" className="icplc-btn" onClick={clearAll}>Clear all</button>
-        </div>
-      )}
-
-      {filteredQueue.length > 0 && (
-        <div className="icplc-action-toolbar">
-          <label>
-            <SelectCheckbox
-              checked={selection.allShownSelected}
-              indeterminate={selection.someSelected}
-              onChange={selection.toggleAllShown}
-              label={`Select all ${filteredQueue.length} filtered action rows`}
-            />
-            <span>Select all filtered</span>
-          </label>
-          <span>{selection.count > 0 ? `${selection.count} of ${filteredQueue.length} selected` : 'Selection applies to the people shown and clears when filters change.'}</span>
+          <button type="button" className="icplc-linkbtn" onClick={clearAll}>Clear all</button>
         </div>
       )}
 
@@ -339,10 +326,41 @@ export default function NeedsAttentionPage({ canWrite }) {
         </div>
       )}
 
-      {isEmpty && (
+      {!queueEmpty && (
+        <div className="icplc-action-resultbar">
+          <div role="status" className="icplc-action-count">
+            <strong>{filteredQueue.length}</strong> of {baseQueue.length} action item{baseQueue.length === 1 ? '' : 's'}
+          </div>
+          {filteredQueue.length > 0 && (
+            <label className="icplc-action-selectall">
+              <SelectCheckbox
+                checked={selection.allShownSelected}
+                indeterminate={selection.someSelected}
+                onChange={selection.toggleAllShown}
+                label={`Select all ${filteredQueue.length} filtered action rows`}
+              />
+              <span>Select all filtered</span>
+            </label>
+          )}
+          {selection.count > 0 && (
+            <span className="icplc-action-selpill" aria-live="polite">
+              <strong>{selection.count} selected</strong>
+              <span>of {filteredQueue.length} shown</span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {queueEmpty && ambiguousRegistrations.length === 0 && (
         <div className="icplc-action-empty">
-          <div>All clear</div>
-          <p>No participants match the current action filters.</p>
+          <div>You're all caught up.</div>
+          <p>No participants currently require operational follow-up.</p>
+        </div>
+      )}
+
+      {noMatches && (
+        <div className="icplc-action-empty">
+          <div>No participants match these filters.</div>
           {activeFilters.length > 0 && <button type="button" className="icplc-btn" onClick={clearAll}>Clear filters</button>}
         </div>
       )}
@@ -351,16 +369,15 @@ export default function NeedsAttentionPage({ canWrite }) {
         {filteredQueue.map((row) => {
           const { participant, primaryKey, keys, tier } = row
           const primaryDef = attentionCategoryDef(primaryKey)
-          const borderColor = TIER_BORDER[tier] || TIER_BORDER[1]
-          const bgColor = TIER_BG[tier] || 'var(--icplc-surface)'
-          const labelColor = TIER_LABEL_COLOR[tier] || TIER_LABEL_COLOR[1]
           const profileTab = primaryDef?.section || 'overview'
+          const others = keys.slice(1)
+          const regLabel = REGISTRATION_STATE_LABELS[row.registration]
 
           return (
             <article
               key={participant.id}
-              className="icplc-action-row"
-              style={{ borderLeftColor: borderColor, background: bgColor }}
+              className={`icplc-ac${selection.isSelected(participant.id) ? ' is-selected' : ''}`}
+              data-tier={tier}
               tabIndex={0}
               aria-label={`Open profile: ${participant.full_name}`}
               onClick={() => openProfile(participant.id, profileTab)}
@@ -369,46 +386,48 @@ export default function NeedsAttentionPage({ canWrite }) {
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfile(participant.id, profileTab) }
               }}
             >
-              <div className="icplc-action-row-main">
+              <div className="icplc-ac-select">
                 <SelectCheckbox
                   checked={selection.isSelected(participant.id)}
                   onChange={() => selection.toggle(participant.id)}
                   label={`Select ${participant.full_name}`}
                 />
-                <div className="icplc-action-person">
-                  <strong>{participant.full_name}</strong>
-                  <span>{[participant.email, participant.subgroup || 'No subgroup'].filter(Boolean).join(' | ')}</span>
+              </div>
+              <div className="icplc-ac-body">
+                <div className="icplc-ac-top">
+                  <div className="icplc-ac-who">
+                    <strong>{participant.full_name}</strong>
+                    <span className="icplc-ac-sub" title={participant.subgroup || undefined}>{participant.subgroup || 'No subgroup'}</span>
+                  </div>
+                  <span className="icplc-ac-priority">{TIER_LABEL[tier] || 'Review'}</span>
                 </div>
-                <Badge tone={readinessTone(row.readiness)} label={readinessLabel(row.readiness)} />
-              </div>
 
-              <div className="icplc-action-why">
-                <em className="icplc-action-label">Why</em>
-                <span style={{ color: labelColor, borderColor: `${borderColor}55`, background: `${borderColor}18` }}>
-                  {primaryDef?.label || primaryKey}
-                </span>
-                {keys.slice(1, 3).map((key) => <span key={key}>{attentionCategoryDef(key)?.label || key}</span>)}
-                {keys.length > 3 && <span>+{keys.length - 3} more</span>}
-              </div>
-
-              <div className="icplc-action-state">
-                <Badge tone={row.registration === 'registered' ? 'done' : row.registration === 'registration_missing' ? 'blocked' : 'at_risk'} label={REGISTRATION_STATE_LABELS[row.registration]} />
-                <Badge tone="mute" label={PARTICIPATION_LABELS[row.participation] || row.participation} />
-                <Badge tone={flightStatusTone(row.flight)} label={flightStatusLabel(row.flight)} />
-                {row.risk && <Badge tone="warn" label={RISK_LABELS[row.risk] || row.risk} />}
-              </div>
-
-              <div className="icplc-action-next">
-                <strong>Next action</strong>
-                <span>{nextActionFor(primaryKey)}</span>
-              </div>
-
-              {row.tags.length > 0 && (
-                <div className="icplc-action-tags">
-                  {row.tags.slice(0, 3).map((tag) => <span key={tag.id || tag.name} className="fchip" style={{ background: tag.color || 'var(--surface-2)' }}>{tag.name}</span>)}
-                  {row.tags.length > 3 && <span>+{row.tags.length - 3}</span>}
+                <div className="icplc-ac-line">
+                  <em>Why</em>
+                  <span className="icplc-ac-reason">{primaryDef?.label || primaryKey}</span>
+                  {others.length > 0 && (
+                    <span className="icplc-ac-also">
+                      {others.slice(0, 2).map((key) => attentionCategoryDef(key)?.label || key).join(' · ')}
+                      {others.length > 2 ? ` · +${others.length - 2} more` : ''}
+                    </span>
+                  )}
                 </div>
-              )}
+                <div className="icplc-ac-line">
+                  <em>Next</em>
+                  <span>{nextActionFor(primaryKey)}</span>
+                </div>
+
+                <div className="icplc-ac-meta">
+                  {row.registration === 'registered' && <span className="icplc-mchip">{regLabel}</span>}
+                  {row.registration !== 'registered' && row.registration !== primaryKey && <span className="icplc-mchip is-warn">{regLabel}</span>}
+                  <span className="icplc-mchip">{PARTICIPATION_LABELS[row.participation] || row.participation}</span>
+                  <span className="icplc-mchip">{readinessLabel(row.readiness)}</span>
+                  <span className="icplc-mchip">{flightStatusLabel(row.flight)}</span>
+                  {row.risk && <span className="icplc-mchip is-warn">{RISK_LABELS[row.risk] || row.risk}</span>}
+                  {row.tags.slice(0, 3).map((tag) => <span key={tag.id || tag.name} className="icplc-mchip is-tag" style={tag.color ? { background: tag.color } : undefined}>{tag.name}</span>)}
+                  {row.tags.length > 3 && <span className="icplc-mchip">+{row.tags.length - 3}</span>}
+                </div>
+              </div>
             </article>
           )
         })}

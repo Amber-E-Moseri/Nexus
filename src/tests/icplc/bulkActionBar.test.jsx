@@ -142,6 +142,7 @@ describe('BulkActionBar', () => {
     ] })
     renderBar([elig1, elig2])
     await screen.findAllByRole('option', { name: 'Finances' })
+    fireEvent.click(screen.getByRole('button', { name: /more/i }))
     fireEvent.change(screen.getByLabelText('Remove a tag from selected'), { target: { value: 't1' } })
     await screen.findByText('Remove tag "Finances" from 2 people?')
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
@@ -152,13 +153,16 @@ describe('BulkActionBar', () => {
     expect(tagMutate.mock.calls[0][0]).toEqual({ ids: ['e1', 'e2'], tagId: 't1', action: 'remove' })
   })
 
-  it('BAR-10 Action shows the main management workflow without opening a menu, and no derived-status setters', () => {
+  it('BAR-10 Action puts Mark reviewed / Add tag / Email up front, keeps Remove tag and Export in More, and has no derived-status setters', () => {
     renderBar([elig1], { context: 'needs_attention', canEmail: true, onEmail: vi.fn() })
     expect(screen.getByRole('button', { name: /mark reviewed/i }).className).toContain('icplc-btn-primary')
     expect(screen.getByLabelText('Add a tag to selected')).toBeTruthy()
-    expect(screen.getByLabelText('Remove a tag from selected')).toBeTruthy()
     expect(screen.getByRole('button', { name: /email selected/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /export selected/i })).toBeTruthy()
+    expect(screen.queryByLabelText('Remove a tag from selected')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /more/i }))
+    expect(screen.getByLabelText('Remove a tag from selected')).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: /export selected/i })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: /export filtered/i })).toBeTruthy()
     for (const forbidden of [/set readiness/i, /mark registered/i, /set participation/i, /not attending/i]) {
       expect(screen.queryByText(forbidden)).toBeNull()
     }

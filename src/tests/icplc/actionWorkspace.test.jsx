@@ -194,7 +194,7 @@ describe('Action workspace', () => {
     const all = () => [registrationAction, regVariant, noSubgroup, documentationAction, docCentral, healthy]
 
     const subgroupSelect = () => screen.getByLabelText('Subgroup')
-    const names = () => [...screen.getByLabelText('Action results').querySelectorAll('.icplc-action-person strong')].map((n) => n.textContent)
+    const names = () => [...screen.getByLabelText('Action results').querySelectorAll('.icplc-ac-who strong')].map((n) => n.textContent)
 
     it('builds subgroup options from the current population, merges spelling variants and flags unknown', () => {
       mocks.participants = all()
@@ -286,7 +286,8 @@ describe('Action workspace', () => {
       await waitFor(() => expect(screen.getByTestId('bulk-selected-count').textContent).toBe('3'))
       fireEvent.click(screen.getByRole('button', { name: 'Capture selected IDs' }))
       expect([...window.__bulkIds].sort()).toEqual(['doccen', 'reg', 'reg2'])
-      expect(screen.getByText('3 of 3 selected')).toBeTruthy()
+      expect(screen.getByText('3 selected')).toBeTruthy()
+      expect(screen.getByText('of 3 shown')).toBeTruthy()
     })
 
     it('changing a filter clears the selection so hidden rows cannot be bulk-targeted', async () => {
