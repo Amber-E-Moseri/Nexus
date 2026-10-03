@@ -240,12 +240,20 @@ Deno.serve(async (request) => {
         // assignee eligibility is governed by Nexus set_task_assignees() RPC authorization
       }
 
-      if (body.external_unique_key) {
-        const { data: existing } = await supabase
+      // external_unique_key is globally unique (partial unique index) but lookups are confined to the
+      // key's own scope so a key can never read another department's/sprint's task through it.
+      const findExisting = async () => {
+        let q = supabase
           .from('tasks')
           .select('id, title, status, status_id')
           .eq('external_unique_key', body.external_unique_key)
-          .maybeSingle()
+        if (keyRecord.department_id) q = q.eq('department_id', keyRecord.department_id)
+        if (keyRecord.sprint_id) q = q.eq('sprint_id', keyRecord.sprint_id)
+        return await q.maybeSingle()
+      }
+
+      if (body.external_unique_key) {
+        const { data: existing } = await findExisting()
 
         if (existing) {
           return jsonResponse(200, {
@@ -276,7 +284,22 @@ Deno.serve(async (request) => {
       }
 
       const { data: task, error } = await supabase.from('tasks').insert(taskData).select().single()
-      if (error) throw error
+      if (error) {
+        // Concurrent POSTs with the same external_unique_key: the loser hits the unique index.
+        // Return the winner as a duplicate instead of a 500.
+        if (error.code === '23505' && body.external_unique_key) {
+          const { data: winner } = await findExisting()
+          if (winner) {
+            return jsonResponse(200, {
+              duplicate: true,
+              task: winner,
+              message: 'Task with this external_unique_key already exists',
+            })
+          }
+          return jsonResponse(409, { error: 'external_unique_key is already in use' })
+        }
+        throw error
+      }
 
       return jsonResponse(201, { task })
     }
@@ -288,6 +311,7 @@ Deno.serve(async (request) => {
 
       const status = url.searchParams.get('status')
       const source = url.searchParams.get('source')
+      const externalUniqueKey = url.searchParams.get('external_unique_key')
       const limit = Math.min(Number.parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 200)
 
       let query = supabase
@@ -301,6 +325,7 @@ Deno.serve(async (request) => {
       if (keyRecord.sprint_id) query = query.eq('sprint_id', keyRecord.sprint_id)
       if (status) query = query.eq('status', status)
       if (source) query = query.eq('source', source)
+      if (externalUniqueKey) query = query.eq('external_unique_key', externalUniqueKey)
 
       const { data: tasks, error } = await query
       if (error) throw error
@@ -426,8 +451,16 @@ Deno.serve(async (request) => {
 
     return jsonResponse(404, { error: 'Not found' })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    console.error('task-api error', message)
+    const dbError = error as { code?: string; message?: string }
+    const message = error instanceof Error ? error.message : (dbError?.message ?? 'Unknown error')
+    console.error('task-api error', dbError?.code ?? '', message)
+    // The department has no usable task status definition (see sync_task_status_fields, SQLSTATE TS001).
+    if (dbError?.code === 'TS001') {
+      return jsonResponse(422, { error: 'The target department has no task statuses configured' })
+    }
+    if (dbError?.code === '23503' && /tasks_status_id_fkey/.test(dbError.message ?? '')) {
+      return jsonResponse(400, { error: 'status_id does not exist' })
+    }
     return jsonResponse(500, { error: 'Internal server error' })
   }
 })
