@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pencil, Crown, Trash2, Plus } from 'lucide-react'
-import { updateSprintMemberTeams, updateSprintTeam, deleteSprintTeam, getActiveUsers, addSprintMember } from '../lib/sprints'
+import { addSprintTeamMembership, removeSprintTeamMembership, updateSprintTeam, deleteSprintTeam, getActiveUsers, addSprintMember } from '../lib/sprints'
 
 const TEAM_COLORS = ['#5B34C7', '#1C87BE', '#E8A020', '#C94830', '#4A8F6C', '#A0522D', '#8B008B']
 
@@ -111,8 +111,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
   async function handleRemoveFromTeam(teamId, member) {
     setSaving(true)
     try {
-      const remaining = (member.sprint_team_ids ?? []).filter((id) => id !== teamId)
-      await updateSprintMemberTeams(sprintId, member.user_id, remaining)
+      await removeSprintTeamMembership(sprintId, teamId, member.user_id)
       await onTeamChanged?.()
     } catch (err) {
       alert(`Failed to remove from team: ${err?.message || String(err)}`)
@@ -127,7 +126,7 @@ export default function SprintTeamPanel({ sprintId, teams, members, canEdit, isA
       if (member.isNonSprintUser) {
         await addSprintMember(sprintId, member.user_id, 'contributor', [teamId], null)
       } else {
-        await updateSprintMemberTeams(sprintId, member.user_id, [...(member.sprint_team_ids ?? []), teamId])
+        await addSprintTeamMembership(sprintId, teamId, member.user_id)
       }
       setOpenDropdown(null)
       await onTeamChanged?.()

@@ -34,7 +34,7 @@ describe('sprint_id migration (static)', () => {
     for (const f of ['cmp-flight-sync', 'cmp-documentation-sync']) {
       const ts = readFileSync(`supabase/functions/${f}/index.ts`, 'utf8').replace(/\/\/[^\n]*/g, '')
       expect(ts, f).not.toMatch(/sprint_pattern/)
-      expect(ts, f).toMatch(/sprint_teams\?\.sprint_id === eventConfig\.sprint_id/)
+      expect(ts, f).toMatch(/rpc\('icplc_user_team_can_write'/) // team authorization is the database's single implementation
     }
   })
 })

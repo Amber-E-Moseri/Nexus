@@ -10,7 +10,7 @@ import {
   getDepartments,
   updateSprint,
   updateSprintMember,
-  updateSprintMemberTeams,
+  addSprintTeamMembership,
 } from '../lib/sprints'
 
 const inputStyle = {
@@ -101,7 +101,7 @@ export default function SprintModal({ mode = 'create', sprint = null, initialDep
       )
 
       if (creatorBelongsToTeam) {
-        await updateSprintMemberTeams(sprintRecord.id, profile.id, [team.id])
+        await addSprintTeamMembership(sprintRecord.id, team.id, profile.id)
       }
 
       createdTeamsLocal.push({

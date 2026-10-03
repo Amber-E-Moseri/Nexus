@@ -331,24 +331,13 @@ Deno.serve(async (req) => {
   let authorized = caller?.role === 'super_admin' || caller?.role === 'regional_secretary'
 
   if (!authorized) {
-    const { data: eventConfig } = await supabase
-      .from('event_configs').select('sprint_id').eq('id', event_id).maybeSingle()
-
-    // Authoritative link only: a NULL sprint_id fails closed (no sprint_pattern name matching).
-    if (eventConfig?.sprint_id) {
-      const { data: memberships } = await supabase
-        .from('sprint_team_members')
-        .select('user_id, sprint_teams!inner(name, sprint_id, is_archived)')
-        .eq('user_id', user.user.id)
-
-      authorized = (memberships || []).some((m: any) => {
-        const teamName = String(m.sprint_teams?.name || '')
-        // Archived teams never authorize (NULL is_archived = active); membership rows are untouched.
-        return m.sprint_teams?.sprint_id === eventConfig.sprint_id
-          && m.sprint_teams?.is_archived !== true
-          && !/finance|transportation|accommodation|hospitality/i.test(teamName)
-      })
-    }
+    // Team-derived authorization lives in ONE place, the database: explicit event sprint_id, active (non-archived) team,
+    // active account, and a sprint membership that has not expired. NULL sprint_id or any failure fails closed.
+    const { data: teamAllowed, error: teamError } = await supabase.rpc('icplc_user_team_can_write', {
+      p_user_id: user.user.id,
+      p_event_id: event_id,
+    })
+    authorized = !teamError && teamAllowed === true
   }
   if (!authorized) {
     return json(403, { error: 'Insufficient authorization: ICPLC flight sync requires write access' })

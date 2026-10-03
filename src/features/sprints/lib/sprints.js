@@ -505,7 +505,6 @@ export async function listSprintTeamsIndependent(sprintId) {
 }
 
 export async function addTeamMember(teamId, userId, role = null) {
-  // sprint_team_members.sprint_id is NOT NULL — look it up from the team
   const { data: team, error: teamError } = await supabase
     .from('sprint_teams')
     .select('sprint_id')
@@ -513,17 +512,14 @@ export async function addTeamMember(teamId, userId, role = null) {
     .single()
   if (teamError) throw teamError
 
+  await addSprintTeamMembership(team.sprint_id, teamId, userId, role)
+
   const { data, error } = await supabase
     .from('sprint_team_members')
-    .insert({
-      sprint_id: team.sprint_id,
-      team_id: teamId,
-      user_id: userId,
-      role,
-    })
     .select(SPRINT_TEAM_MEMBERS_SELECT)
+    .eq('team_id', teamId)
+    .eq('user_id', userId)
     .single()
-
   if (error) throw error
   return data
 }
@@ -586,12 +582,8 @@ export async function addSprintMember(sprintId, userId, role = 'contributor', te
 
   if (error) throw error
 
-  if (normalizedTeamIds.length > 0) {
-    const { error: teamError } = await supabase
-      .from('sprint_team_members')
-      .insert(normalizedTeamIds.map((teamId) => ({ sprint_id: sprintId, team_id: teamId, user_id: userId })))
-      .select()
-    if (teamError) throw teamError
+  for (const teamId of normalizedTeamIds) {
+    await addSprintTeamMembership(sprintId, teamId, userId)
   }
 }
 
@@ -631,35 +623,42 @@ export async function updateSprintMember(sprintId, userId, updates) {
   return data
 }
 
-export async function updateSprintMemberTeams(sprintId, userId, teamIds = []) {
-  const normalizedTeamIds = uniqueTeamIds(teamIds)
+/**
+ * Add ONE team membership. Idempotent: resolves true if it was added, false if the person was already on the team.
+ * Changes exactly one relationship, so concurrent adds/removes of other teams cannot undo each other. The team must
+ * belong to `sprintId`. Authorization is enforced in the database (sprint manager / team creator / super admin).
+ */
+export async function addSprintTeamMembership(sprintId, teamId, userId, role = null) {
+  const { data, error } = await supabase.rpc('add_sprint_team_member', {
+    p_sprint_id: sprintId, p_team_id: teamId, p_user_id: userId, p_role: role,
+  })
+  if (error) throw error
+  return data === true
+}
 
-  // Fetch all team IDs for this sprint so we can do a full replace
-  const { data: sprintTeams, error: teamsError } = await supabase
-    .from('sprint_teams')
-    .select('id')
-    .eq('sprint_id', sprintId)
-  if (teamsError) throw teamsError
+/** Remove ONE team membership. Idempotent: resolves true if removed, false if the person was not on the team. */
+export async function removeSprintTeamMembership(sprintId, teamId, userId) {
+  const { data, error } = await supabase.rpc('remove_sprint_team_member', {
+    p_sprint_id: sprintId, p_team_id: teamId, p_user_id: userId,
+  })
+  if (error) throw error
+  return data === true
+}
 
-  const allSprintTeamIds = (sprintTeams ?? []).map((t) => t.id)
-
-  if (allSprintTeamIds.length > 0) {
-    const { error: deleteError } = await supabase
-      .from('sprint_team_members')
-      .delete()
-      .in('team_id', allSprintTeamIds)
-      .eq('user_id', userId)
-    if (deleteError) throw deleteError
-  }
-
-  if (normalizedTeamIds.length > 0) {
-    const { error: insertError } = await supabase
-      .from('sprint_team_members')
-      .insert(normalizedTeamIds.map((teamId) => ({ sprint_id: sprintId, team_id: teamId, user_id: userId })))
-    if (insertError) throw insertError
-  }
-
-  return normalizedTeamIds
+/**
+ * DELIBERATE reconciliation of one person's complete team set within one sprint (bulk/import workflows only, never an
+ * ordinary UI interaction). One database transaction; refuses with 'stale_membership_state' (SQLSTATE 40001) when the
+ * person's teams differ from `expectedTeamIds`, so a stale view can never overwrite newer changes.
+ * Replaces the former updateSprintMemberTeams(), which deleted then re-inserted from the caller's view and lost
+ * concurrent changes.
+ */
+export async function reconcileSprintMemberTeams(sprintId, userId, desiredTeamIds, expectedTeamIds) {
+  const { data, error } = await supabase.rpc('reconcile_sprint_member_teams', {
+    p_sprint_id: sprintId, p_user_id: userId,
+    p_desired: uniqueTeamIds(desiredTeamIds), p_expected: uniqueTeamIds(expectedTeamIds),
+  })
+  if (error) throw error
+  return data
 }
 
 export async function getSprintMembers(sprintId) {

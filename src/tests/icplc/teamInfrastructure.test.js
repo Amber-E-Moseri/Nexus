@@ -4,7 +4,7 @@
  *
  * Covers: archived teams must not authorize; the two import RPCs that were still gated by the any-event helper;
  * team-membership and event->sprint-link auditing; team deletion invariants; expiry characterization; and the
- * lost-update behaviour of the replace-set team API (updateSprintMemberTeams).
+ * expiry / inactive-account semantics, atomic team-membership operations, and the former replace-set hazard.
  *
  * Every fixture is synthetic and removed afterwards. No production data, sprint or team is read or written.
  * Requires a local Supabase. Without one the suite fails when ICPLC_REQUIRE_DB=1 (or CI=true), else is skipped.
@@ -21,7 +21,7 @@ import pg from 'pg'
 vi.mock('../../lib/supabase.js', () => ({
   supabase: new Proxy({}, { get: (_t, k) => globalThis.__staffClient?.[k]?.bind?.(globalThis.__staffClient) ?? globalThis.__staffClient?.[k] }),
 }))
-const { updateSprintMemberTeams } = await import('../../features/sprints/lib/sprints.js')
+const sprintsApi = await import('../../features/sprints/lib/sprints.js')
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 180_000 })
 
@@ -159,7 +159,7 @@ beforeAll(async () => {
     return
   }
   await mkUser('superAdmin', 'super_admin')
-  for (const k of ['x', 'xm', 'xf', 'writerB', 'staff1', 'staff2', 'staff3', 'target']) await mkUser(k)
+  for (const k of ['x', 'xm', 'xf', 'writerB', 'staff1', 'staff2', 'staff3', 'target', 'lead', 'plainMember', 'stranger', 'multi', 'permM', 'tempOk', 'tempExp', 'tempExp2', 'tempRenew', 'inactiveU', 'teamOnly', 'tempFin']) await mkUser(k)
   await mkUser('manager', 'super_admin')
 
   await mkSprint('A', `ICPLC ${TAG} A`); await mkSprint('B', `ICPLC ${TAG} B`)
@@ -459,93 +459,266 @@ describe('deleting a team', () => {
   })
 })
 
-// ═════════════════════════════════════ 6. EXPIRY — CURRENT SEMANTICS (characterization) ══════════════════
-describe('temporary-membership expiry: what the database does today', () => {
-  it('an expired temporary sprint membership does not stop sprint-derived ICPLC access (no function reads membership_end_date)', async (ctx) => {
+// ═════════════════════════ 6. EXPIRED TEMPORARY MEMBERSHIP / INACTIVE ACCOUNT ═══════════════════════════
+const setMember = (sprintKey, user, { temp = false, end = null } = {}) => sql(
+  'insert into public.sprint_members (sprint_id, user_id, is_temporary, membership_end_date) values ($1,$2,$3,$4) on conflict (sprint_id, user_id) do update set is_temporary = $3, membership_end_date = $4',
+  [sp[sprintKey], users[user], temp, end])
+const dayOffset = (n) => sql('select (current_date + $1::int)::date as d', [n]).then((r) => r.rows[0].d)
+const canTeamWrite = async (user, event = 'A') => (await write(user, event)) > 0
+const memberRows = async (user, sprintKey) => (await sql('select count(*)::int n from public.sprint_team_members stm join public.sprint_teams st on st.id = stm.team_id where stm.user_id = $1 and st.sprint_id = $2', [users[user], sp[sprintKey]])).rows[0].n
+
+describe('an expired temporary sprint membership, or an inactive account, no longer authorizes', () => {
+  it('permanent sprint member with a team is active', async (ctx) => {
     need(ctx)
-    await mkUser('temp')
-    await sql("insert into public.sprint_members (sprint_id, user_id, is_temporary, membership_end_date) values ($1,$2,true,current_date - 30)", [sp.A, users.temp])
-    expect(await read('temp', 'A')).toContain('A person') // direct member: generic arm ignores the end date
-    await join('tA', 'temp')
-    expect(await write('temp', 'A')).toBeGreaterThan(0) // team arm ignores it as well
+    await setMember('A', 'permM'); await join('tA', 'permM')
+    expect(await canTeamWrite('permM')).toBe(true)
+    expect((await cmp('permM', 'A'))).toEqual(ALLOWED)
   })
 
-  it('the daily job\'s boundary is users.status = inactive; ICPLC authorization does not consult it either', async (ctx) => {
+  it('temporary member before expiry is active; ON the end date and after it is expired (date semantics, end date inclusive)', async (ctx) => {
     need(ctx)
-    await sql("update public.users set status = 'inactive' where id = $1", [users.temp])
-    expect(await write('temp', 'A')).toBeGreaterThan(0) // still authorized by team membership
-    await sql("update public.users set status = 'active' where id = $1", [users.temp])
+    await setMember('A', 'tempOk', { temp: true, end: await dayOffset(1) }); await join('tA', 'tempOk')
+    expect(await canTeamWrite('tempOk')).toBe(true)
+    await setMember('A', 'tempOk', { temp: true, end: await dayOffset(0) })
+    expect(await canTeamWrite('tempOk')).toBe(false) // end date == today counts as expired, as in the daily job (<=)
+    await setMember('A', 'tempOk', { temp: true, end: await dayOffset(-1) })
+    expect(await canTeamWrite('tempOk')).toBe(false)
   })
 
-  it('sprint_team_members has no expiry column', async (ctx) => {
+  it('expired member whose team rows remain is denied on every path; nothing is deleted; renewing restores access', async (ctx) => {
     need(ctx)
-    const cols = (await sql("select column_name from information_schema.columns where table_schema='public' and table_name='sprint_team_members'")).rows.map((r) => r.column_name)
-    expect(cols.filter((c) => /end|expire|until|temporary/i.test(c))).toEqual([])
+    await setMember('A', 'tempExp', { temp: true, end: await dayOffset(-5) }); await join('tA', 'tempExp')
+    const before = await memberRows('tempExp', 'A')
+    expect(before).toBe(1)
+    const paths = async () => ({
+      read: (await read('tempExp', 'A')).length > 0, write: await canTeamWrite('tempExp'), import: await importAllowed('tempExp', 'A'),
+      regImport: await regImportAllowed('tempExp', 'A'), helperWrite: await helper('tempExp', 'icplc_can_write_participants', 'A'), cmp: await cmp('tempExp', 'A'),
+    })
+    expect(await paths()).toEqual({ read: false, write: false, import: false, regImport: false, helperWrite: false, cmp: DENIED })
+    expect(await memberRows('tempExp', 'A')).toBe(before) // rows kept as history/configuration
+    expect((await sql('select count(*)::int n from public.sprint_members where user_id = $1', [users.tempExp])).rows[0].n).toBe(1)
+    await setMember('A', 'tempExp', { temp: true, end: await dayOffset(30) }) // renewed
+    expect(await paths()).toEqual({ read: true, write: true, import: true, regImport: true, helperWrite: true, cmp: ALLOWED })
+    await setMember('A', 'tempExp', { temp: false, end: null }) // made permanent
+    expect(await canTeamWrite('tempExp')).toBe(true)
+  })
+
+  it('multi-team temporary member: ALL team-derived grants vanish when the parent sprint membership expires', async (ctx) => {
+    need(ctx)
+    await setMember('A', 'tempExp2', { temp: true, end: await dayOffset(10) }); await join('tA', 'tempExp2'); await join('tB', 'tempExp2')
+    expect(await canTeamWrite('tempExp2')).toBe(true)
+    await archive('tA', true) // still has Operations
+    expect(await canTeamWrite('tempExp2')).toBe(true)
+    await archive('tA', false)
+    await setMember('A', 'tempExp2', { temp: true, end: await dayOffset(-1) })
+    expect(await canTeamWrite('tempExp2')).toBe(false)
+    expect(await read('tempExp2', 'A')).toEqual([])
+    expect(await memberRows('tempExp2', 'A')).toBe(2)
+  })
+
+  it('an expired DIRECT member with a restrictive team still cannot use the generic arm', async (ctx) => {
+    need(ctx)
+    await setMember('A', 'tempFin', { temp: true, end: await dayOffset(-1) }); await join('tFin', 'tempFin')
+    expect(await read('tempFin', 'A')).toEqual([])
+    await setMember('A', 'tempFin', { temp: true, end: await dayOffset(5) })
+    expect(await read('tempFin', 'A')).toEqual([]) // active, but Finance-only: team rules apply (F1)
+  })
+
+  it('a team-only member (no sprint_members row at all) is not treated as expired', async (ctx) => {
+    need(ctx)
+    await join('tA', 'teamOnly')
+    expect((await sql('select count(*)::int n from public.sprint_members where user_id = $1', [users.teamOnly])).rows[0].n).toBe(0)
+    expect(await canTeamWrite('teamOnly')).toBe(true)
+  })
+
+  it('an account that is not active has no sprint- or team-derived access; reactivating restores it', async (ctx) => {
+    need(ctx)
+    await setMember('A', 'inactiveU'); await join('tA', 'inactiveU')
+    expect(await canTeamWrite('inactiveU')).toBe(true)
+    for (const status of ['inactive', 'archived', 'invited', 'pending_activation']) {
+      await sql('update public.users set status = $2 where id = $1', [users.inactiveU, status])
+      expect(await canTeamWrite('inactiveU'), status).toBe(false)
+      expect((await read('inactiveU', 'A')).length, status).toBe(0) // direct-member arm too
+      expect(await cmp('inactiveU', 'A'), status).toEqual(DENIED)
+    }
+    await sql("update public.users set status = 'active' where id = $1", [users.inactiveU])
+    expect(await canTeamWrite('inactiveU')).toBe(true)
+  })
+
+  it('platform behaviour is unchanged: a platform role is not subject to the sprint-membership rules', async (ctx) => {
+    need(ctx)
+    await setMember('A', 'superAdmin', { temp: true, end: await dayOffset(-3) }) // even an "expired" row does not matter
+    expect((await read('superAdmin', 'A')).length).toBeGreaterThan(0)
+    expect(await cmp('superAdmin', 'A')).toEqual(ALLOWED)
+    await sql('delete from public.sprint_members where user_id = $1', [users.superAdmin])
+  })
+
+  it('NULL event sprint_id still fails closed, even for an active permanent member', async (ctx) => {
+    need(ctx)
+    await mkEvent('N2', `ICPLC ${TAG} N2`, null); await person('N2', 'N2 person')
+    expect(await read('permM', 'N2')).toEqual([])
+    expect(await cmp('permM', 'N2')).toEqual(DENIED)
+  })
+
+  it('the explicit-user helpers are not callable by signed-in users (no probing of other people)', async (ctx) => {
+    need(ctx)
+    for (const [fn, args] of [
+      ['icplc_user_team_can_write', { p_user_id: users.permM, p_event_id: ev.A }],
+      ['icplc_event_team_memberships_for', { p_user_id: users.permM, p_event_id: ev.A, p_include_archived: false }],
+      ['is_active_sprint_member', { p_sprint_id: sp.A, p_user_id: users.permM }],
+      ['is_active_account', { p_user_id: users.permM }],
+    ]) {
+      const { error } = await clients.stranger.rpc(fn, args)
+      expect(error?.code, fn).toBe('42501')
+    }
   })
 })
 
-// ═════════════════════════════════════ 7. REPLACE-SET TEAM API — LOST UPDATES ════════════════════════════
-describe('updateSprintMemberTeams (the real replace-set API)', () => {
-  // Service role: user-JWT writes to these tables hit the policy recursion noted above. The statement sequence the
-  // function issues (delete, then insert) and its stale-input semantics are what is under test, not RLS.
-  const as = () => { globalThis.__staffClient = admin }
+// ═════════════════════════ 7. ATOMIC TEAM MEMBERSHIP (real user JWTs, real concurrency) ═══════════════════
+describe('atomic sprint team membership', () => {
+  let S // sprint key
+  const T = {}
+  const rpc = (user, fn, args) => clients[user].rpc(fn, args)
+  const add = (user, team, who = 'target') => rpc(user, 'add_sprint_team_member', { p_sprint_id: sp[S], p_team_id: tm[team], p_user_id: users[who], p_role: null })
+  const remove = (user, team, who = 'target') => rpc(user, 'remove_sprint_team_member', { p_sprint_id: sp[S], p_team_id: tm[team], p_user_id: users[who] })
+  const names = (who = 'target') => teamsOf(who, S)
+  const audits = async (team, who = 'target') => (await auditRows('sprint_team', tm[team]))
+    .filter((r) => r.action.startsWith('sprint_team_member_') && r.metadata.affected_user_id === users[who])
+    .map((r) => r.action.replace('sprint_team_member_', ''))
 
-  it('on the schema produced by the migration chain it deletes the person\'s teams and then fails to re-insert (data loss)', async (ctx) => {
-    need(ctx)
-    await mkSprint('R0', `ICPLC ${TAG} R0`); await mkTeam('r0a', 'R0', 'A'); await mkTeam('r0b', 'R0', 'B')
-    await join('r0a', 'staff1')
-    as('manager')
-    // the call inserts a sprint_id into sprint_team_members, a column the replayed migrations never create
-    await expect(updateSprintMemberTeams(sp.R0, users.staff1, [tm.r0a, tm.r0b])).rejects.toMatchObject({ code: 'PGRST204' })
-    expect(await teamsOf('staff1', 'R0')).toEqual([]) // the delete step had already removed the existing membership
+  beforeAll(async () => {
+    if (!available) return
+    S = 'AT'
+    await mkSprint(S, `ICPLC ${TAG} AT`)
+    await sql('update public.sprints set created_by = $2 where id = $1', [sp[S], users.lead]) // lead = sprint creator => can_manage_sprint
+    for (const n of ['A', 'B', 'C', 'D', 'E', 'F']) { await mkTeam(`at${n}`, S, `Team ${n}`) }
+    await direct(S, 'plainMember'); await direct(S, 'multi')
+    await join('atA', 'multi'); await join('atB', 'multi')
   })
 
-  describe('with a prod-like sprint_id column present (code comments say it exists and is NOT NULL in production)', () => {
-    beforeAll(async () => {
-      if (!available) return
-      await sql('alter table public.sprint_team_members add column if not exists sprint_id uuid')
-      await sql("notify pgrst, 'reload schema'")
-      await new Promise((r) => setTimeout(r, 2500))
-    })
-    afterAll(async () => {
-      if (!available) return
+  it('authorization: sprint manager and super admin may change membership; ordinary member, multi-team member and stranger may not', async (ctx) => {
+    need(ctx)
+    for (const who of ['plainMember', 'multi', 'stranger']) {
+      const a = await add(who, 'atA'); expect(a.error?.code, `${who} add: ${JSON.stringify(a)}`).toBe('42501')
+      const r = await remove(who, 'atA', 'multi'); expect(r.error?.code, `${who} remove`).toBe('42501')
+    }
+    expect(await names('multi')).toEqual(['Team A', 'Team B']) // refused calls changed nothing
+    expect((await add('lead', 'atA')).data).toBe(true)
+    expect((await add('superAdmin', 'atB')).data).toBe(true)
+    expect(await names()).toEqual(['Team A', 'Team B'])
+    expect((await rpc('stranger', 'reconcile_sprint_member_teams', { p_sprint_id: sp[S], p_user_id: users.target, p_desired: [], p_expected: [tm.atA, tm.atB] })).error?.code).toBe('42501')
+    expect(await names()).toEqual(['Team A', 'Team B'])
+  })
+
+  it('validation: wrong sprint, unknown team and unknown user are rejected without changes', async (ctx) => {
+    need(ctx)
+    const wrong = await rpc('lead', 'add_sprint_team_member', { p_sprint_id: sp.A, p_team_id: tm.atC, p_user_id: users.target, p_role: null })
+    expect(wrong.error?.code).toBe('22023')
+    expect((await rpc('lead', 'add_sprint_team_member', { p_sprint_id: sp[S], p_team_id: id(), p_user_id: users.target, p_role: null })).error?.code).toBe('P0002')
+    expect((await rpc('lead', 'add_sprint_team_member', { p_sprint_id: sp[S], p_team_id: tm.atC, p_user_id: id(), p_role: null })).error?.code).toBe('P0002')
+    expect(await names()).toEqual(['Team A', 'Team B'])
+  })
+
+  it('A+B: add C -> A+B+C; remove A -> B+C; each operation is idempotent and audits exactly one event (a no-op audits none)', async (ctx) => {
+    need(ctx)
+    expect((await add('lead', 'atC')).data).toBe(true)
+    expect(await names()).toEqual(['Team A', 'Team B', 'Team C'])
+    expect((await add('lead', 'atC')).data).toBe(false) // already a member: nothing written
+    expect((await remove('lead', 'atA')).data).toBe(true)
+    expect(await names()).toEqual(['Team B', 'Team C'])
+    expect((await remove('lead', 'atA')).data).toBe(false)
+    expect(await audits('atC')).toEqual(['added']) // exactly one, despite the repeated call
+    expect(await audits('atA')).toEqual(['added', 'removed'])
+    expect(await audits('atB')).toEqual(['added']) // removing A did not touch B's history
+  })
+
+  it('concurrent add D / add E (different staff) -> B+C+D+E; concurrent remove B / add F -> C+D+E+F', async (ctx) => {
+    need(ctx)
+    const r1 = await Promise.all([add('lead', 'atD'), add('superAdmin', 'atE')])
+    expect(r1.map((r) => r.data)).toEqual([true, true])
+    expect(await names()).toEqual(['Team B', 'Team C', 'Team D', 'Team E'])
+    const r2 = await Promise.all([remove('lead', 'atB'), add('superAdmin', 'atF')])
+    expect(r2.map((r) => r.data)).toEqual([true, true])
+    expect(await names()).toEqual(['Team C', 'Team D', 'Team E', 'Team F'])
+  })
+
+  it('many racing operations on one person converge to exactly the intended set (no lost updates)', async (ctx) => {
+    need(ctx)
+    await sql('delete from public.sprint_team_members where user_id = $1', [users.staff1])
+    const adds = ['atA', 'atB', 'atC', 'atD', 'atE', 'atF'].map((t, i) => add(i % 2 ? 'lead' : 'superAdmin', t, 'staff1'))
+    expect((await Promise.all(adds)).every((r) => r.data === true)).toBe(true)
+    expect(await names('staff1')).toEqual(['Team A', 'Team B', 'Team C', 'Team D', 'Team E', 'Team F'])
+    await Promise.all([remove('lead', 'atC', 'staff1'), remove('superAdmin', 'atE', 'staff1')])
+    expect(await names('staff1')).toEqual(['Team A', 'Team B', 'Team D', 'Team F'])
+    // racing operations on DIFFERENT teams: removes of A and B alongside adds of C and E
+    const mixed = [remove('lead', 'atA', 'staff1'), remove('superAdmin', 'atB', 'staff1'), add('lead', 'atC', 'staff1'), add('superAdmin', 'atE', 'staff1')]
+    expect((await Promise.all(mixed)).map((r) => r.data)).toEqual([true, true, true, true])
+    expect(await names('staff1')).toEqual(['Team C', 'Team D', 'Team E', 'Team F'])
+  })
+
+  it('the former replace-set hazard, modelled: stale full-set writes lose concurrent changes (why the interactive path moved)', async (ctx) => {
+    need(ctx)
+    const legacyReplaceSet = async (who, desired) => { // the removed updateSprintMemberTeams algorithm: delete all, insert the caller's list
+      await sql('delete from public.sprint_team_members where user_id = $1 and team_id = any($2)', [users[who], Object.entries(tm).filter(([k]) => k.startsWith('at')).map(([, v]) => v)])
+      for (const t of desired) await sql('insert into public.sprint_team_members (team_id, user_id) values ($1,$2)', [tm[t], users[who]])
+    }
+    await legacyReplaceSet('staff2', ['atA', 'atB'])
+    await legacyReplaceSet('staff2', ['atA', 'atB', 'atC']) // staff 1 adds C
+    await legacyReplaceSet('staff2', ['atA', 'atB', 'atD']) // staff 2, stale A+B, adds D
+    expect(await names('staff2')).toEqual(['Team A', 'Team B', 'Team D']) // C silently lost
+    // same sequence with the atomic operations keeps everything
+    await sql('delete from public.sprint_team_members where user_id = $1', [users.staff2])
+    await add('lead', 'atA', 'staff2'); await add('lead', 'atB', 'staff2')
+    await add('lead', 'atC', 'staff2'); await add('superAdmin', 'atD', 'staff2')
+    expect(await names('staff2')).toEqual(['Team A', 'Team B', 'Team C', 'Team D'])
+  })
+
+  it('reconcile: one transaction, applies only the difference, one audit event per changed row', async (ctx) => {
+    need(ctx)
+    await sql('delete from public.sprint_team_members where user_id = $1', [users.staff3])
+    await add('lead', 'atA', 'staff3'); await add('lead', 'atB', 'staff3')
+    const { data, error } = await rpc('lead', 'reconcile_sprint_member_teams', { p_sprint_id: sp[S], p_user_id: users.staff3, p_desired: [tm.atB, tm.atC], p_expected: [tm.atA, tm.atB] })
+    expect(error).toBeNull()
+    expect(data.added).toEqual([tm.atC]); expect(data.removed).toEqual([tm.atA])
+    expect(await names('staff3')).toEqual(['Team B', 'Team C'])
+    expect((await audits('atC')).length).toBeGreaterThan(0)
+    const again = await rpc('lead', 'reconcile_sprint_member_teams', { p_sprint_id: sp[S], p_user_id: users.staff3, p_desired: [tm.atB, tm.atC], p_expected: [tm.atB, tm.atC] })
+    expect(again.data).toEqual({ added: [], removed: [] }) // idempotent
+  })
+
+  it('reconcile refuses stale expectations, foreign teams, and a missing expectation, changing nothing', async (ctx) => {
+    need(ctx)
+    const stale = await rpc('lead', 'reconcile_sprint_member_teams', { p_sprint_id: sp[S], p_user_id: users.staff3, p_desired: [tm.atD], p_expected: [tm.atB] })
+    expect(stale.error?.code).toBe('40001'); expect(stale.error?.message).toMatch(/stale_membership_state/)
+    const foreign = await rpc('lead', 'reconcile_sprint_member_teams', { p_sprint_id: sp[S], p_user_id: users.staff3, p_desired: [tm.tA], p_expected: [tm.atB, tm.atC] })
+    expect(foreign.error?.code).toBe('22023')
+    const none = await rpc('lead', 'reconcile_sprint_member_teams', { p_sprint_id: sp[S], p_user_id: users.staff3, p_desired: [], p_expected: null })
+    expect(none.error?.code).toBe('22023')
+    expect(await names('staff3')).toEqual(['Team B', 'Team C'])
+  })
+
+  it('the application API (real functions) is wired to the atomic operations and the replace-set function is gone', async (ctx) => {
+    need(ctx)
+    globalThis.__staffClient = clients.lead
+    expect(sprintsApi.updateSprintMemberTeams).toBeUndefined()
+    expect(await sprintsApi.addSprintTeamMembership(sp[S], tm.atE, users.staff3)).toBe(true)
+    expect(await sprintsApi.addSprintTeamMembership(sp[S], tm.atE, users.staff3)).toBe(false)
+    expect(await names('staff3')).toEqual(['Team B', 'Team C', 'Team E'])
+    expect(await sprintsApi.removeSprintTeamMembership(sp[S], tm.atB, users.staff3)).toBe(true)
+    await expect(sprintsApi.addSprintTeamMembership(sp.A, tm.atF, users.staff3)).rejects.toMatchObject({ code: '22023' })
+    await expect(sprintsApi.reconcileSprintMemberTeams(sp[S], users.staff3, [tm.atC], [tm.atB])).rejects.toMatchObject({ code: '40001' })
+    expect(await names('staff3')).toEqual(['Team C', 'Team E'])
+  })
+
+  it('works on a database that (unlike the chain) carries a legacy sprint_id column', async (ctx) => {
+    need(ctx)
+    await sql('alter table public.sprint_team_members add column if not exists sprint_id uuid not null default gen_random_uuid()')
+    try {
+      expect((await add('lead', 'atB', 'staff3')).data).toBe(true)
+      const row = await sql('select sprint_id from public.sprint_team_members where team_id = $1 and user_id = $2', [tm.atB, users.staff3])
+      expect(row.rows[0].sprint_id).toBe(sp[S]) // filled from the team's sprint by the drift shim
+    } finally {
       await sql('alter table public.sprint_team_members drop column if exists sprint_id')
-      await sql("notify pgrst, 'reload schema'")
-    })
-
-    it('ADD scenario: staff 2 acting on a stale A+B view silently erases the C that staff 1 just added', async (ctx) => {
-      need(ctx)
-      await mkSprint('R1', `ICPLC ${TAG} R1`)
-      for (const [k, n] of [['r1a', 'A'], ['r1b', 'B'], ['r1c', 'C'], ['r1d', 'D']]) await mkTeam(k, 'R1', n)
-      await join('r1a', 'target'); await join('r1b', 'target') // X -> A + B
-      const staff1View = [tm.r1a, tm.r1b]; const staff2View = [tm.r1a, tm.r1b] // both loaded A+B
-      as('manager'); await updateSprintMemberTeams(sp.R1, users.target, [...staff1View, tm.r1c]) // staff 1 adds C
-      expect(await teamsOf('target', 'R1')).toEqual(['A', 'B', 'C'])
-      as('manager'); await updateSprintMemberTeams(sp.R1, users.target, [...staff2View, tm.r1d]) // staff 2 adds D (stale)
-      expect(await teamsOf('target', 'R1')).toEqual(['A', 'B', 'D']) // C is lost: this is the defect
-    })
-
-    it('REMOVE scenario: a stale view resurrects a membership another staff member removed', async (ctx) => {
-      need(ctx)
-      // current: A, B, D ; staff 1 removes B; staff 2 (stale A+B+D) removes D
-      const stale = [tm.r1a, tm.r1b, tm.r1d]
-      as('manager'); await updateSprintMemberTeams(sp.R1, users.target, stale.filter((t) => t !== tm.r1b))
-      expect(await teamsOf('target', 'R1')).toEqual(['A', 'D'])
-      as('manager'); await updateSprintMemberTeams(sp.R1, users.target, stale.filter((t) => t !== tm.r1d))
-      expect(await teamsOf('target', 'R1')).toEqual(['A', 'B']) // B is back although it had been removed; the removal is lost
-    })
-
-    it('single-relationship operations do not have the problem (the model to move interactive callers to)', async (ctx) => {
-      need(ctx)
-      await mkSprint('R2', `ICPLC ${TAG} R2`)
-      for (const [k, n] of [['r2a', 'A'], ['r2b', 'B'], ['r2c', 'C'], ['r2d', 'D']]) await mkTeam(k, 'R2', n)
-      await join('r2a', 'target'); await join('r2b', 'target')
-      const add = (t) => admin.from('sprint_team_members').insert({ team_id: tm[t], user_id: users.target })
-      const remove = (t) => admin.from('sprint_team_members').delete().eq('team_id', tm[t]).eq('user_id', users.target)
-      await Promise.all([add('r2c'), add('r2d')])
-      expect(await teamsOf('target', 'R2')).toEqual(['A', 'B', 'C', 'D'])
-      await Promise.all([remove('r2b'), remove('r2d')])
-      expect(await teamsOf('target', 'R2')).toEqual(['A', 'C'])
-    })
+    }
   })
 })

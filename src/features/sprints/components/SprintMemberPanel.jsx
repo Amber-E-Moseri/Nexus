@@ -9,7 +9,8 @@ import {
   getActiveUsers,
   removeSprintMember,
   updateSprintMemberRole,
-  updateSprintMemberTeams,
+  addSprintTeamMembership,
+  removeSprintTeamMembership,
   reactivateTemporaryMember,
   getPendingSprintInvitations,
 } from '../lib/sprints'
@@ -283,8 +284,15 @@ export default function SprintMemberPanel({
     await onChanged?.()
   }
 
-  async function handleTeamChange(userId, teamIds) {
-    await updateSprintMemberTeams(sprintId, userId, teamIds)
+  // Each interaction changes exactly ONE membership (atomic, idempotent): a stale list in this panel can no longer
+  // overwrite a change another staff member just made.
+  async function handleAddToTeam(userId, teamId) {
+    await addSprintTeamMembership(sprintId, teamId, userId)
+    await onChanged?.()
+  }
+
+  async function handleRemoveFromTeam(userId, teamId) {
+    await removeSprintTeamMembership(sprintId, teamId, userId)
     await onChanged?.()
   }
 
@@ -668,7 +676,7 @@ export default function SprintMemberPanel({
                             {team.name}
                             <button
                               type="button"
-                              onClick={() => handleTeamChange(member.user.id, (member.sprint_team_ids ?? []).filter((id) => id !== team.id))}
+                              onClick={() => handleRemoveFromTeam(member.user.id, team.id)}
                               style={{ lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer', color: TOKENS.primary, fontSize: 13, padding: '0 1px', opacity: 0.7 }}
                               onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
                               onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7' }}
@@ -699,7 +707,7 @@ export default function SprintMemberPanel({
                                   <button
                                     key={team.id}
                                     type="button"
-                                    onClick={() => { handleTeamChange(member.user.id, [...(member.sprint_team_ids ?? []), team.id]); setAddTeamForId(null) }}
+                                    onClick={() => { handleAddToTeam(member.user.id, team.id); setAddTeamForId(null) }}
                                     style={{ display: 'block', width: '100%', padding: '9px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: TOKENS.textPrimary, fontFamily: 'DM Sans, system-ui, sans-serif', textAlign: 'left' }}
                                     onMouseEnter={(e) => { e.currentTarget.style.background = TOKENS.surfaceTertiary }}
                                     onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}

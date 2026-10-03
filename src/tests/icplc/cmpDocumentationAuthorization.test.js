@@ -205,8 +205,8 @@ describe('CMP documentation sync edge authorization', () => {
 
     await pgExec(
       `INSERT INTO public.event_configs(id, event_name, sprint_pattern, is_active)
-       VALUES ($1, 'CMP Auth Event', 'cmp-auth', false)
-       ON CONFLICT (id) DO UPDATE SET sprint_pattern = excluded.sprint_pattern`,
+       VALUES ($1, 'ICPLC CMP Auth Event', 'cmp-auth', false)
+       ON CONFLICT (id) DO UPDATE SET sprint_pattern = excluded.sprint_pattern, event_name = excluded.event_name`,
       [EVENT_ID],
     )
     await pgExec(

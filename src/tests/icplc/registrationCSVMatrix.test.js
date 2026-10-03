@@ -137,7 +137,7 @@ async function createTestAuthUser(email, password, role) {
 
   await pgExec(`INSERT INTO auth.users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`, [userId])
   await pgExec(
-    `INSERT INTO public.users (id, email, name, role) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET role = $4`,
+    `INSERT INTO public.users (id, email, name, role, status) VALUES ($1, $2, $3, $4, 'active') ON CONFLICT (id) DO UPDATE SET role = $4, status = 'active'`,
     [userId, email, role, role]
   )
 

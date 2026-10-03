@@ -12,40 +12,54 @@ membership or `event_configs.sprint_id` is created or changed by this work; conf
 | Cross-event RPC gaps | `icplc_resolve_unmatched_row` and `icplc_backfill_participants_from_import` (SECURITY DEFINER) were gated only by the any-event helper, so a writer of one event could act inside another's batch (and backfill every event). Both now authorize for the batch's own event; a NULL batch needs a platform role. |
 | Audit | `activity_log` rows (database triggers) for team member added/removed, team created/deleted/archived/unarchived/moved, and every change of `event_configs.sprint_id`. |
 
-## Expiry semantics (as found, not changed)
-* `sprint_members.is_temporary` + `membership_end_date` (and `users.is_temporary`) exist. `sprint_team_members` has **no** expiry
-  column (the `team_memberships … membership_end_date` UI in `SprintMemberPanel` reads a field that does not exist).
-* No policy or authorization function reads `membership_end_date`; `is_temp_member_expired()` is only used by a notification trigger.
-* Expiry is enforced out of band: the daily `deactivate-temp-sprint-members` job sets `users.status = 'inactive'`
-  (it never touches `sprint_members`/`sprint_team_members`). Neither that status nor the end date is consulted by the ICPLC
-  helpers (all SECURITY DEFINER), and no Auth ban is applied. So an expired temporary member keeps sprint- and team-derived
-  ICPLC access at the database layer until their sessions end / the account is otherwise blocked in the app.
-* **Open product decision** (not made here): is "account inactive" the intended boundary, or should expiry also stop sprint/team
-  authorization? Characterization tests lock the current behaviour so any change is deliberate.
+## Expiry and inactive accounts (decided and implemented)
+Decision: an expired temporary sprint membership must not keep granting sprint- or team-derived ICPLC access, and authorization
+must not wait for the daily clean-up job.
+* `sprint_members.membership_end_date` is a **DATE**; expired = `is_temporary AND membership_end_date <= current_date` (end date
+  inclusive) - the same predicate as `is_temp_member_expired()` and the daily job, so nothing was reinterpreted.
+* One canonical set of helpers (`20271005000003`): `sprint_membership_is_expired`, `sprint_member_is_expired`, `is_active_account`
+  (`users.status = 'active'`), `is_active_sprint_member`, and the single shared team source `icplc_event_team_memberships_for`
+  that every ICPLC team decision (RLS helpers **and** both CMP Edge Functions, via `icplc_user_team_can_write`) now uses.
+* Direct sprint-member arm: needs an active sprint membership. Team arm: needs the team row, an active account, and that the
+  person's sprint membership is not expired. A team-only member (no `sprint_members` row) is not blocked: absence is not expiry.
+* Team rows are never deleted/changed by expiry; renewing (later end date, or non-temporary) restores access.
+* Any non-`active` status (inactive, archived, invited, pending_activation) loses sprint/team-derived ICPLC access.
+* Unchanged on purpose: platform roles, the Programs department, the service role, the generic `is_sprint_member()` used across
+  Nexus, and **Group Pastor** access (participant-derived, not sprint-derived). Open follow-up: should an inactive Group Pastor
+  keep their own-subgroup read? Not decided here.
+* The helpers that take an explicit user id are service-role only, so signed-in users cannot probe other people's access.
+* Consequence worth knowing before population: newly invited people (`invited` / `pending_activation`) have no ICPLC
+  sprint/team access until their account is `active`.
 
 ## Team deletion
 `delete_sprint_team` deletes `sprint_team_members WHERE team_id = …` then the team. FK `team_id → sprint_teams ON DELETE CASCADE`.
 Other teams of the same person are untouched (tested). It is a **no-op for a team whose `sprint_id` is NULL**. Prefer archive over
 delete once a team has operational history: deletion removes the memberships and their audit context is only the activity_log rows.
 
-## Multi-team mutation: lost updates (NOT fixed here — separate PR proposed)
-`updateSprintMemberTeams(sprintId, userId, teamIds)` replaces a person's whole team set in a sprint with two non-transactional
-statements (delete all, then insert). Proven with the real function:
-* stale add: A+B, staff 1 adds C, staff 2 (stale A+B) adds D → **A+B+D, C silently lost**;
-* stale remove: staff 2's stale view resurrects a membership staff 1 removed;
-* single-row insert/delete (the model to move to) is safe under concurrency;
-* between the delete and the insert a person has no team membership, which F1 reads as "no team" (generic direct-member arm).
-Callers: `SprintMemberPanel` (add/remove chips), `SprintTeamPanel` (add/remove), `SprintModal` (creator). Recommendation: interactive callers
-use atomic add/remove (`addTeamMember` / `removeTeamMember` already exist as single-row operations); keep replace-set only for a
-deliberate reconciliation/import with a preview.
+## Multi-team mutation: lost updates (fixed)
+The old replace-set `updateSprintMemberTeams` (delete everything, then insert the caller's list) lost concurrent changes (A+B, staff 1
+adds C, staff 2 on a stale view adds D -> A+B+D) and resurrected removed memberships (proven; the algorithm is kept as a model in the
+test). It is **removed**. `20271005000004` adds `add_sprint_team_member`, `remove_sprint_team_member` (single relationship, idempotent,
+sprint-validated, audited once, SECURITY DEFINER with an explicit manager check like `delete_sprint_team`, deliberately narrower than the
+table policy) and `reconcile_sprint_member_teams` (one transaction, per-person lock, refuses stale `expected` state, for deliberate bulk
+use only). Callers: `SprintMemberPanel` (add/remove chips) and `SprintTeamPanel` (add/remove) and `SprintModal` (creator joins the new
+team) were all single add/remove interactions and now use the atomic operations; `addSprintMember` and `addTeamMember` add one team at a
+time. No caller needed replace-set. Real concurrent RPC tests: add/add, remove/add, six racing adds, mixed removes/adds all converge.
+The migration contains a temporary drift shim: if a database has a `sprint_id` column on `sprint_team_members` it is filled from the team
+(the column is never created or required).
 
-### Schema/code mismatch to verify against production (read-only) before that PR
-The replace-set function, `addTeamMember` and `addSprintMember` insert `sprint_id` into `sprint_team_members` (code comments call it
-NOT NULL), and `create_sprint_with_template` does the same. The migration chain never creates that column (a migration comment says
-not to), so on a chain-built database those calls fail with PGRST204 *after* the delete. Also, user-JWT writes to `sprint_teams`
-/ `sprint_team_members` hit `infinite recursion detected in policy` on the chain-built schema. Production probably differs from the
-migration chain here. Verify (read-only): `select column_name, is_nullable from information_schema.columns where table_name='sprint_team_members'`
-and the policies on both tables. The audit triggers are written to work either way (the sprint is read from the team).
+## Production schema comparison: NOT DONE (no production access from this environment)
+Run `docs/icplc/drafts/production_schema_readonly_inspection.sql` (SELECT-only catalog queries, no user data) against production and
+compare. Until then these are the **migration-chain** facts and the open questions:
+| Object | Migration-chain schema | Production | Match? |
+|---|---|---|---|
+| `sprint_team_members` columns | id, team_id, user_id, role, joined_at (no sprint_id; a migration comment says never add it) | unverified | ? |
+| App code / RPCs inserting `sprint_id` into it | `addTeamMember`, `addSprintMember`, `create_sprint_with_template` still assume it | unverified | ? |
+| RLS: user-token read/write of `sprint_teams`, `sprint_team_members` | fails with 42P17 (recursion) | unverified | ? |
+| RLS: user-token read of `departments`, `users`, `tasks`, `activity_log` | fails with 42P17 | unverified | ? |
+The feature works for real users in production, so production's policies very likely differ from the chain. That is repo-wide drift (not
+ICPLC-specific); the cycles and a draft fix are in `docs/icplc/drafts/policy_recursion_fixes_DRAFT.sql` and are deliberately NOT migrations:
+re-creating policies from the chain's definitions could overwrite production fixes.
 
 ## Bulk population (design only; additive by default)
 Input: rows of `{ person identity (email / nexus user id), sprint, teams[] }` (one person may appear in several rows or carry a team array).
