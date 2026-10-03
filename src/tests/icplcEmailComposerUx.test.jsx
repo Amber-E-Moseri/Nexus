@@ -144,6 +144,52 @@ describe('ICPLCEmailComposer recipient curation UX', () => {
     expect(screen.getByText('Preview: ICPLC update for Amber in Preview subgroup')).toBeTruthy()
   })
 
+  it('sample recipient selection personalizes subject and body preview without changing send payload', async () => {
+    renderComposer(selectedRows)
+    fireEvent.change(screen.getByPlaceholderText('Email subject'), {
+      target: { value: 'Important ICPLC information for {{first_name}}' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('Write the email body'), {
+      target: { value: 'Hello {{first_name}} from {{subgroup}}' },
+    })
+
+    fireEvent.change(screen.getByLabelText('Sample recipient'), { target: { value: 'b' } })
+
+    expect(screen.getByText('Preview: Important ICPLC information for Ben')).toBeTruthy()
+    expect(screen.getByText(/Hello Ben from Central/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Review send/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Send email/i }))
+
+    await waitFor(() => expect(invoke).toHaveBeenCalled())
+    expect(invoke.mock.calls.at(-1)[1].body.participant_ids).toEqual(['a', 'b', 'c'])
+    expect(invoke.mock.calls.at(-1)[1].body.subject).toBe('Important ICPLC information for {{first_name}}')
+    expect(invoke.mock.calls.at(-1)[1].body.body).toBe('Hello {{first_name}} from {{subgroup}}')
+  })
+
+  it('sample preview falls back to an effective recipient after filtering or exclusion removes the selected sample', () => {
+    renderComposer(selectedRows)
+    fireEvent.change(screen.getByPlaceholderText('Email subject'), {
+      target: { value: 'For {{first_name}}' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('Write the email body'), {
+      target: { value: 'Body for {{first_name}}' },
+    })
+
+    fireEvent.change(screen.getByLabelText('Sample recipient'), { target: { value: 'b' } })
+    expect(screen.getByText('Preview: For Ben')).toBeTruthy()
+    expect(screen.getByText(/Body for Ben/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ben Missing' }))
+    expect(screen.getByText('Preview: For Amber')).toBeTruthy()
+    expect(screen.getByText(/Body for Amber/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Missing \(1\)/ }))
+    expect(screen.getByText(/0 effective recipients from 3 eligible candidates/)).toBeTruthy()
+    expect(screen.queryByLabelText('Sample recipient')).toBeNull()
+    expect(screen.getByText(/Preview: For/).textContent).toBe('Preview: For Preview')
+  })
+
   it('merge tags and test send keep the hardened endpoint contract', async () => {
     renderComposer(selectedRows)
     fireEvent.click(screen.getByRole('button', { name: '{{first_name}}' }))
