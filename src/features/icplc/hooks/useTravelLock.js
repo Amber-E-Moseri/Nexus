@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
-import { isFieldOverridden, setOverridePatch } from '../lib/fieldAuthority.js'
+import { isFieldOverridden } from '../lib/fieldAuthority.js'
 
 // The six itinerary fields an import (CMP flights / registration) may overwrite.
 export const TRAVEL_FIELDS = [
@@ -15,26 +15,20 @@ export function isTravelLocked(participant) {
 
 /**
  * Lock/unlock a participant's itinerary so re-imports won't overwrite it.
- * Uses the row's own override_fields (from the list query), so it never depends on
- * a profile query being cached.
+ * The change is applied atomically on the server (icplc_apply_override_changes): only the six itinerary keys are
+ * set or cleared, so overrides another staff member added meanwhile are never overwritten by a stale browser copy.
  */
 export function useTravelLock() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ participant, lock, userId }) => {
-      const next = { ...(participant.override_fields || {}) }
-      for (const field of TRAVEL_FIELDS) {
-        if (lock) Object.assign(next, setOverridePatch(field, userId))
-        else delete next[field]
-      }
-      const { data, error } = await supabase
-        .from('icplc_participants')
-        .update({ override_fields: next })
-        .eq('id', participant.id)
-        .select()
-        .single()
+    mutationFn: async ({ participant, lock }) => {
+      const { data, error } = await supabase.rpc('icplc_apply_override_changes', {
+        p_participant_id: participant.id,
+        p_set_fields: lock ? TRAVEL_FIELDS : [],
+        p_clear_fields: lock ? [] : TRAVEL_FIELDS,
+      })
       if (error) throw error
-      return data
+      return { ...participant, override_fields: data }
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['icplc_profile', data.id] })

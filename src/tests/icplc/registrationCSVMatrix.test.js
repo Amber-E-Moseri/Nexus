@@ -893,6 +893,8 @@ describe('ICPLC Registration CSV — Certification Matrix', () => {
       })
       const sprint = await pgInsertReturning('sprints', { name: 'ICPLC Auth Sprint Alpha', status: 'planning', sprint_type: 'custom' })
       sprintId = sprint.data.id
+      // Authorization follows the explicit event -> sprint link, never the name pattern.
+      await pgExec('UPDATE public.event_configs SET sprint_id = $1 WHERE id = $2', [sprintId, SPRINT_EVENT_ID])
 
       const allowed = await pgInsertReturning('sprint_teams', { sprint_id: sprintId, name: 'Delegate Relations' })
       allowedTeamId = allowed.data.id
@@ -933,16 +935,18 @@ describe('ICPLC Registration CSV — Certification Matrix', () => {
       }
     })
 
-    async function freshBatch() {
+    // The batch (and its participants) belong to `eventId`. Authorization is evaluated for THAT event, so a sprint
+    // writer is only allowed on the event whose sprint their team belongs to (SPRINT_EVENT_ID).
+    async function freshBatch(eventId = TEST_EVENT_ID) {
       const regKey = 'REG-AUTH-' + Math.random().toString(36).slice(2, 8)
       const p = await pgInsertReturning('icplc_participants', {
-        event_id: TEST_EVENT_ID, full_name: 'Auth Test', registration_status: 'unknown',
+        event_id: eventId, full_name: 'Auth Test', registration_status: 'unknown',
       })
       await pgInsertReturning('icplc_identity_maps', {
-        event_id: TEST_EVENT_ID, source_type: 'registration_csv',
+        event_id: eventId, source_type: 'registration_csv',
         source_key: regKey, participant_id: p.data.id,
       })
-      const { batchId } = await parseAndPreview(TEST_EVENT_ID, [
+      const { batchId } = await parseAndPreview(eventId, [
         { 'Registration ID': regKey, 'First Name': 'Auth', 'Last Name': 'Test', 'Registered': 'Yes' },
       ])
       return { batchId, participantId: p.data.id }
@@ -1036,14 +1040,24 @@ describe('ICPLC Registration CSV — Certification Matrix', () => {
       expect(data[0].applied_rows).toBeGreaterThanOrEqual(1)
     })
 
-    it('sprint-writer in allowed team → ALLOWED', async () => {
-      const { batchId } = await freshBatch()
+    it('sprint-writer in allowed team → ALLOWED (for the event whose sprint their team belongs to)', async () => {
+      const { batchId } = await freshBatch(SPRINT_EVENT_ID)
       const { data, error } = await authUsers.sprintWriter.client.rpc(
         'icplc_apply_registration_import',
         { p_batch_id: batchId, p_applied_by: authUsers.sprintWriter.userId }
       )
       expect(error).toBeNull()
       expect(data[0].applied_rows).toBeGreaterThanOrEqual(1)
+    })
+
+    it('sprint-writer in allowed team on ANOTHER event\'s batch → DENIED (membership in one event never authorizes another)', async () => {
+      const { batchId } = await freshBatch(TEST_EVENT_ID)
+      const { error } = await authUsers.sprintWriter.client.rpc(
+        'icplc_apply_registration_import',
+        { p_batch_id: batchId, p_applied_by: authUsers.sprintWriter.userId }
+      )
+      expect(error).not.toBeNull()
+      expect(error.message).toMatch(/Insufficient authorization/i)
     })
 
     it('ordinary member (no sprint team) → DENIED', async () => {
