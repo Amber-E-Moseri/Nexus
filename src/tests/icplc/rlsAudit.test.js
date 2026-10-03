@@ -18,31 +18,35 @@ describe('RLS Audit (release gate)', () => {
   let testEventId
   let testParticipantId
 
+  const RLS_AUDIT_EVENT_ID = '00000000-0000-0000-0000-000000009510'
+
   beforeAll(async () => {
     adminSupabase = createClient(
       process.env.SUPABASE_URL ?? 'http://localhost:54321',
       process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU',
     )
 
-    // Ensure a test event and participant exist
-    const { data: event, error: eventError } = await adminSupabase
+    // Ensure the stack is reachable, then use a deterministic event fixture.
+    const { error: eventError } = await adminSupabase
       .from('event_configs')
       .select('id')
-      .ilike('event_name', '%ICPLC%')
       .limit(1)
       .maybeSingle()
     if (/fetch failed/i.test(eventError?.message ?? '')) return
     supabaseAvailable = true
-    testEventId = event?.id
 
-    if (!testEventId) {
-      const { data } = await adminSupabase
-        .from('event_configs')
-        .insert({ event_name: 'ICPLC RLS Test', sprint_pattern: '%ICPLC RLS%' })
-        .select('id')
-        .single()
-      testEventId = data?.id
-    }
+    const { data: event, error: upsertError } = await adminSupabase
+      .from('event_configs')
+      .upsert({
+        id: RLS_AUDIT_EVENT_ID,
+        event_name: 'ICPLC RLS Audit Test',
+        sprint_pattern: '%ICPLC RLS Audit%',
+        is_active: false,
+      })
+      .select('id')
+      .single()
+    if (upsertError) throw upsertError
+    testEventId = event?.id
 
     if (testEventId) {
       const { data } = await adminSupabase
@@ -127,6 +131,20 @@ describe('RLS Audit (release gate)', () => {
 
     // Cleanup
     if (data?.id) await adminSupabase.from('icplc_participants').delete().eq('id', data.id)
+  })
+
+  it('16b. Service role insert still enforces event_config FK integrity', async () => {
+    if (!supabaseAvailable) return
+    const { error } = await adminSupabase
+      .from('icplc_participants')
+      .insert({
+        event_id: '00000000-0000-0000-0000-000000009599',
+        full_name: 'Invalid Event FK Test',
+        email: 'invalid-event-fk@example.com',
+      })
+
+    expect(error).not.toBeNull()
+    expect(error?.code).toBe('23503')
   })
 
   // ── Test 17: Permission revocation — removed from team → no longer reads ──
