@@ -8,8 +8,13 @@
 --
 -- WHAT
 --   1. event_configs.sprint_id  -> sprints(id), NULLABLE. No backfill: nothing here guesses a production mapping.
---   2. At most one event per sprint (partial unique index). A sprint that served two events would be a shared
---      authorization boundary, which is the exact failure this column exists to remove.
+--   2. A plain (non-unique) index for the FK / ON DELETE SET NULL lookups. Cardinality is: each event has AT MOST ONE
+--      explicitly configured sprint (single column); many events MAY reference one sprint. one-event-per-sprint is not
+--      a Nexus domain invariant (sprints are generic work containers; an event config can be duplicated as a draft,
+--      archived and re-activated, or two programs can deliberately share one organising sprint). Sharing is safe
+--      because it can only be created by an explicit super_admin write; the accident this column removes was an
+--      OVERLAPPING NAME PATTERN, and that no longer exists. Sharing a sprint shares its team memberships between those
+--      events by the admin's explicit choice.
 --   3. icplc_event_sprint_ids(event) -- the single choke point behind every F2 event-scoped helper, policy and RPC
 --      guard -- now resolves ONLY through sprint_id. sprint_pattern no longer takes part in authorization.
 --
@@ -43,7 +48,7 @@ comment on column public.event_configs.sprint_id is
   'Authoritative event -> sprint link used by ICPLC authorization. NULL = unconfigured: sprint-derived access fails closed. '
   'sprint_pattern is legacy/discovery only and never decides authorization.';
 
-create unique index if not exists event_configs_sprint_id_key
+create index if not exists event_configs_sprint_id_idx
   on public.event_configs (sprint_id)
   where sprint_id is not null;
 

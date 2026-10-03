@@ -15,10 +15,11 @@ const code = (sql) => sql.replace(/--[^\n]*/g, '').replace(/'[^']*'/g, "''")
 
 describe('sprint_id migration (static)', () => {
   const sql = code(MIG(LINK))
-  it('adds a nullable FK to sprints that fails closed on delete, and a one-event-per-sprint index', () => {
+  it('adds a nullable FK to sprints that fails closed on delete, with a plain (non-unique) index', () => {
     expect(sql).toMatch(/add column if not exists sprint_id uuid references public\.sprints\(id\) on delete set null/i)
     expect(sql).not.toMatch(/sprint_id uuid[^,;]*not null/i)
-    expect(sql).toMatch(/create unique index[^;]*\(sprint_id\)\s*where sprint_id is not null/i)
+    expect(sql).toMatch(/create index[^;]*\(sprint_id\)\s*where sprint_id is not null/i)
+    expect(sql).not.toMatch(/unique/i) // one-event-per-sprint is not a domain invariant
   })
   it('resolution no longer references sprint_pattern or name matching', () => {
     const fn = sql.slice(sql.search(/create or replace function public\.icplc_event_sprint_ids/i))
@@ -147,12 +148,23 @@ describe('explicit event -> sprint authorization (database)', () => {
       await H.db.query("update public.event_configs set sprint_pattern = '%ICPLC%' where id = $1", [EV_A])
     })
 
-    it('a sprint cannot back two events; deleting a sprint unlinks (fails closed)', async (ctx) => {
+    it('two events MAY deliberately share a sprint (explicit); each resolves it by its own sprint_id', async (ctx) => {
       H.need(ctx)
-      await expect(link(EV_N, SP_A)).rejects.toThrow(/event_configs_sprint_id_key/)
+      await link(EV_N, SP_A) // explicit admin choice: allowed
+      expect(await sprintsOf(EV_N)).toEqual([SP_A])
+      expect(await seen(U(1))).toEqual(['A person', 'N person'])
+      expect(await seen(U(4))).toEqual(['B person']) // sharing never leaks to an unrelated sprint
+      await H.db.query('update public.event_configs set sprint_id = null where id = $1', [EV_N])
+    })
+
+    it('deleting a linked sprint nulls the link and authorization fails closed immediately', async (ctx) => {
+      H.need(ctx)
+      await link(EV_N, SP_A2)
+      expect(await sprintsOf(EV_N)).toEqual([SP_A2])
       await H.db.query('delete from public.sprints where id = $1', [SP_A2])
-      await link(EV_N, SP_A2).catch(() => {}) // nonexistent sprint rejected by FK
+      expect((await H.db.query('select sprint_id from public.event_configs where id = $1', [EV_N])).rows[0].sprint_id).toBeNull()
       expect(await sprintsOf(EV_N)).toEqual([])
+      expect(await seen(U(5))).toEqual([]) // team of the deleted sprint cascaded away; nothing stale
     })
 
     it('platform roles stay event-independent', async (ctx) => {

@@ -893,6 +893,8 @@ describe('ICPLC Registration CSV — Certification Matrix', () => {
       })
       const sprint = await pgInsertReturning('sprints', { name: 'ICPLC Auth Sprint Alpha', status: 'planning', sprint_type: 'custom' })
       sprintId = sprint.data.id
+      // Authorization follows the explicit event -> sprint link, never the name pattern.
+      await pgExec('UPDATE public.event_configs SET sprint_id = $1 WHERE id = $2', [sprintId, SPRINT_EVENT_ID])
 
       const allowed = await pgInsertReturning('sprint_teams', { sprint_id: sprintId, name: 'Delegate Relations' })
       allowedTeamId = allowed.data.id
